@@ -7,7 +7,7 @@ browser process or system PDF dependency is required.
 
 ## Requirements
 
-- Ruby 3.0 or later
+- Ruby 3.1 or later
 - Linux, macOS, or Windows
 
 Releases include supported native gems plus a source gem.

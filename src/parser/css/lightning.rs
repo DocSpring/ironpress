@@ -1417,7 +1417,7 @@ fn filter_list_has_valid_ranges(filters: &FilterList<'_>) -> bool {
     })
 }
 
-fn parser_options<'i>(input: &'i str) -> ParserOptions<'static, 'i> {
+fn parser_options<'i>(input: &'i str) -> ParserOptions<'i> {
     let _ = input;
     ParserOptions {
         filename: String::new(),

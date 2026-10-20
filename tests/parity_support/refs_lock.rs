@@ -715,7 +715,13 @@ fn current_font_bundle_sha256(parity_dir: &Path) -> Option<String> {
         hasher.update(std::fs::read(path).ok()?);
         hasher.update([0]);
     }
-    Some(format!("{:x}", hasher.finalize()))
+    Some(
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
+    )
 }
 
 fn provenance_identity(provenance: &Provenance) -> Option<String> {

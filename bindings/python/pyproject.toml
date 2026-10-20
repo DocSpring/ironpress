@@ -8,7 +8,7 @@ version = "1.7.0"
 description = "Pure Rust HTML/CSS/Markdown to PDF converter. No browser, no system dependencies."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

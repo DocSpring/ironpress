@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Changed
+
+- Dependency refresh: lightningcss 1.0.0-alpha.72 (with cssparser 0.37,
+  cssparser-color 0.5 and parcel_selectors 0.28.3), resvg 0.48 and fontdb 0.24,
+  sha2 0.11, lru 0.19, and the ureq pin moved to 3.4.2. Output is unchanged;
+  the resvg bump adds a second fontations stack to the dependency tree until
+  subsetter moves to skrifa 0.44 or later.
+- Python binding: pyo3 0.30 drops Python 3.8 (end of life since October 2024).
+  The wheel is built against the abi3-py39 stable ABI and requires Python 3.9
+  or later.
+- Ruby binding: magnus 0.9 drops Ruby 3.0 (end of life since April 2024). The
+  gem requires Ruby 3.1 or later.
+
 ## [1.7.0] — 2026-09-15
 
 ### Added

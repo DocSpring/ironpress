@@ -7,7 +7,7 @@ browser process or system PDF dependency is required.
 
 ## Requirements
 
-- CPython 3.8 or later
+- CPython 3.9 or later
 - Linux, macOS, or Windows
 
 Published ABI3 wheels do not require a Rust toolchain.

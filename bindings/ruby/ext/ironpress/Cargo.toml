@@ -13,5 +13,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ironpress-core = { version = "=1.7.0", package = "ironpress" }
-magnus = "0.7"
+magnus = "0.9"
 rb-sys = { version = "0.9", default-features = false, features = ["stable-api-compiled-fallback"] }
