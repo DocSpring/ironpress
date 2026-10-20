@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Text shaping runs on harfrust and glyph outlines, bounds and advances come
+  from skrifa, replacing rustybuzz and ttf-parser. ironpress now parses fonts
+  with the same fontations stack resvg uses, with the goal of one copy of it in
+  the dependency tree once subsetter follows (see typst/subsetter#38). Shaping
+  and metrics are unchanged on the parity corpus; the only byte-level
+  difference is that Type 3 glyph outlines no longer repeat the contour's
+  closing segment before `h`.
+
+### Changed
+
 - Dependency refresh: lightningcss 1.0.0-alpha.72 (with cssparser 0.37,
   cssparser-color 0.5 and parcel_selectors 0.28.3), resvg 0.48 and fontdb 0.24,
   sha2 0.11, lru 0.19, and the ureq pin moved to 3.4.2. Output is unchanged;

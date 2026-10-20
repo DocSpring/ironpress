@@ -10,9 +10,9 @@ const OBJECT_REPLACEMENT_CHARACTER: char = '\u{fffc}';
 /// Takes a list of text runs in logical order and returns them split into
 /// one run per level-run, arranged in visual left-to-right order. Each
 /// resulting run's text is kept in LOGICAL order (not pre-reversed) so that
-/// the downstream text shaper (rustybuzz, via `guess_segment_properties`)
+/// the downstream text shaper (harfrust, via `guess_segment_properties`)
 /// can apply the correct RTL shaping itself. Pre-reversing here would cause
-/// rustybuzz to reverse a second time, undoing the bidi reorder.
+/// harfrust to reverse a second time, undoing the bidi reorder.
 pub(crate) fn reorder_runs_bidi(
     runs: &[TextRun],
     paragraph_rtl: bool,
@@ -39,7 +39,7 @@ pub(crate) fn reorder_runs_bidi(
     // `direction` (css-writing-modes-4 §2.4). For `direction: rtl` this means
     // the entire visual order is the reverse of logical order; for `ltr` the
     // logical order is kept. The text inside each emitted run is reversed so the
-    // shaper does not re-flip it (rustybuzz reverses RTL-shaped runs itself, but
+    // shaper does not re-flip it (harfrust reverses RTL-shaped runs itself, but
     // these glyphs are forced, not naturally RTL, so we pre-reverse here).
     if bidi_override {
         if !paragraph_rtl {
@@ -115,7 +115,7 @@ pub(crate) fn reorder_runs_bidi(
 
     for byte_range in vis_ranges.iter() {
         // Each visual run's characters remain in *logical* order inside the
-        // run — the shaper (rustybuzz) will flip RTL glyphs itself. Only the
+        // run — the shaper (harfrust) will flip RTL glyphs itself. Only the
         // *order of runs* is visual (left-to-right on the page), so we emit
         // runs in the order `visual_runs` gives them.
         // Find chars in this byte range (already in logical order).
