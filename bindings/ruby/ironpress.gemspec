@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
   spec.metadata["documentation_uri"] = "https://gastongouron.github.io/ironpress/get-started/ruby/"
   spec.metadata["source_code_uri"] = "https://github.com/gastongouron/ironpress"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.1"
 
   spec.files = Dir[
     "lib/**/*.rb",
