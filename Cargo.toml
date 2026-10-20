@@ -43,14 +43,15 @@ remote = ["bogon", "core-net", "ureq", "url"]
 wasm = ["wasm-bindgen", "js-sys", "getrandom/wasm_js"]
 
 [dependencies]
-cssparser-color = "0.1"
-cssparser = "0.33"
+cssparser-color = "0.5"
+cssparser = "0.37"
 html5ever = "0.39"
-lightningcss = { version = "=1.0.0-alpha.71", default-features = false }
-# lightningcss alpha.71 declares `parcel_selectors = "0.28.2"`, which also
-# admits 0.28.3 even though that release moved to an incompatible cssparser.
-# Keep the transitive selector API on the version alpha.71 was built against.
-parcel_selectors = "=0.28.2"
+lightningcss = { version = "=1.0.0-alpha.72", default-features = false }
+# lightningcss alpha.72 declares `parcel_selectors = "0.28.3"`, which also
+# admits later patch releases even if one moves to an incompatible cssparser
+# (0.28.3 did exactly that against alpha.71). Keep the transitive selector API
+# on the version alpha.72 was built against.
+parcel_selectors = "=0.28.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 png_decoder = { package = "png", version = "0.18" }
 pulldown-cmark = "0.13"
@@ -75,7 +76,7 @@ url = { version = "2.5", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 language-tags = "0.3.2"
-# lightningcss alpha.71 still uses getrandom 0.3 on wasm32. This direct edge
+# lightningcss alpha.72 still uses getrandom 0.3 on wasm32. This direct edge
 # enables wasm_js for that shared dependency graph; 0.4 would leave 0.3 unconfigured.
 getrandom = { version = "0.3", optional = true }
 unicode-bidi = "0.3.18"
