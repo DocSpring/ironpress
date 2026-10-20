@@ -5,7 +5,7 @@
     "dpi": 300,
     "pdftoppm_available": true,
     "rasterizer_source_path": "/usr/bin/pdftoppm",
-    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-5827-1788561594503082027-0/pdftoppm",
+    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-5810-1792510475696567432-0/pdftoppm",
     "rasterizer_arguments": "[-r, 300, -png, <PDF>, <PREFIX>]",
     "rasterizer_version": "pdftoppm version 24.08.0",
     "rasterizer_sha256": "b1f76a56605df368efd233e09faad3bd910e50c0d6556c616a7c0b0adebf6013"
@@ -105356,8 +105356,8 @@
               "interaction_of": [],
               "base_ids": [],
               "status": "PASS",
-              "diff_pct": 0.0004010025062656642,
-              "semantic_diff_pct": 0.0004010025062656642,
+              "diff_pct": 0.0002005012531328321,
+              "semantic_diff_pct": 0.0002005012531328321,
               "description": "A local @font-face exposes only a regular face; font-weight:bold with font-synthesis:none must remain regular instead of fake-bolding. Catches: A renderer that always synthesizes missing bold/italic passes bold fallback tests but violates explicit synthesis suppression.",
               "note": "",
               "kind": "feature",
@@ -105380,8 +105380,8 @@
                   {
                     "width": 1050,
                     "height": 475,
-                    "rgba_sha256": "5a74f4c27fe88d2fc07718d41531e104e3cd1c9bdda2993bfad8cd71a1eaf69e",
-                    "painted_pixels": 30019
+                    "rgba_sha256": "31ef46eaddd6b701b667b1143fe6667b7ae1e790bb3ceec330ef29bb362efa21",
+                    "painted_pixels": 30018
                   }
                 ],
                 "oracle": [
@@ -105394,62 +105394,41 @@
                 ]
               },
               "diagnosis": {
-                "primary_class": "ColorValue",
-                "secondary": [
-                  "AntialiasCoverage"
-                ],
-                "headline": "fill recolour ΔRGB(-1,-4,-4) (ΔE 1.6)",
+                "primary_class": "AntialiasCoverage",
+                "secondary": [],
+                "headline": "visually accepted coverage phase; raw antialiasing coverage residue on a shared outline",
                 "magnitude": {
                   "missing_area_pct": 0.0,
                   "extra_area_pct": 0.0,
                   "modal_drgba": [
-                    -1,
-                    -4,
-                    -4,
+                    -3,
+                    -18,
+                    -17,
                     0
                   ],
-                  "delta_e": 1.6215770562875345,
+                  "delta_e": 4.266963078133351,
                   "recovered_alpha": null,
                   "colorspace": null
                 },
-                "region_count": 2,
+                "region_count": 1,
                 "region_classes": [
                   {
                     "class": "ColorErr",
-                    "region_count": 2,
-                    "total_pixels": 2,
-                    "total_area_pct": 0.0014793118241394104,
+                    "region_count": 1,
+                    "total_pixels": 1,
+                    "total_area_pct": 0.0007396559120697052,
                     "union_bbox_css": [
-                      47.36,
-                      61.12,
+                      161.6,
+                      76.16,
                       161.6,
                       76.16
                     ],
                     "largest_region_pixels": 1,
                     "largest_region_area_pct": 0.0007396559120697052,
-                    "max_delta_e": 1.6215770562875345
+                    "max_delta_e": 0.0
                   }
                 ],
                 "region_examples": [
-                  {
-                    "class": "ColorValue",
-                    "bbox_css": [
-                      47.36,
-                      61.12,
-                      47.36,
-                      61.12
-                    ],
-                    "area_pct": 0.0007396559120697052,
-                    "modal_drgba": [
-                      -1,
-                      -4,
-                      -4,
-                      0
-                    ],
-                    "delta_e": 1.6215770562875345,
-                    "recovered_alpha": null,
-                    "headline": "fill recolour ΔRGB(-1,-4,-4) (ΔE 1.6)"
-                  },
                   {
                     "class": "AntialiasCoverage",
                     "bbox_css": [
@@ -105471,8 +105450,8 @@
                   }
                 ],
                 "confidence": 1.0,
-                "different_pixels": 2,
-                "visual_pass_basis": "raw same-coordinate visibility policy"
+                "different_pixels": 1,
+                "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
               }
             }
           ]
