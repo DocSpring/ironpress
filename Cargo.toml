@@ -56,10 +56,10 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 png_decoder = { package = "png", version = "0.18" }
 pulldown-cmark = "0.13"
 markup5ever_rcdom = "0.39"
-fontdb = "0.23"
+fontdb = "0.24"
 flate2 = "1"
 lru = "0.19"
-resvg = "0.47"
+resvg = "0.48"
 rustybuzz = "0.20"
 self_cell = "1"
 sha2 = "0.11"
