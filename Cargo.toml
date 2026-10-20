@@ -45,7 +45,7 @@ wasm = ["wasm-bindgen", "js-sys", "getrandom/wasm_js"]
 [dependencies]
 cssparser-color = "0.5"
 cssparser = "0.37"
-html5ever = "0.39"
+html5ever = "0.40"
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false }
 # lightningcss alpha.72 declares `parcel_selectors = "0.28.3"`, which also
 # admits later patch releases even if one moves to an incompatible cssparser
@@ -55,7 +55,6 @@ parcel_selectors = "=0.28.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 png_decoder = { package = "png", version = "0.18" }
 pulldown-cmark = "0.13"
-markup5ever_rcdom = "0.39"
 fontdb = "0.24"
 flate2 = "1"
 lru = "0.19"
