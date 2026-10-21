@@ -222,7 +222,7 @@ pub struct TtfFont {
     /// Raw TTF data for embedding. Wrapped in Arc so cloning a TtfFont
     /// (e.g. from the bundled font cache) is O(1) instead of copying ~400KB.
     pub data: std::sync::Arc<Vec<u8>>,
-    /// The rustybuzz shaping view of [`Self::data`], derived once with the rest
+    /// The harfrust shaping view of [`Self::data`], derived once with the rest
     /// of the face.
     ///
     /// Shared through an `Arc` for the same reason `data` is: a registered font
@@ -230,7 +230,7 @@ pub struct TtfFont {
     /// while reusing the one set of parsed shaping tables. The face borrows
     /// `data`, so the two are dropped together with the last clone — nothing
     /// outlives the fonts that use it and no process-wide table pins it.
-    /// `None` means rustybuzz rejected these bytes.
+    /// `None` means harfrust rejected these bytes.
     pub shaping: Option<std::sync::Arc<ShapingFace>>,
 }
 
@@ -314,10 +314,8 @@ impl TtfFont {
         if self.units_per_em == 0 {
             return None;
         }
-        let face = rustybuzz::ttf_parser::Face::parse(&self.data, self.face_index.get()).ok()?;
-        let glyph_id = face.glyph_index(ch)?;
-        let bounds = face.glyph_bounding_box(glyph_id)?;
-        let center = (f32::from(bounds.y_min) + f32::from(bounds.y_max)) / 2.0;
+        let (bounds, _) = glyph_bounds(&self.data, self.face_index, ch)?;
+        let center = (bounds.y_min + bounds.y_max) / 2.0;
         Some(center / f32::from(self.units_per_em))
     }
 
@@ -327,14 +325,12 @@ impl TtfFont {
         if self.units_per_em == 0 || !font_size.is_finite() {
             return None;
         }
-        let face = rustybuzz::ttf_parser::Face::parse(&self.data, self.face_index.get()).ok()?;
-        let glyph_id = face.glyph_index(ch)?;
-        let bounds = face.glyph_bounding_box(glyph_id)?;
-        let advance = f32::from(face.glyph_hor_advance(glyph_id)?);
+        let (bounds, advance) = glyph_bounds(&self.data, self.face_index, ch)?;
+        let advance = advance?;
         let scale = font_size.max(0.0) / f32::from(self.units_per_em);
         Some(GlyphSideBearings {
-            start: f32::from(bounds.x_min).max(0.0) * scale,
-            end: (advance - f32::from(bounds.x_max)).max(0.0) * scale,
+            start: bounds.x_min.max(0.0) * scale,
+            end: (advance - bounds.x_max).max(0.0) * scale,
         })
     }
 
@@ -799,10 +795,24 @@ fn parse_os2_positive_metric(
 /// Used to derive the x-height for the CSS `ex` unit when `OS/2.sxHeight` is
 /// absent. Returns `None` when the character has no glyph or no contour bounds.
 fn measure_glyph_y_max(data: &[u8], face_index: FontFaceIndex, ch: char) -> Option<u16> {
-    let face = rustybuzz::ttf_parser::Face::parse(data, face_index.get()).ok()?;
-    let gid = face.glyph_index(ch)?;
-    let bbox = face.glyph_bounding_box(gid)?;
-    (bbox.y_max > 0).then_some(bbox.y_max as u16)
+    let (bounds, _) = glyph_bounds(data, face_index, ch)?;
+    (bounds.y_max > 0.0).then_some(bounds.y_max as u16)
+}
+
+/// Unscaled bounding box and horizontal advance of the glyph `ch` maps to.
+fn glyph_bounds(
+    data: &[u8],
+    face_index: FontFaceIndex,
+    ch: char,
+) -> Option<(skrifa::metrics::BoundingBox, Option<f32>)> {
+    use skrifa::MetadataProvider as _;
+    use skrifa::instance::{LocationRef, Size};
+
+    let font = skrifa::FontRef::from_index(data, face_index.get()).ok()?;
+    let glyph_id = font.charmap().map(ch)?;
+    let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
+    let bounds = metrics.bounds(glyph_id)?;
+    Some((bounds, metrics.advance_width(glyph_id)))
 }
 
 fn parse_os2_layout_metrics(data: &[u8], os2: Option<&TableRecord>) -> Option<FontVerticalMetrics> {
@@ -2418,15 +2428,16 @@ mod tests {
         let font = parse_ttf(liberation_sans_bytes()).expect("Liberation Sans parses");
         let shaping = font.shaping.as_ref().expect("shaping face");
 
-        let mut buffer = rustybuzz::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str("Hello");
         buffer.guess_segment_properties();
-        let shaped = rustybuzz::shape(shaping.face(), &[], buffer);
+        let shaper = harfrust::ShaperFont::new(shaping.font());
+        harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::new()).expect("shapes");
 
         // Liberation Sans has a glyph for each of H, e, l, l, o and forms no
         // ligature across them, so shaping maps the five characters one to one.
-        assert_eq!(shaped.glyph_infos().len(), 5);
-        assert!(shaped.glyph_infos().iter().all(|glyph| glyph.glyph_id != 0));
+        assert_eq!(buffer.glyph_infos().len(), 5);
+        assert!(buffer.glyph_infos().iter().all(|glyph| glyph.glyph_id != 0));
     }
 
     #[test]
@@ -2440,9 +2451,8 @@ mod tests {
     }
 
     #[test]
-    fn a_font_rustybuzz_rejects_has_no_shaping_face() {
-        let font = parse_ttf(named_test_ttf(b"Alfa")).expect("synthetic font parses");
-        assert!(font.shaping.is_none());
+    fn bytes_harfrust_rejects_yield_no_shaping_face() {
+        assert!(ShapingFace::parse(Arc::new(vec![0; 4]), 0).is_none());
     }
 
     #[test]
@@ -2529,7 +2539,7 @@ mod tests {
         let font = parse_ttf(include_bytes!("../../assets/LiberationSans-Regular.ttf").to_vec())
             .expect("Liberation Sans parses");
         let face = font.shaping.as_ref().expect("a real font is shapeable");
-        assert!(face.face().units_per_em() > 0);
+        assert!(face.font().units_per_em() > 0);
         let clone = font.clone();
         assert!(
             std::sync::Arc::ptr_eq(

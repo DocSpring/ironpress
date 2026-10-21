@@ -809,17 +809,17 @@ fn shape_text_glyphs(
         return Some(Vec::new());
     }
 
-    let face = font.shaping.as_ref()?.face();
+    let face = font.shaping.as_ref()?.font();
     let scale = font.adjusted_font_size(font_size) / (face.units_per_em() as f32).max(1.0);
 
-    let mut buffer = rustybuzz::UnicodeBuffer::new();
+    let mut buffer = harfrust::Buffer::new();
     buffer.push_str(text);
     buffer.guess_segment_properties();
     if matches!(direction, TextShapingDirection::Vertical) {
-        // HarfBuzz/Rustybuzz enables vertical OpenType features for TTB. This
+        // HarfBuzz/harfrust enables vertical OpenType features for TTB. This
         // also obtains per-glyph vertical advances and origins from `vmtx` and
         // `VORG` rather than approximating them with horizontal metrics.
-        buffer.set_direction(rustybuzz::Direction::TopToBottom);
+        buffer.set_direction(harfrust::Direction::TopToBottom);
     }
 
     let mut features = Vec::new();
@@ -828,21 +828,19 @@ fn shape_text_glyphs(
         // standard and contextual ligatures while leaving pair positioning to
         // the independently-controlled `font-kerning` property.
         features.extend([
-            rustybuzz::Feature::new(rustybuzz::ttf_parser::Tag::from_bytes(b"liga"), 0, ..),
-            rustybuzz::Feature::new(rustybuzz::ttf_parser::Tag::from_bytes(b"clig"), 0, ..),
+            harfrust::Feature::new(harfrust::Tag::new(b"liga"), 0, ..),
+            harfrust::Feature::new(harfrust::Tag::new(b"clig"), 0, ..),
         ]);
     }
     if !shaping.kerning {
-        features.push(rustybuzz::Feature::new(
-            rustybuzz::ttf_parser::Tag::from_bytes(b"kern"),
-            0,
-            ..,
-        ));
+        features.push(harfrust::Feature::new(harfrust::Tag::new(b"kern"), 0, ..));
     }
 
-    let shaped = rustybuzz::shape(face, &features, buffer);
-    let infos = shaped.glyph_infos();
-    let positions = shaped.glyph_positions();
+    let shaper = harfrust::ShaperFont::new(face);
+    let options = harfrust::ShapeOptions::new().features(&features);
+    harfrust::shape(&shaper, &mut buffer, options).ok()?;
+    let infos = buffer.glyph_infos();
+    let positions = buffer.glyph_positions();
     if infos.len() != positions.len() {
         return None;
     }
@@ -1226,7 +1224,7 @@ mod tests {
 
     #[test]
     fn shape_text_with_font_returns_none_for_invalid_font_data() {
-        let font = make_stub_font(); // data is Vec::new(), rustybuzz can't parse it
+        let font = make_stub_font(); // data is Vec::new(), harfrust can't parse it
         assert!(shape_text_with_font("hello", 12.0, &font, TextShaping::default()).is_none());
     }
 

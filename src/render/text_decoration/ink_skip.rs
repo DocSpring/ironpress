@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use skrifa::MetadataProvider as _;
+use skrifa::instance::{LocationRef, Size};
+
 use crate::layout::engine::TextRun;
 use crate::parser::ttf::TtfFont;
 use crate::types::Point;
@@ -35,10 +38,11 @@ pub(crate) fn ink_skip_intervals(
     let Some(shaped) = crate::text::shape_text_run(run, custom_fonts) else {
         return Vec::new();
     };
-    let Ok(face) = rustybuzz::ttf_parser::Face::parse(&font.data, font.face_index.get()) else {
+    let Ok(face) = skrifa::FontRef::from_index(&font.data, font.face_index.get()) else {
         return Vec::new();
     };
-    let units_per_em = f32::from(face.units_per_em()).max(1.0);
+    let outlines = face.outline_glyphs();
+    let units_per_em = f32::from(font.units_per_em).max(1.0);
     let scale = font.adjusted_font_size(run.font_size) / units_per_em;
     let thickness = thickness(run, decoration);
     let synthetic_bold = run
@@ -59,10 +63,14 @@ pub(crate) fn ink_skip_intervals(
             || !glyph_unicode_is_cjk(&glyph.unicode);
         if skip_for_script {
             let mut outline = GlyphOutline::default();
-            if face
-                .outline_glyph(rustybuzz::ttf_parser::GlyphId(glyph.glyph_id), &mut outline)
-                .is_some()
-            {
+            let drawn = outlines
+                .get(skrifa::GlyphId::new(u32::from(glyph.glyph_id)))
+                .and_then(|glyph| {
+                    glyph
+                        .draw((Size::unscaled(), LocationRef::default()), &mut outline)
+                        .ok()
+                });
+            if drawn.is_some() {
                 outline.finish();
                 let band = InlineInterval::new(
                     (axis_from_baseline - glyph.y_offset - collision_half_band) / scale,
@@ -181,7 +189,7 @@ impl GlyphOutline {
     }
 }
 
-impl rustybuzz::ttf_parser::OutlineBuilder for GlyphOutline {
+impl skrifa::outline::OutlinePen for GlyphOutline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.finish_contour();
         self.current.push(Point::new(x, y));

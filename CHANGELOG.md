@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Text shaping runs on harfrust and glyph outlines, bounds and advances come
+  from skrifa, replacing rustybuzz and ttf-parser. ironpress now parses fonts
+  with the same fontations stack resvg uses, with the goal of one copy of it in
+  the dependency tree once subsetter follows (see typst/subsetter#38). Shaping
+  and metrics are unchanged on the parity corpus; the only byte-level
+  difference is that Type 3 glyph outlines no longer repeat the contour's
+  closing segment before `h`.
 - HTML parsing feeds html5ever into an in-crate tree sink instead of
   `markup5ever_rcdom`. The DOM handed to layout is unchanged (checked against
   rcdom on every HTML file in the repository); the unofficial rcdom crate is

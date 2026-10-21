@@ -1,5 +1,7 @@
 use super::*;
 use resvg::tiny_skia;
+use skrifa::MetadataProvider as _;
+use skrifa::instance::{LocationRef, Size};
 
 impl PdfWriter {
     pub(super) fn add_type3_font(
@@ -77,18 +79,26 @@ impl PdfWriter {
 
 fn type3_char_proc(ttf: &TtfFont, glyph_id: u16, glyph_style: Type3GlyphStyle) -> String {
     let width = ttf.glyph_width(glyph_id);
-    let Ok(face) = rustybuzz::ttf_parser::Face::parse(&ttf.data, ttf.face_index.get()) else {
+    let Ok(face) = skrifa::FontRef::from_index(&ttf.data, ttf.face_index.get()) else {
         let [left, bottom, right, top] = type3_font_bbox(ttf, glyph_style);
         return format!("{width} 0 {left} {bottom} {right} {top} d1\n");
     };
 
-    let glyph = rustybuzz::ttf_parser::GlyphId(glyph_id);
+    let glyph = skrifa::GlyphId::new(u32::from(glyph_id));
     let Some(source) = glyph_path(&face, glyph) else {
         return format!("{width} 0 d0\n");
     };
-    let bounds = face.glyph_bounding_box(glyph).map_or(ttf.bbox, |bbox| {
-        [bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max]
-    });
+    let bounds = face
+        .glyph_metrics(Size::unscaled(), LocationRef::default())
+        .bounds(glyph)
+        .map_or(ttf.bbox, |bbox| {
+            [
+                bbox.x_min as i16,
+                bbox.y_min as i16,
+                bbox.x_max as i16,
+                bbox.y_max as i16,
+            ]
+        });
     let [left, bottom, right, top] = expanded_type3_bbox(bounds, ttf, glyph_style);
     let mut content = format!("{width} 0 {left} {bottom} {right} {top} d1\n");
     if glyph_style == Type3GlyphStyle::SyntheticWeight
@@ -136,12 +146,12 @@ fn synthetic_weight_glyph_path(source: &tiny_skia::Path, units_per_em: u16) -> O
     Some(content)
 }
 
-fn glyph_path(
-    face: &rustybuzz::ttf_parser::Face<'_>,
-    glyph: rustybuzz::ttf_parser::GlyphId,
-) -> Option<tiny_skia::Path> {
+fn glyph_path(face: &skrifa::FontRef<'_>, glyph: skrifa::GlyphId) -> Option<tiny_skia::Path> {
+    let outline = face.outline_glyphs().get(glyph)?;
     let mut builder = TinySkiaGlyphPath::default();
-    face.outline_glyph(glyph, &mut builder)?;
+    outline
+        .draw((Size::unscaled(), LocationRef::default()), &mut builder)
+        .ok()?;
     builder.finish()
 }
 
@@ -156,7 +166,7 @@ impl TinySkiaGlyphPath {
     }
 }
 
-impl rustybuzz::ttf_parser::OutlineBuilder for TinySkiaGlyphPath {
+impl skrifa::outline::OutlinePen for TinySkiaGlyphPath {
     fn move_to(&mut self, x: f32, y: f32) {
         self.builder.move_to(x, -y);
     }
@@ -292,8 +302,8 @@ mod tests {
     #[test]
     fn type3_coordinates_use_chromes_negative_y_convention() {
         let mut path = TinySkiaGlyphPath::default();
-        rustybuzz::ttf_parser::OutlineBuilder::move_to(&mut path, 2.0, 3.0);
-        rustybuzz::ttf_parser::OutlineBuilder::line_to(&mut path, 4.0, -5.0);
+        skrifa::outline::OutlinePen::move_to(&mut path, 2.0, 3.0);
+        skrifa::outline::OutlinePen::line_to(&mut path, 4.0, -5.0);
         let path = path.finish().expect("two-point path");
         let mut content = String::new();
         append_tiny_skia_path(&mut content, &path);

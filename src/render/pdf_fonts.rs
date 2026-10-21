@@ -568,7 +568,7 @@ fn prepare_font(
     if (glyph_style == Type3GlyphStyle::SyntheticWeight
         || crate::render::pdf::sfnt_has_cff_outlines(&ttf.data))
         && usage.glyphs.len() <= u8::MAX as usize
-        && rustybuzz::ttf_parser::Face::parse(&ttf.data, ttf.face_index.get()).is_ok()
+        && skrifa::FontRef::from_index(&ttf.data, ttf.face_index.get()).is_ok()
     {
         return type3_font(ttf, usage, glyph_style);
     }
