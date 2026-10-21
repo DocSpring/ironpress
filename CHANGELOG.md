@@ -11,6 +11,10 @@
   and metrics are unchanged on the parity corpus; the only byte-level
   difference is that Type 3 glyph outlines no longer repeat the contour's
   closing segment before `h`.
+- HTML parsing feeds html5ever into an in-crate tree sink instead of
+  `markup5ever_rcdom`. The DOM handed to layout is unchanged (checked against
+  rcdom on every HTML file in the repository); the unofficial rcdom crate is
+  gone and html5ever moves to 0.40.
 
 ### Changed
 
