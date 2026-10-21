@@ -4,6 +4,13 @@
 
 ### Changed
 
+- HTML parsing feeds html5ever into an in-crate tree sink instead of
+  `markup5ever_rcdom`. The DOM handed to layout is unchanged (checked against
+  rcdom on every HTML file in the repository); the unofficial rcdom crate is
+  gone and html5ever moves to 0.40.
+
+### Changed
+
 - Dependency refresh: lightningcss 1.0.0-alpha.72 (with cssparser 0.37,
   cssparser-color 0.5 and parcel_selectors 0.28.3), resvg 0.48 and fontdb 0.24,
   sha2 0.11, lru 0.19, and the ureq pin moved to 3.4.2. Output is unchanged;
