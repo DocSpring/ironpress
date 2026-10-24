@@ -7,6 +7,12 @@
 - Ruby native gems are built for Ruby 4.0, so installing on Ruby 4 no longer
   falls back to compiling the extension from source.
 
+### Fixed
+
+- A box taller than the space left on the page that is followed by a forced
+  break, such as a long table before `break-before: page`, continues on the
+  next page instead of losing everything past the page edge.
+
 ## [1.7.0] — 2026-09-15
 
 ### Added
