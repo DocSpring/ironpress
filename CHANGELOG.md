@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Ruby native gems are built for Ruby 4.0, so installing on Ruby 4 no longer
+  falls back to compiling the extension from source.
+
 ## [1.7.0] — 2026-09-15
 
 ### Added
