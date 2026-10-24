@@ -64,6 +64,12 @@ check_version() {
   fi
 }
 
+# DocSpring's builds add a fourth part to the gem version (1.7.0.1 is 1.7.0 plus
+# our first build), so compare the Ruby versions without it. See docspring/README.md.
+without_docspring_build() {
+  sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$/\1/'
+}
+
 check_version "Rust crate" "$(package_version Cargo.toml)"
 check_version "C crate" "$(package_version bindings/c/Cargo.toml)"
 check_version "C core requirement" "$(core_requirement bindings/c/Cargo.toml)"
@@ -78,8 +84,8 @@ check_version "Python distribution" "$(package_version bindings/python/pyproject
 check_version "Python core requirement" "$(core_requirement bindings/python/Cargo.toml)"
 check_version "Ruby crate" "$(package_version bindings/ruby/ext/ironpress/Cargo.toml)"
 check_version "Ruby core requirement" "$(core_requirement bindings/ruby/ext/ironpress/Cargo.toml)"
-check_version "Ruby runtime" "$(ruby_runtime_version bindings/ruby/lib/ironpress/version.rb)"
-check_version "Ruby lockfile" "$(ruby_lock_version bindings/ruby/Gemfile.lock)"
+check_version "Ruby runtime" "$(ruby_runtime_version bindings/ruby/lib/ironpress/version.rb | without_docspring_build)"
+check_version "Ruby lockfile" "$(ruby_lock_version bindings/ruby/Gemfile.lock | without_docspring_build)"
 
 if ((MISMATCHES > 0)); then
   exit 1
