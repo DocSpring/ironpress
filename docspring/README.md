@@ -26,5 +26,8 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
    `gh workflow run ci.yml --repo DocSpring/ironpress --ref docspring -f publish_crate=false` and
    `gh workflow run ruby.yml --repo DocSpring/ironpress --ref docspring -f publish=false`.
 2. When both are green, push a signed tag `docspring-1.7.0.<n>` and create a GitHub release for it with the native
-   gems from the Ruby Release run's artifacts and `npm pack` of the CI run's `wasm-package` artifact.
+   gems from the Ruby Release run's artifacts, `npm pack` of the CI run's `wasm-package` artifact and a `SHA256SUMS`
+   of them all. Releases on this fork are immutable (turned on after `docspring-1.7.0.2`, which isn't), so pass every
+   file to the one `gh release create` call: it uploads them to a draft and then publishes it, and nothing can be
+   added or replaced afterwards. The notes can still be edited.
 3. `gh workflow run publish.yml --repo DocSpring/gems` adds the gems to https://docspring.github.io/gems/.
