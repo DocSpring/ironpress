@@ -7,8 +7,8 @@ includes them, then goes back to the upstream packages.
 | --- | --- |
 | magnus 0.9, so the Ruby binding compiles against Ruby 4.0 | `33c1ba8` on `main`, not released yet |
 | Native gems for Ruby 4.0 | gastongouron/ironpress#275 |
-| A box taller than the rest of the page keeps fragmenting when a forced break follows it (a long table before `break-before: page` lost its later rows) | branch `fix/table-overflow-before-forced-break` here; upstream PR to follow |
-| A table row split by a forced break inside a cell ends its first fragment at the page end, instead of running past it by the table's top border, padding and spacing (with the fix above, that overflow pushed the row onto an extra page) | the same branch and PR |
+| A box taller than the rest of the page keeps fragmenting when a forced break follows it (a long table before `break-before: page` lost its later rows) | gastongouron/ironpress#276 (its second commit) |
+| A table row split by a forced break inside a cell ends its first fragment at the page end, instead of running past it by the table's top border, padding and spacing (with the fix above, that overflow pushed the row onto an extra page) | gastongouron/ironpress#276 (its first commit) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
