@@ -145,11 +145,13 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             // Same `vertical-align: middle` UA default as <td> (see above).
             style.set("vertical-align", CssValue::Keyword("middle".into()));
         }
+        // Chrome UA stylesheet: `margin-block: 1em; margin-inline: 40px`, in
+        // the inherited font style (not italic).
         HtmlTag::Blockquote => {
-            style.set("margin-top", CssValue::Length(8.0));
-            style.set("margin-bottom", CssValue::Length(8.0));
+            style.set("margin-top", CssValue::Em(1.0));
+            style.set("margin-bottom", CssValue::Em(1.0));
             style.set("margin-left", CssValue::Length(30.0));
-            style.set("font-style", CssValue::Keyword("italic".into()));
+            style.set("margin-right", CssValue::Length(30.0));
         }
         HtmlTag::Pre => {
             style.set("font-family", CssValue::Keyword("monospace".into()));
@@ -393,6 +395,28 @@ mod tests {
                 .is_some()
         );
         assert!(default_style(HtmlTag::Summary).get("font-weight").is_some());
+    }
+
+    #[test]
+    fn blockquote_defaults_match_chrome() {
+        let blockquote = default_style(HtmlTag::Blockquote);
+        assert!(matches!(
+            blockquote.get("margin-top"),
+            Some(CssValue::Em(1.0))
+        ));
+        assert!(matches!(
+            blockquote.get("margin-bottom"),
+            Some(CssValue::Em(1.0))
+        ));
+        assert!(matches!(
+            blockquote.get("margin-left"),
+            Some(CssValue::Length(30.0))
+        ));
+        assert!(matches!(
+            blockquote.get("margin-right"),
+            Some(CssValue::Length(30.0))
+        ));
+        assert!(blockquote.get("font-style").is_none());
     }
 
     #[test]
