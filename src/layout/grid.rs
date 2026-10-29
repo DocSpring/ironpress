@@ -1920,6 +1920,34 @@ fn layout_grid_item_content_inner(
         };
     }
 
+    // A list's items take their numbers and markers from the list. The cell
+    // already insets its content by the list's padding, so the items start at
+    // the cell's content edge.
+    if matches!(
+        item_el.tag,
+        crate::parser::dom::HtmlTag::Ul | crate::parser::dom::HtmlTag::Ol
+    ) {
+        crate::layout::engine::layout_list_children(
+            item_el,
+            item_style,
+            crate::layout::engine::ListChildLayout {
+                layout: &child_ctx,
+                available_width: content_width,
+                available_height: content_height.unwrap_or_else(|| child_ctx.available_height()),
+                parent: None,
+                list_indent: 0.0,
+                ancestors: &child_ancestors,
+                positioned_depth: frame.descendants.positioned_depth,
+            },
+            &mut out,
+            env,
+        );
+        return CellContent {
+            lines: Vec::new(),
+            children: out,
+        };
+    }
+
     let inline_sequence = InlineContentSequence::with_generated(
         &item_el.children,
         item_style.generated_content(item_el),
