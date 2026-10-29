@@ -1,7 +1,7 @@
 //! CSS 2.1 §9.2.1.1: inline content beside block-level siblings is wrapped in
 //! anonymous block boxes that keep their place among those siblings.
 
-use crate::layout::elements::{FlexRow, Image, LayoutVisitor, TableRow, TextBlock};
+use crate::layout::elements::{Container, FlexRow, Image, LayoutVisitor, TableRow, TextBlock};
 use crate::layout::engine::{TextLine, visit_layout_tree};
 
 use super::support::layout_pages;
@@ -214,5 +214,53 @@ fn list_item_lays_out_its_block_children_at_its_content_edge() {
     assert_eq!(
         edges.0,
         expected.map(|(words, edge)| (words.to_string(), edge))
+    );
+}
+
+#[derive(Default)]
+struct ItemBoxes(Vec<(f32, Vec<String>)>);
+
+impl LayoutVisitor for ItemBoxes {
+    fn visit_container(&mut self, container: &Container) {
+        let mut content = ContentOrder::default();
+        for child in &container.children {
+            visit_layout_tree(child.as_ref(), &mut content);
+        }
+        self.0
+            .push((container.positioning.insets.left, content.entries));
+    }
+}
+
+fn item_boxes(markup: &str) -> Vec<(f32, Vec<String>)> {
+    let mut boxes = ItemBoxes::default();
+    for page in layout_pages(markup) {
+        for (_, element) in &page.elements {
+            element.accept(&mut boxes);
+        }
+    }
+    boxes.0
+}
+
+#[test]
+fn list_item_with_a_box_keeps_it_around_its_block_children() {
+    let boxes = item_boxes(
+        r#"<ul style="margin:0;padding-left:40px">
+            <li style="border:1px solid blue">Inline only</li>
+            <li style="background:#efe"><p>One</p><p>Two</p></li>
+            <li style="border-bottom:1px solid">Three<ul><li>Nested</li></ul></li>
+        </ul>"#,
+    );
+
+    // The first item's text block paints its own box; the others keep a box
+    // at the list's 30pt indent around all of their content.
+    assert_eq!(
+        boxes,
+        [
+            (30.0, vec!["<img> One".to_string(), "Two".to_string()]),
+            (
+                30.0,
+                vec!["<img> Three".to_string(), "<img> Nested".to_string()]
+            ),
+        ]
     );
 }
