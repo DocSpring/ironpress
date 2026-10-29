@@ -528,9 +528,9 @@ fn target_placeholder_measure_text(text: &str) -> Cow<'_, str> {
             return Cow::Owned(out);
         };
         let payload = &rest[payload_start..payload_start + end_rel];
-        if payload.starts_with("counter|")
-            || crate::layout::page_counters::is_page_counter_payload(payload)
-        {
+        if let Some(measure) = crate::layout::page_counters::placeholder_measure_text(payload) {
+            out.push_str(measure);
+        } else if payload.starts_with("counter|") {
             out.push('0');
         }
         rest = &rest[payload_start + end_rel + TARGET_PLACEHOLDER_END.len()..];

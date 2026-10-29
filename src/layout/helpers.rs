@@ -859,7 +859,13 @@ pub(crate) fn resolve_content_with_quotes(
             ContentItem::Counter(name, style) => {
                 match counter_state
                     .defer_page_counters
-                    .then(|| crate::layout::page_counters::page_counter_placeholder(name, style))
+                    .then(|| {
+                        crate::layout::page_counters::page_counter_placeholder(
+                            name,
+                            style,
+                            counter_state.page_count,
+                        )
+                    })
                     .flatten()
                 {
                     Some(placeholder) => result.push_str(&placeholder),
