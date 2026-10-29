@@ -392,6 +392,47 @@ mod page_margin_text_tests {
     }
 
     #[test]
+    fn margin_box_font_usage_includes_a_running_elements_page_counters() {
+        let document = crate::parser::html::parse_html_with_styles(
+            r#"<style>
+                .header { position: running(header) }
+                .number::after { content: counter(page) "/" counter(pages) }
+            </style>
+            <div class="header">Head <span class="number"></span></div>
+            <p>One</p><p style="break-before: page">Two</p>"#,
+        )
+        .expect("valid running-header fixture");
+        let rules = document
+            .stylesheets
+            .iter()
+            .flat_map(|stylesheet| crate::parser::css::parse_stylesheet(stylesheet))
+            .collect::<Vec<_>>();
+        let pages = crate::layout::engine::layout_with_rules(
+            &document.nodes,
+            PageSize::new(200.0, 200.0),
+            Margin::uniform(20.0),
+            &rules,
+        );
+        let decoration = PageDecoration {
+            margin_boxes: crate::parser::css::parse_page_rules(
+                "@page { @top-center { content: element(header) } }",
+            )
+            .remove(0)
+            .margin_boxes,
+            ..PageDecoration::default()
+        };
+
+        let usage = margin_box_font_usage(&pages, Some(&decoration), &HashMap::new());
+        let painted = usage
+            .per_page_runs
+            .iter()
+            .map(|runs| runs.iter().map(|run| run.text.trim()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(painted, ["1/2", "2/2"]);
+    }
+
+    #[test]
     fn synthetic_weight_running_element_uses_its_registered_font_resource() {
         const FAMILY: &str = "IronpressSyntheticWeightFixture";
         let font = std::fs::read(
@@ -924,6 +965,18 @@ pub(super) fn margin_box_font_usage(
             let text = margin_box_font_usage_text(margin_box, page, page_number, pages.len());
             if !text.is_empty() {
                 runs.push(margin_box_font_usage_run(text, style.font_family));
+            }
+            // A running element's page counters paint this page's values.
+            let page_counters = crate::layout::page_counters::PageCounterValues {
+                page: page_counter_value(margin_box, page_number),
+                pages: pages.len(),
+            };
+            for token in &margin_box.content {
+                if let crate::parser::css::MarginContentToken::Element(reference) = token
+                    && let Some(element) = page.generated_content.running_element(reference)
+                {
+                    runs.extend(page_counters.resolved_runs(element));
+                }
             }
         }
     }

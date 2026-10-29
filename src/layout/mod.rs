@@ -20,6 +20,7 @@ pub(crate) mod list_markers;
 pub mod math;
 pub(crate) mod multicol;
 pub(crate) mod page_context;
+pub(crate) mod page_counters;
 pub(crate) mod page_values;
 pub(crate) mod paginate;
 pub(crate) mod print_scale;

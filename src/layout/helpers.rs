@@ -857,7 +857,14 @@ pub(crate) fn resolve_content_with_quotes(
                 }
             }
             ContentItem::Counter(name, style) => {
-                result.push_str(&format_counter_value(style, counter_state.get(name)));
+                match counter_state
+                    .defer_page_counters
+                    .then(|| crate::layout::page_counters::page_counter_placeholder(name, style))
+                    .flatten()
+                {
+                    Some(placeholder) => result.push_str(&placeholder),
+                    None => result.push_str(&format_counter_value(style, counter_state.get(name))),
+                }
             }
             ContentItem::Counters(name, sep, style) => {
                 result.push_str(&counter_state.get_all_styled(name, sep, style));

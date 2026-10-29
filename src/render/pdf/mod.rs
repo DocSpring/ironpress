@@ -686,7 +686,15 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
                         }
                     }
                 }
-                if let Some(element) = running_element {
+                // The running element's page counters take this page's values.
+                let resolved_running_element = running_element.and_then(|element| {
+                    crate::layout::page_counters::PageCounterValues {
+                        page: page_counter,
+                        pages: total_pages,
+                    }
+                    .resolve(element)
+                });
+                if let Some(element) = resolved_running_element.as_deref().or(running_element) {
                     let rendered = band.is_some_and(|band| {
                         let document_transform = pdf_writer.page_content_transform;
                         pdf_writer.page_content_transform = physical_page_transform;
