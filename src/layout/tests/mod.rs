@@ -7,6 +7,7 @@ mod flex_item_blocks;
 mod generated_content;
 mod grid_red_team;
 mod inline_selectors;
+mod list_markers;
 mod paged_breaks;
 mod positioning;
 mod root_formatting_context;

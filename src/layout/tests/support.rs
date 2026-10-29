@@ -101,7 +101,7 @@ pub(super) fn layout_pages_at_with_fonts(
     )
 }
 
-fn collected_runs(markup: &str) -> Vec<TextRun> {
+pub(super) fn collected_runs(markup: &str) -> Vec<TextRun> {
     let mut collector = RunCollector::default();
     for page in layout_pages(markup) {
         for (_, element) in page.elements {

@@ -96,6 +96,15 @@ fn nearest_table_attributes<'a>(
         .map(|ancestor| &ancestor.element.attributes)
 }
 
+/// Number of `<ul>`/`<ol>` elements the element is nested in.
+fn list_nesting_depth(selector_context: &SelectorContext<'_>) -> usize {
+    selector_context
+        .ancestors
+        .iter()
+        .filter(|ancestor| matches!(ancestor.element.tag, HtmlTag::Ul | HtmlTag::Ol))
+        .count()
+}
+
 /// Build the HTML UA and presentational-hint layers that depend on attributes
 /// or ancestry and therefore cannot live in the tag-only default stylesheet.
 pub(crate) fn html_cascade_layers(
@@ -120,6 +129,22 @@ pub(crate) fn html_cascade_layers(
             layers
                 .presentational_hints
                 .set("border-spacing", CssValue::Length(spacing));
+        }
+    }
+
+    // HTML's UA stylesheet gives a `<ul>` nested in another list `circle`
+    // markers, and one nested two or more levels deep `square` markers
+    // (`:is(ol, ul) ul` and `:is(ol, ul) :is(ol, ul) ul`).
+    if tag == HtmlTag::Ul {
+        let marker = match list_nesting_depth(selector_context) {
+            0 => None,
+            1 => Some("circle"),
+            _ => Some("square"),
+        };
+        if let Some(marker) = marker {
+            layers
+                .ua
+                .set("list-style-type", CssValue::Keyword(marker.into()));
         }
     }
 
