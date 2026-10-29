@@ -138,6 +138,19 @@ pub(crate) fn html_cascade_layers(
         }
     }
 
+    // A list nested in another list has no vertical margins in HTML's UA
+    // stylesheet (`:is(dl, ol, ul) :is(dl, ol, ul) { margin-block: 0 }`).
+    let is_list = |tag: HtmlTag| matches!(tag, HtmlTag::Ul | HtmlTag::Ol | HtmlTag::Dl);
+    if is_list(tag)
+        && selector_context
+            .ancestors
+            .iter()
+            .any(|ancestor| is_list(ancestor.element.tag))
+    {
+        layers.ua.set("margin-top", CssValue::Length(0.0));
+        layers.ua.set("margin-bottom", CssValue::Length(0.0));
+    }
+
     layers
 }
 

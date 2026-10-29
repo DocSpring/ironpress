@@ -3969,15 +3969,20 @@ fn flatten_element_with_running_mode(
             return;
         }
 
-        // List handling — Ul/Ol pass context to Li children
-        if el.tag == HtmlTag::Ul || el.tag == HtmlTag::Ol {
+        // List handling — Ul/Ol pass context to Li children. A list with no
+        // box to paint or size lays its items out in its parent's flow; any
+        // other list is laid out by its display type below, and a block list
+        // with a box of its own lays its items out in that box.
+        let is_list = el.tag == HtmlTag::Ul || el.tag == HtmlTag::Ol;
+        if is_list && list_lays_out_in_parent_flow(&style) {
             let list_indent = style.padding.left + style.margin.left;
+            let list_start = output.len();
             layout_list_children(
                 el,
                 &style,
                 ListChildLayout {
                     layout: &layout_ctx,
-                    available_width,
+                    available_width: available_width - style.padding.right - style.margin.right,
                     available_height,
                     parent: list_ctx,
                     list_indent,
@@ -3987,8 +3992,26 @@ fn flatten_element_with_running_mode(
                 output,
                 env,
             );
+            // The list has no box here, so its vertical margins collapse with
+            // its first and last items' (CSS 2.1 §8.3.1).
+            crate::layout::helpers::collapse_margins_into_children(
+                output,
+                list_start,
+                style.margin.top,
+                style.margin.bottom,
+            );
             return;
         }
+        // A list with a box of its own nested in a list item starts at the
+        // item's content edge, which the item's list indent measures.
+        let list_box_indent = match list_ctx {
+            Some(ListContext::Unordered { indent } | ListContext::Ordered { indent, .. })
+                if is_list =>
+            {
+                *indent
+            }
+            _ => 0.0,
+        };
 
         // Li handling — prepend bullet/number marker
         if el.tag == HtmlTag::Li || style.display == Display::ListItem {
@@ -4555,6 +4578,7 @@ fn flatten_element_with_running_mode(
             return;
         }
 
+        let routed_start = output.len();
         route_element(
             el,
             &mut style,
@@ -4566,6 +4590,16 @@ fn flatten_element_with_running_mode(
             &pseudo_styles,
             env,
         );
+        if list_box_indent != 0.0 {
+            for node in &mut output[routed_start..] {
+                if let Some(owner) = node.positioning_owner_mut() {
+                    let positioning = owner.positioning_mut();
+                    if !positioning.scheme.is_absolute() {
+                        positioning.insets.left += list_box_indent;
+                    }
+                }
+            }
+        }
     })();
 
     if filter_application == FilterApplication::Materialize
@@ -4575,6 +4609,44 @@ fn flatten_element_with_running_mode(
     }
     env.counter_state.leave_element(counter_scope);
     emit_page_break_after(&style, output);
+}
+
+/// Whether a `<ul>`/`<ol>` lays its items out in its parent's flow, as it
+/// has no box to paint, size, offset or clip: its padding and margins only
+/// indent its items and collapse with theirs. Any other list keeps its box.
+fn list_lays_out_in_parent_flow(style: &ComputedStyle) -> bool {
+    if style.display != Display::Block {
+        // Flex and grid items get no list markers, so a flex or grid list
+        // whose items have markers keeps the list layout.
+        return style.list_style_type != ListStyleType::None;
+    }
+    !style.position.is_positioned()
+        && style.float == crate::style::computed::Float::None
+        && style.padding.top == 0.0
+        && style.padding.bottom == 0.0
+        && !style.margin_left_auto
+        && !style.margin_right_auto
+        && !has_background_paint(style)
+        && !style.has_border_decoration()
+        && style.box_shadow.is_empty()
+        && style.opacity >= 1.0
+        && style.mix_blend_mode == crate::style::computed::BlendMode::Normal
+        && !style.isolation.isolates()
+        && !style.filter.establishes_stacking_context
+        && style.mask_image.is_none()
+        && style.transform.is_none()
+        && style.width.is_none()
+        && style.width_keyword.is_none()
+        && style.percentage_sizing.width.is_none()
+        && style.min_width.is_none()
+        && style.max_width.is_none()
+        && style.height.is_none()
+        && style.percentage_sizing.height.is_none()
+        && style.min_height.is_none()
+        && style.max_height.is_none()
+        && style.aspect_ratio.is_none()
+        && style.overflow_x == crate::style::computed::Overflow::Visible
+        && style.overflow_y == crate::style::computed::Overflow::Visible
 }
 
 /// Where a `<ul>`/`<ol>` lays out its children.

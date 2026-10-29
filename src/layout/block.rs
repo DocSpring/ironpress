@@ -5,7 +5,7 @@ use crate::layout::elements::{
 };
 use crate::layout::flow_metrics::BlockMargins;
 use crate::parser::css::{AncestorInfo, CssRule, PseudoElement, SelectorContext};
-use crate::parser::dom::{DomNode, ElementNode};
+use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
     BoxSizing, ComputedStyle, Display, Float, FontFamily, Overflow, Position, TextAlign,
@@ -835,8 +835,11 @@ pub(crate) fn layout_block_element(
         || style.aspect_ratio.is_some()
         || style.transform.is_some()
         || overflow_axes.clips_any();
+    // A list that reaches block layout keeps its box: the box lays out its
+    // items (see `layout_list_children`).
+    let is_list = matches!(el.tag, HtmlTag::Ul | HtmlTag::Ol);
     let requires_principal_box =
-        early_has_visual || style.position.is_positioned() || keeps_box_geometry;
+        early_has_visual || style.position.is_positioned() || keeps_box_geometry || is_list;
     let has_block_kids_for_wrapper = nesting_depth < 40
         && (has_inflow_block_pseudo
             || early_has_visual && has_out_of_flow_children
@@ -1895,6 +1898,24 @@ pub(crate) fn layout_block_element(
                     child_ancestors,
                 )
                 .with_positioned_ancestor_depth(positioned_depth),
+                &mut child_elements,
+                env,
+            );
+            &[][..]
+        } else if is_list {
+            // The box's padding indents the list's items.
+            crate::layout::engine::layout_list_children(
+                el,
+                style,
+                crate::layout::engine::ListChildLayout {
+                    layout: ctx,
+                    available_width: inner_width,
+                    available_height,
+                    parent: None,
+                    list_indent: 0.0,
+                    ancestors: child_ancestors,
+                    positioned_depth,
+                },
                 &mut child_elements,
                 env,
             );
