@@ -3220,7 +3220,7 @@ fn min_content_anywhere_width(runs: &[TextRun], fonts: &HashMap<String, TtfFont>
 /// `layout_inline_block_group` does and pre-wraps the inner text.
 fn build_inline_box(
     style: &ComputedStyle,
-    el: &ElementNode,
+    content: InlineContentSequence<'_>,
     rules: &[CssRule],
     fonts: &HashMap<String, TtfFont>,
     ancestors: &[AncestorInfo],
@@ -3246,13 +3246,8 @@ fn build_inline_box(
     };
 
     let mut runs = Vec::new();
-    InlineRunCollector::new(rules, fonts, counter_state, resources).collect(
-        InlineContentSequence::new(&el.children),
-        style,
-        &mut runs,
-        None,
-        ancestors,
-    );
+    InlineRunCollector::new(rules, fonts, counter_state, resources)
+        .collect(content, style, &mut runs, None, ancestors);
     let wrap_inner_width = if !has_explicit_width
         && style.width_keyword == Some(IntrinsicWidthKeyword::MinContent)
         && style.overflow_wrap == OverflowWrap::Anywhere
@@ -3783,9 +3778,21 @@ fn collect_text_runs_inner(
                         if is_atomic_inline_block {
                             let line_height_factor =
                                 text_run_line_height_factor(parent_style, fonts);
+                            let generated = GeneratedContentStyles::resolve(
+                                el,
+                                &style,
+                                rules,
+                                &selector_ctx,
+                                fonts,
+                            );
+                            // `::before` and `::after` are the box's first and
+                            // last inline content.
                             if let Some(boxed) = build_inline_box(
                                 &style,
-                                el,
+                                InlineContentSequence::with_generated(
+                                    &el.children,
+                                    generated.boxes(el),
+                                ),
                                 rules,
                                 fonts,
                                 &child_ancestors,
@@ -3909,7 +3916,7 @@ mod indent_tests {
         let mut resources = crate::security::resources::ResourceLoader::default();
         build_inline_box(
             &style,
-            element,
+            InlineContentSequence::new(&element.children),
             &[],
             &HashMap::new(),
             &[],

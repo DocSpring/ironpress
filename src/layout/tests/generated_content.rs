@@ -299,3 +299,25 @@ fn running_page_numbers_get_room_for_their_widest_value() {
         "the item is {width}pt wide, and \"10/12\" needs {widest_width}pt"
     );
 }
+
+#[test]
+fn inline_block_lays_out_its_before_and_after_content() {
+    for (markup, expected) in [
+        (
+            r#"<style>.b { display: inline-block } .b::before { content: "BEFORE" } .b::after { content: "AFTER" }</style>
+            <p>x <span class="b">t</span> y</p>"#,
+            "BEFOREtAFTER",
+        ),
+        (
+            r#"<style>.b { display: inline-block } .b::after { content: "AFTER" }</style>
+            <p>x <span class="b"></span> y</p>"#,
+            "AFTER",
+        ),
+    ] {
+        let inner: String = super::support::visible_inline_box_runs(markup)
+            .iter()
+            .map(|run| run.text.trim())
+            .collect();
+        assert_eq!(inner, expected, "{markup}");
+    }
+}
