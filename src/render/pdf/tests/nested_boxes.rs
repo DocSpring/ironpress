@@ -431,3 +431,30 @@ fn layout_elements_nested_text_block_no_lines_with_background() {
     );
     assert!(content.contains("re\nf\n"), "Should have rectangle fill");
 }
+
+#[test]
+fn inline_block_paints_the_inline_blocks_nested_in_it() {
+    for (label, markup) in [
+        (
+            "between text",
+            r#"<p>a <span style="display:inline-block;border:1pt solid #888">outer <b style="display:inline-block;width:30pt;height:10pt;background:#00f"></b> end</span> z</p>"#,
+        ),
+        (
+            "two levels deep",
+            r#"<p><span style="display:inline-block">x <span style="display:inline-block">y <b style="display:inline-block;width:30pt;height:10pt;background:#00f"></b></span></span></p>"#,
+        ),
+    ] {
+        let pdf = crate::html_to_pdf(markup).unwrap();
+        let content = String::from_utf8_lossy(&pdf);
+        // The blue fill is followed by the 30pt-wide box's rectangle.
+        let painted = content
+            .split("0 0 1 rg\n")
+            .skip(1)
+            .filter_map(|rest| rest.lines().next())
+            .any(|rect| {
+                let fields: Vec<&str> = rect.split_whitespace().collect();
+                fields.len() == 5 && fields[4] == "re" && fields[2] == "30"
+            });
+        assert!(painted, "the nested inline-block is not painted ({label})");
+    }
+}

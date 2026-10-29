@@ -245,9 +245,51 @@ pub(super) fn render_inline_box(
         let merged = crate::text::coalesce_text_runs(&line.runs);
         let parent_font_size = crate::layout::text::line_primary_font_size(&merged);
         let line_ascender = line_text_top(line, custom_fonts);
+        // Line-box and parent text content-area edges for the vertical
+        // alignment of nested atomic inline boxes, as in a block's lines.
+        let line_top_y = inner_y + metrics.ascender + metrics.half_leading;
+        let line_bottom_y = inner_y - metrics.descender - metrics.half_leading;
+        let (text_ascent, text_descent) = line_text_content_extents(line, custom_fonts);
+        let line_text_top_y = if text_ascent > 0.0 {
+            inner_y + text_ascent
+        } else {
+            line_top_y
+        };
+        let line_text_bottom_y = if text_descent > 0.0 {
+            inner_y - text_descent
+        } else {
+            line_bottom_y
+        };
         let mut x = content_box.left;
         for (run_index, run) in merged.iter().enumerate() {
             if let Some(advance) = run.atomic_inline_advance() {
+                // An inline-block nested in this one paints in its slot.
+                if let Some(nested) = run.inline_box.as_deref() {
+                    if !run.is_inline_edge() {
+                        render_inline_box(
+                            content,
+                            nested,
+                            x + nested.margin_left,
+                            inner_y,
+                            _page_height,
+                            line_top_y,
+                            line_bottom_y,
+                            line_text_top_y,
+                            line_text_bottom_y,
+                            run.font_size,
+                            run_line_height_for_vertical_align(run),
+                            line_primary_x_height_ratio(&merged, custom_fonts),
+                            custom_fonts,
+                            prepared_custom_fonts,
+                            page_ext_gstates,
+                            bg_alpha_counter,
+                            page_shadings,
+                            shading_counter,
+                            pdf_writer,
+                            page_images,
+                        );
+                    }
+                }
                 x += advance;
                 continue;
             }
