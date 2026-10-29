@@ -238,3 +238,25 @@ fn generated_block_remains_inside_its_absolute_originating_box() {
 
     assert_eq!(boxes.0, [(12.0, 9.0, 72.0, 1)]);
 }
+
+#[test]
+fn inline_block_lays_out_its_before_and_after_content() {
+    for (markup, expected) in [
+        (
+            r#"<style>.b { display: inline-block } .b::before { content: "BEFORE" } .b::after { content: "AFTER" }</style>
+            <p>x <span class="b">t</span> y</p>"#,
+            "BEFOREtAFTER",
+        ),
+        (
+            r#"<style>.b { display: inline-block } .b::after { content: "AFTER" }</style>
+            <p>x <span class="b"></span> y</p>"#,
+            "AFTER",
+        ),
+    ] {
+        let inner: String = super::support::visible_inline_box_runs(markup)
+            .iter()
+            .map(|run| run.text.trim())
+            .collect();
+        assert_eq!(inner, expected, "{markup}");
+    }
+}
