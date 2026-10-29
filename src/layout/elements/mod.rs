@@ -32,7 +32,9 @@ pub(crate) use media::{
     SvgPaint,
 };
 pub(crate) use metadata::{AvoidPageBreak, NamedString, PageBreak, RunningElement};
-pub(crate) use misc::{ColumnRule, HorizontalRule, MathBlock, ProgressBar, ProgressColors};
+#[cfg(test)]
+pub(crate) use misc::ProgressColors;
+pub(crate) use misc::{ColumnRule, HorizontalRule, MathBlock, ProgressBar};
 pub(crate) use multicol::{MulticolColumn, MulticolContainer};
 pub(crate) use placement::{FragmentBox, FragmentPlacement, FragmentPlacementOwner};
 pub(crate) use principal::{PrincipalBox, impl_principal_layout_element};

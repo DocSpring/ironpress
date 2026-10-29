@@ -1535,7 +1535,33 @@ pub(crate) fn layout_block_element(
     // measures shrink-to-fit rows inside the wrapper. When there is no wrapper
     // (a plain non-visual block), the group path never fires, so the inline-box
     // runs must stay and render as a TextBlock.
+    // The leading runs of a box with block children hold only its text and
+    // inline elements: its own inline-blocks are laid out beside them.
+    let runs_hold_own_inline_blocks = !has_block_kids_for_wrapper;
+    // The group path lays out only this box's own inline-block children. An
+    // atomic box inside an inline element (`<span><b style="display:
+    // inline-block">`), or a `<progress>` gauge, reaches the line only through
+    // these runs, so they must not be dropped for the group path.
+    let direct_inline_block_runs = if runs_hold_own_inline_blocks {
+        el.children
+            .iter()
+            .filter_map(|child| match child {
+                DomNode::Element(element) => Some(element),
+                DomNode::Text(_) => None,
+            })
+            .zip(inline_children.iter())
+            .filter(|(element, child)| {
+                matches!(child.role, InlineFormattingRole::Atomic(_))
+                    && child.role.uses_text_run_layout(element)
+            })
+            .count()
+    } else {
+        0
+    };
+    let group_path_owns_inline_boxes =
+        runs.iter().filter(|r| r.inline_box.is_some()).count() <= direct_inline_block_runs;
     let will_use_group_wrapper = has_inline_box_runs
+        && group_path_owns_inline_boxes
         && !had_text_runs
         && (early_has_visual
             || style.height.is_some()
@@ -1548,7 +1574,7 @@ pub(crate) fn layout_block_element(
         || has_math_children;
     let atomic_inline_emission = if mixed_inline_row_emitted {
         AtomicInlineEmission::MixedRow
-    } else if has_inline_box_runs && !will_use_group_wrapper {
+    } else if has_inline_box_runs && !will_use_group_wrapper && runs_hold_own_inline_blocks {
         AtomicInlineEmission::InlineBlockRuns
     } else {
         AtomicInlineEmission::Independent

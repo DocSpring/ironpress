@@ -505,6 +505,9 @@ fn transform_run_colors(run: &mut TextRun, transform: &impl FilterColorTransform
         if let Some(stroke) = &mut inline_box.paint.centered_stroke {
             stroke.transform_color(|color| transform.transform(color));
         }
+        if let Some(fill) = &mut inline_box.paint.gauge_fill {
+            fill.color = transform.transform(fill.color);
+        }
         for line in &mut inline_box.lines {
             for run in &mut line.runs {
                 transform_run_colors(run, transform);

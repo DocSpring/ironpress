@@ -3741,6 +3741,31 @@ fn collect_text_runs_inner(
                         } else {
                             link_url
                         };
+                        // `<progress>` and `<meter>` are inline-level replaced
+                        // gauges: in a line of text they take an atomic slot
+                        // like an inline-block, rather than flowing their
+                        // fallback children as text.
+                        if matches!(el.tag, HtmlTag::Progress | HtmlTag::Meter) {
+                            let gauge = crate::layout::elements::ProgressBar::for_element(
+                                el,
+                                &style,
+                                f32::INFINITY,
+                            );
+                            runs.push(TextRun {
+                                font_size: used_font_size(parent_style, fonts),
+                                color: parent_style.color,
+                                link_url: url.map(String::from),
+                                font_family: resolve_style_font_family(parent_style, fonts),
+                                line_height_factor: text_run_line_height_factor(
+                                    parent_style,
+                                    fonts,
+                                ),
+                                inline_box: Some(Box::new(gauge.into_inline_box(&style))),
+                                ..Default::default()
+                            });
+                            counter_state.leave_element(counter_scope);
+                            continue;
+                        }
                         let mut child_ancestors = ancestors.to_vec();
                         child_ancestors.push(selector_ctx.as_ancestor(el));
                         // `display: inline-block` is an atomic inline box: it

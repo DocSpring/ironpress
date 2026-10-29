@@ -344,6 +344,22 @@ fn render_progress_element() {
 }
 
 #[test]
+fn render_inline_progress_paints_track_fill_and_outline() {
+    let pdf =
+        crate::html_to_pdf(r#"<p>Done <progress value="1" max="2"></progress></p>"#).unwrap();
+    let content = String::from_utf8_lossy(&pdf);
+    assert!(
+        content.contains("0.88 0.88 0.88 rg\n"),
+        "Expected the gauge track"
+    );
+    assert!(
+        content.contains("0.12 0.53 0.9 rg\n") && content.contains(" 75 12 re\n"),
+        "Expected the half-width gauge fill"
+    );
+    assert!(content.contains("0.6 0.6 0.6 RG"), "Expected the gauge outline");
+}
+
+#[test]
 fn render_progress_empty() {
     let pdf = crate::html_to_pdf(r#"<progress value="0" max="1"></progress>"#).unwrap();
     assert!(pdf.starts_with(b"%PDF"));
