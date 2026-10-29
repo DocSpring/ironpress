@@ -29,8 +29,9 @@ use super::engine::{
 };
 use super::helpers::{PseudoBoxContext, build_pseudo_block, pseudo_is_block_like};
 use super::inline_formatting::{
-    AnonymousInlineFormattingContext, GeneratedBox, GeneratedContentStyles, GeneratedInlineContent,
-    IndependentFlowLayout, InlineFormattingChild, InlineFormattingRole, layout_mixed_flow_children,
+    AnonymousBlockFlow, AnonymousInlineFormattingContext, GeneratedBox, GeneratedContentStyles,
+    GeneratedInlineContent, IndependentFlowLayout, InlineContentSequence, InlineFormattingChild,
+    InlineFormattingContext, InlineFormattingRole, layout_mixed_flow_children,
 };
 #[cfg(test)]
 use super::paginate::estimate_element_height;
@@ -1379,6 +1380,7 @@ fn measure_caption_min_width(
             ancestors: &caption_ancestors,
             available_width: available_width.max(0.0),
             descendant_layout,
+            pass: TableCellFlowPass::Measure,
         },
         env,
     );
@@ -2507,6 +2509,7 @@ pub(crate) fn flatten_table(
                                         ancestors: &text_ancestors,
                                         available_width: inner_width,
                                         descendant_layout,
+                                        pass: TableCellFlowPass::Measure,
                                     },
                                     &mut measurement_env,
                                 );
@@ -3206,6 +3209,7 @@ pub(crate) fn flatten_table(
                         ancestors: &text_ancestors,
                         available_width: cell_inner,
                         descendant_layout,
+                        pass: TableCellFlowPass::Layout,
                     },
                     &mut flow_env,
                 );
@@ -3629,6 +3633,7 @@ pub(crate) fn flatten_table(
                     ancestors: &caption_ancestors,
                     available_width: caption_inner,
                     descendant_layout,
+                    pass: TableCellFlowPass::Layout,
                 },
                 &mut flow_env,
             );
@@ -3861,6 +3866,16 @@ struct TableCellFlowContext<'style, 'ancestors, 'dom> {
     ancestors: &'ancestors [AncestorInfo<'dom>],
     available_width: f32,
     descendant_layout: TableDescendantLayout,
+    pass: TableCellFlowPass,
+}
+
+/// Whether a cell's content is measured for its column's width or laid out.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TableCellFlowPass {
+    /// All of the cell's inline content is measured as one run sequence.
+    Measure,
+    /// Inline content after a block-level child is laid out after it.
+    Layout,
 }
 
 struct TableCellChildLayout<'output, 'style, 'ancestors, 'dom> {
@@ -3898,6 +3913,15 @@ impl IndependentFlowLayout for TableCellChildLayout<'_, '_, '_, '_> {
     }
 }
 
+/// Lay out a cell's children: its inline content as `runs` for the cell's own
+/// lines, and the boxes laid out on their own as `nested_rows`, which follow
+/// those lines.
+///
+/// Inline content after a block-level child can't join the cell's lines, which
+/// come first. From the first such block on, the content is laid out in source
+/// order into `nested_rows`, its inline runs in anonymous blocks
+/// (CSS 2.1 §9.2.1.1). The measuring pass keeps every run in `runs`, so the
+/// column is still as wide as the text needs.
 fn layout_table_cell_flow(
     nodes: &[DomNode],
     runs: &mut Vec<TextRun>,
@@ -3905,18 +3929,96 @@ fn layout_table_cell_flow(
     context: TableCellFlowContext<'_, '_, '_>,
     env: &mut LayoutEnv,
 ) {
+    let sequence = InlineContentSequence::new(nodes);
+    let anonymous_blocks_from = match context.pass {
+        TableCellFlowPass::Layout => first_block_before_inline_content(sequence, context, env),
+        TableCellFlowPass::Measure => None,
+    };
     let mut child_layout = TableCellChildLayout {
         context,
         output: nested_rows,
     };
     layout_mixed_flow_children(
-        nodes,
+        anonymous_blocks_from.map_or(sequence, |start| {
+            InlineContentSequence::segment(nodes, 0, start)
+        }),
         context.style,
         runs,
         context.ancestors,
         env,
         &mut child_layout,
     );
+    let Some(start) = anonymous_blocks_from else {
+        return;
+    };
+    let content = context
+        .descendant_layout
+        .child_context(context.available_width, context.style);
+    AnonymousBlockFlow::new(context.style, &content, context.ancestors).layout(
+        sequence.tail(start),
+        nested_rows,
+        env,
+        &mut |element: &ElementNode,
+              child: &InlineFormattingChild,
+              output: &mut Vec<LayoutNode>,
+              env: &mut LayoutEnv<'_>| {
+            TableCellChildLayout { context, output }.layout_independently(element, child, env);
+        },
+    );
+}
+
+/// The source index of a cell's first block-level child that inline content
+/// follows, if any.
+fn first_block_before_inline_content(
+    sequence: InlineContentSequence<'_>,
+    context: TableCellFlowContext<'_, '_, '_>,
+    env: &LayoutEnv,
+) -> Option<usize> {
+    let nodes = sequence.nodes();
+    let first_element = nodes
+        .iter()
+        .position(|node| matches!(node, DomNode::Element(_)))?;
+    // Only an element can be a block, so content must follow one.
+    if !nodes[first_element + 1..].iter().any(|node| match node {
+        DomNode::Element(_) => true,
+        DomNode::Text(text) => !text.trim().is_empty(),
+    }) {
+        return None;
+    }
+    let children = InlineFormattingContext::new(
+        context.style,
+        env.rules,
+        context.ancestors,
+        env.font_metrics(),
+    )
+    .children(sequence);
+    let mut first_block = None;
+    let mut element_index = 0;
+    for (node_index, node) in nodes.iter().enumerate() {
+        let inline_content = match node {
+            DomNode::Text(text) => !text.trim().is_empty(),
+            DomNode::Element(element) => {
+                let child = children.get(element_index)?;
+                element_index += 1;
+                match child.role {
+                    InlineFormattingRole::Hidden | InlineFormattingRole::OutOfFlow => false,
+                    InlineFormattingRole::Outside => {
+                        if first_block.is_none()
+                            && table_cell_child_should_flatten(element, &child.style)
+                        {
+                            first_block = Some(node_index);
+                        }
+                        false
+                    }
+                    _ => true,
+                }
+            }
+        };
+        if inline_content && first_block.is_some() {
+            return first_block;
+        }
+    }
+    None
 }
 
 #[cfg(test)]

@@ -40,21 +40,20 @@ pub(crate) trait IndependentFlowLayout {
 /// Inline participants are collected by [`InlineRunCollector`]; only a policy-
 /// approved independent box escapes to the formatting-context implementation.
 pub(crate) fn layout_mixed_flow_children<'dom>(
-    nodes: &'dom [DomNode],
+    sequence: InlineContentSequence<'dom>,
     parent_style: &ComputedStyle,
     runs: &mut Vec<TextRun>,
     ancestors: &[AncestorInfo<'dom>],
     env: &mut LayoutEnv<'_>,
     independent_layout: &mut impl IndependentFlowLayout,
 ) {
-    let sequence = InlineContentSequence::new(nodes);
     let children =
         InlineFormattingContext::new(parent_style, env.rules, ancestors, env.font_metrics())
             .children(sequence);
     let mut element_index = 0;
     let run_context = independent_layout.inline_run_context();
 
-    for (node_index, node) in nodes.iter().enumerate() {
+    for (node_index, node) in sequence.nodes().iter().enumerate() {
         let DomNode::Element(element) = node else {
             InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
                 .in_context(run_context)

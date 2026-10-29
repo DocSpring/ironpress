@@ -48,6 +48,7 @@ use super::inline_formatting::{
     AtomicInlineKind, GeneratedContentStyles, InlineContentSequence, InlineFormattingContext,
     InlineFormattingRole, PrincipalPseudoStyles,
 };
+use super::list_item::{ListItemContent, collect_list_item_marker_line, layout_list_item_blocks};
 use super::list_markers::{
     BuiltInBulletSlot, build_list_bullet_marker, format_counter_value, format_list_marker,
 };
@@ -4401,30 +4402,51 @@ fn flatten_element_with_running_mode(
                 });
             }
 
-            let runs_before_inline = runs.len();
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect_box_content(&el.children, &style, &mut runs, None, ancestors);
-            append_pseudo_inline_run(
-                &mut runs,
-                generated_styles.after(),
-                el,
-                env.fonts,
-                env.counter_state,
-                &mut *env.resources,
-            );
-
-            // "Loose" list items (Markdown with blank lines between items) wrap each
-            // item's content in a <p>. When the <li> has no direct inline content
-            // but its first block child is a <p>, inline that <p>'s runs so the
-            // marker sits on the same baseline as the first line of text (matching
-            // Chrome), and apply the <p>'s vertical margins on the combined block
-            // so consecutive loose items are separated as paragraphs. Gated on
-            // <li> to keep the hot path (nested blocks) free of extra stack.
+            // Block-level children other than nested lists, and inline content
+            // after a block, are laid out after the marker's line, in source
+            // order (`layout_list_item_blocks` below).
+            let list_item_blocks =
+                collect_list_item_marker_line(el, &style, &child_ancestors, env, &mut runs);
             let (consumed_p_idx, extra_margin_top, extra_margin_bottom) =
-                if el.tag == HtmlTag::Li && runs.len() == runs_before_inline {
-                    inline_loose_list_p(el, &style, &child_ancestors, env, &mut runs)
+                if let Some(blocks) = &list_item_blocks {
+                    (None, blocks.margin_top, blocks.margin_bottom)
                 } else {
-                    (None, 0.0, 0.0)
+                    let runs_before_inline = runs.len();
+                    InlineRunCollector::new(
+                        env.rules,
+                        env.fonts,
+                        env.counter_state,
+                        &mut *env.resources,
+                    )
+                    .collect_box_content(
+                        &el.children,
+                        &style,
+                        &mut runs,
+                        None,
+                        ancestors,
+                    );
+                    append_pseudo_inline_run(
+                        &mut runs,
+                        generated_styles.after(),
+                        el,
+                        env.fonts,
+                        env.counter_state,
+                        &mut *env.resources,
+                    );
+
+                    // "Loose" list items (Markdown with blank lines between items)
+                    // wrap each item's content in a <p>. When the <li> has no direct
+                    // inline content but its first block child is a <p>, inline that
+                    // <p>'s runs so the marker sits on the same baseline as the first
+                    // line of text (matching Chrome), and apply the <p>'s vertical
+                    // margins on the combined block so consecutive loose items are
+                    // separated as paragraphs. Gated on <li> to keep the hot path
+                    // (nested blocks) free of extra stack.
+                    if el.tag == HtmlTag::Li && runs.len() == runs_before_inline {
+                        inline_loose_list_p(el, &style, &child_ancestors, env, &mut runs)
+                    } else {
+                        (None, 0.0, 0.0)
+                    }
                 };
 
             let block_heading_level = heading_level(el.tag);
@@ -4536,6 +4558,34 @@ fn flatten_element_with_running_mode(
                 );
                 list_block.semantics.heading_level = block_heading_level;
                 output.push(list_block.boxed());
+            }
+
+            if let Some(blocks) = &list_item_blocks {
+                let content = layout_ctx
+                    .with_parent(inner_width, Some(available_height), style.font_size)
+                    .with_containing_block(None);
+                let border_left = LayoutBorder::from_computed(&style.border, style.color)
+                    .left
+                    .width;
+                layout_list_item_blocks(
+                    el,
+                    &style,
+                    generated_styles.after(),
+                    blocks,
+                    ListItemContent {
+                        layout: &content,
+                        ancestors: &child_ancestors,
+                        list: list_ctx,
+                        positioned_depth,
+                        inline_start: style.left.unwrap_or(0.0)
+                            + list_indent
+                            + border_left
+                            + style.padding.left,
+                    },
+                    output,
+                    env,
+                );
+                return;
             }
 
             // Process block children inside li (nested lists get reduced width for indentation)
