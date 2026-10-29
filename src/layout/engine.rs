@@ -4449,6 +4449,21 @@ fn flatten_element_with_running_mode(
 
             let block_heading_level = heading_level(el.tag);
 
+            // An item with a box of its own (a background, border or vertical
+            // padding) and block children keeps that box around all of its
+            // content: the marker's line and its blocks are laid out inside it,
+            // from its content edge.
+            let item_start = output.len();
+            let item_box = list_item_keeps_box(
+                el,
+                &style,
+                list_item_blocks.is_some(),
+                consumed_p_idx,
+                parent_style,
+            );
+            let item_left = style.left.unwrap_or(0.0) + list_indent;
+            let item_border = LayoutBorder::from_computed(&style.border, style.color);
+
             if !runs.is_empty() {
                 let effective_writing_mode = if style.writing_mode == WritingMode::HorizontalTb {
                     parent_style.writing_mode
@@ -4521,8 +4536,10 @@ fn flatten_element_with_running_mode(
                         + list_indent
                         + (available_width - vertical_column_advance - vertical_column_offset)
                             .max(0.0)
+                } else if item_box {
+                    0.0
                 } else {
-                    style.left.unwrap_or(0.0) + list_indent
+                    item_left
                 };
                 let offset_bottom = if vertical_marker_match {
                     (vertical_inline_extent
@@ -4544,6 +4561,22 @@ fn flatten_element_with_running_mode(
                     border: LayoutBorder::from_computed(&style.border, style.color),
                 };
                 let mut list_block = TextBlock::from_style(lines, &style, box_model);
+                if item_box {
+                    // The item's box (`wrap_list_item_box`) paints, offsets and
+                    // spaces the item; this block is its first line of content.
+                    list_block.box_model = BoxModel {
+                        size: LayoutSize::fixed(
+                            block_width
+                                - style.padding.horizontal()
+                                - item_border.horizontal_width(),
+                            None,
+                        ),
+                        margins: BlockMargins::new(extra_margin_top, extra_margin_bottom),
+                        ..BoxModel::default()
+                    };
+                    list_block.paint = Default::default();
+                    list_block.positioning = Default::default();
+                }
                 list_block.text.writing_mode = effective_writing_mode;
                 // Hang an outside marker into the padding while preserving an
                 // authored text indent as part of the same text-formatting group.
@@ -4575,14 +4608,18 @@ fn flatten_element_with_running_mode(
                         ancestors: &child_ancestors,
                         list: list_ctx,
                         positioned_depth,
-                        inline_start: style.left.unwrap_or(0.0)
-                            + list_indent
-                            + border_left
-                            + style.padding.left,
+                        inline_start: if item_box {
+                            0.0
+                        } else {
+                            item_left + border_left + style.padding.left
+                        },
                     },
                     output,
                     env,
                 );
+                if item_box {
+                    wrap_list_item_box(output, item_start, &style, item_left, available_width);
+                }
                 return;
             }
 
@@ -4612,9 +4649,17 @@ fn flatten_element_with_running_mode(
                         // (the li's content edge sans its padding); add the li's
                         // padding-left so the sublist — and its markers — start at the
                         // li's content edge, not its border edge.
+                        // Inside the item's own box, the box places it.
+                        let nested_indent = |indent: f32| {
+                            if item_box {
+                                0.0
+                            } else {
+                                indent + style.padding.left
+                            }
+                        };
                         let nested_list_ctx = list_ctx.map(|c| match *c {
                             ListContext::Unordered { indent } => ListContext::Unordered {
-                                indent: indent + style.padding.left,
+                                indent: nested_indent(indent),
                             },
                             ListContext::Ordered {
                                 index,
@@ -4623,7 +4668,7 @@ fn flatten_element_with_running_mode(
                             } => ListContext::Ordered {
                                 index,
                                 step,
-                                indent: indent + style.padding.left,
+                                indent: nested_indent(indent),
                             },
                         });
                         flatten_element(
@@ -4656,6 +4701,9 @@ fn flatten_element_with_running_mode(
                     }
                     child_el_idx += 1;
                 }
+            }
+            if item_box {
+                wrap_list_item_box(output, item_start, &style, item_left, available_width);
             }
             // Mirror `route_element`'s counter cleanup: this Li branch `return`s
             // early, so pop any counters it pushed via `counter-reset` to keep the
@@ -4894,6 +4942,82 @@ pub(crate) fn layout_list_children(
     if auto_list_item_counter {
         env.counter_state.pop_name("list-item");
     }
+}
+
+/// Whether a list item keeps a box of its own around its content: it has a
+/// background, border or vertical padding to paint around block children
+/// (a nested list or another block). An item whose content is one text
+/// block paints that box on the block itself.
+fn list_item_keeps_box(
+    item: &ElementNode,
+    style: &ComputedStyle,
+    has_blocks_after_marker_line: bool,
+    consumed_paragraph: Option<usize>,
+    parent_style: &ComputedStyle,
+) -> bool {
+    if style.writing_mode.is_vertical() || parent_style.writing_mode.is_vertical() {
+        return false;
+    }
+    let has_box = has_background_paint(style)
+        || style.has_border_decoration()
+        || style.padding.top != 0.0
+        || style.padding.bottom != 0.0
+        || !style.box_shadow.is_empty();
+    has_box
+        && (has_blocks_after_marker_line
+            || item.children.iter().enumerate().any(|(index, child)| {
+                Some(index) != consumed_paragraph
+                    && matches!(child, DomNode::Element(element)
+                        if matches!(element.tag, HtmlTag::Ul | HtmlTag::Ol)
+                            || recurses_as_layout_child(element.tag))
+            }))
+}
+
+/// Put a list item's content, laid out from its content edge since
+/// `item_start`, in the item's own box.
+fn wrap_list_item_box(
+    output: &mut Vec<LayoutNode>,
+    item_start: usize,
+    style: &ComputedStyle,
+    item_left: f32,
+    available_width: f32,
+) {
+    let children: Vec<LayoutNode> = output.drain(item_start..).collect();
+    let width = style.width.unwrap_or(available_width);
+    let size = LayoutSize {
+        width: crate::layout::elements::InlineSize::from_used(
+            width,
+            available_width,
+            style.width.is_some(),
+        ),
+        height: crate::layout::elements::BlockSize::from_definite(style.height),
+    };
+    output.push(
+        Container {
+            children,
+            box_model: BoxModel {
+                size,
+                margins: BlockMargins::new(style.margin.top, style.margin.bottom),
+                padding: style.padding,
+                border: LayoutBorder::from_computed(&style.border, style.color),
+            },
+            paint: crate::layout::elements::BoxPaint::from_style(style, size),
+            flow: crate::layout::elements::BlockFlow {
+                float: style.float,
+                clear: style.clear,
+            },
+            positioning: crate::layout::elements::Positioning::from_style(style)
+                .with_resolved_insets(EdgeSizes::new(
+                    style.top.unwrap_or_default(),
+                    style.right.unwrap_or_default(),
+                    style.bottom.unwrap_or_default(),
+                    item_left,
+                )),
+            fragmentation: BoxFragmentation::from_style(style),
+            ..Default::default()
+        }
+        .boxed(),
+    );
 }
 
 /// Extracted helper for the loose-list fix (#140): when an `<li>` has no
