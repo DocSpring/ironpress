@@ -15,6 +15,7 @@ pub(crate) mod inline;
 pub(crate) mod inline_box;
 pub(crate) mod inline_formatting;
 pub(crate) mod intrinsic_width;
+pub(crate) mod list_item;
 pub(crate) mod list_markers;
 pub mod math;
 pub(crate) mod multicol;

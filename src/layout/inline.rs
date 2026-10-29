@@ -165,7 +165,14 @@ fn layout_inline_block_contents(
     env: &mut LayoutEnv,
     layout: &mut InlineBlockChildLayout<'_, '_>,
 ) {
-    layout_mixed_flow_children(nodes, parent_style, runs, ancestors, env, layout);
+    layout_mixed_flow_children(
+        InlineContentSequence::new(nodes),
+        parent_style,
+        runs,
+        ancestors,
+        env,
+        layout,
+    );
 }
 
 /// Lay out consecutive atomic inline elements as `FlexRow`s.

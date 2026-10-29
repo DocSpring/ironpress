@@ -1,7 +1,7 @@
 //! CSS 2.1 §9.2.1.1: inline content beside block-level siblings is wrapped in
 //! anonymous block boxes that keep their place among those siblings.
 
-use crate::layout::elements::{FlexRow, Image, LayoutVisitor, TextBlock};
+use crate::layout::elements::{FlexRow, Image, LayoutVisitor, TableRow, TextBlock};
 use crate::layout::engine::{TextLine, visit_layout_tree};
 
 use super::support::layout_pages;
@@ -69,6 +69,13 @@ impl LayoutVisitor for ContentOrder {
             words.push_str(&" <img> ".repeat(images.0));
         }
         self.push(&words);
+    }
+
+    /// A cell's own lines come before the boxes laid out inside it.
+    fn visit_table_row(&mut self, row: &TableRow) {
+        for cell in &row.content.cells {
+            self.push(&line_words(&cell.layout.content.lines));
+        }
     }
 
     fn visit_image(&mut self, _element: &Image) {
@@ -140,4 +147,72 @@ fn painted_block_keeps_generated_content_around_its_anonymous_blocks() {
     );
 
     assert_eq!(order, ["[b]head", "One", "foot[a]"]);
+}
+
+#[test]
+fn table_cell_keeps_the_text_after_its_block_children_after_them() {
+    let order = content_order(
+        r#"<table><tr><td>Before <div>block</div> after <i>it</i><div>end</div></td></tr></table>"#,
+    );
+
+    assert_eq!(order, ["Before", "block", "after it", "end"]);
+}
+
+#[test]
+fn list_item_keeps_its_block_children_and_the_text_after_them_in_source_order() {
+    let order = content_order(
+        r#"<ol>
+            <li>Text before <div>block</div> text <b>after</b></li>
+            <li><span style="display:block">Span block</span></li>
+        </ol>"#,
+    );
+
+    assert_eq!(
+        order,
+        ["1. Text before", "block", "text after", "2. Span block"]
+    );
+}
+
+/// Each page-level text block's words and the x of its content edge.
+#[derive(Default)]
+struct ContentEdges(Vec<(String, f32)>);
+
+impl LayoutVisitor for ContentEdges {
+    fn visit_text_block(&mut self, block: &TextBlock) {
+        let words = line_words(&block.lines);
+        let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+        let edge = block.positioning.insets.left
+            + block.box_model.border.left.width
+            + block.box_model.padding.left;
+        self.0.push((words, edge));
+    }
+}
+
+#[test]
+fn list_item_lays_out_its_block_children_at_its_content_edge() {
+    let mut edges = ContentEdges::default();
+    for page in layout_pages(
+        r#"<style>ds-line { display: block }</style>
+        <ul style="margin:0;padding-left:40px">
+            <li style="padding-left:8px"><ds-line>One</ds-line><div>Two</div><ds-line>Three</ds-line></li>
+            <li><p style="margin:0">Four</p><p style="margin:0">Five</p></li>
+        </ul>"#,
+    ) {
+        for (_, element) in &page.elements {
+            element.accept(&mut edges);
+        }
+    }
+
+    // 40px of list padding is 30pt, and the first item's 8px is 6pt more.
+    let expected = [
+        ("<img> One", 36.0),
+        ("Two", 36.0),
+        ("Three", 36.0),
+        ("<img> Four", 30.0),
+        ("Five", 30.0),
+    ];
+    assert_eq!(
+        edges.0,
+        expected.map(|(words, edge)| (words.to_string(), edge))
+    );
 }
