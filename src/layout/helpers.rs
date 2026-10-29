@@ -685,6 +685,67 @@ pub(crate) fn collapse_margins_through_parent(
     }
 }
 
+/// The counterpart of [`collapse_margins_through_parent`] for a block laid out
+/// without a principal box: its children join its parent's flow, so nothing
+/// separates its margins from theirs (CSS 2.1 § 8.3.1). Its top margin
+/// collapses into its first in-flow child's and its bottom margin into its
+/// last's. With no in-flow child its margins collapse together onto an empty
+/// spacer.
+pub(crate) fn collapse_margins_into_children(
+    children: &mut Vec<LayoutNode>,
+    start: usize,
+    margin_top: f32,
+    margin_bottom: f32,
+) {
+    let Some(own) = children.get_mut(start..) else {
+        return;
+    };
+    let (Some(first), Some(last)) = (first_in_flow_idx(own), last_in_flow_idx(own)) else {
+        let margin = collapse_margin_pair(margin_top, margin_bottom);
+        if margin != 0.0 {
+            let mut spacer = crate::layout::elements::TextBlock::empty_spacer();
+            spacer.box_model.margins = BlockMargins::new(margin, 0.0);
+            children.push(spacer.boxed());
+        }
+        return;
+    };
+    if margin_bottom != 0.0 {
+        match own[last]
+            .block_flow_participant_mut()
+            .filter(|flow| flow.collapses_outer_margins())
+        {
+            Some(flow) => {
+                let end = &mut flow.margins_mut().end;
+                *end = collapse_margin_pair(margin_bottom, *end);
+            }
+            None => {
+                let mut spacer = crate::layout::elements::TextBlock::empty_spacer();
+                spacer.box_model.margins = BlockMargins::new(margin_bottom, 0.0);
+                children.insert(start + last + 1, spacer.boxed());
+            }
+        }
+    }
+    if margin_top != 0.0 {
+        let Some(own) = children.get_mut(start..) else {
+            return;
+        };
+        match own[first]
+            .block_flow_participant_mut()
+            .filter(|flow| flow.collapses_outer_margins())
+        {
+            Some(flow) => {
+                let begin = &mut flow.margins_mut().start;
+                *begin = collapse_margin_pair(margin_top, *begin);
+            }
+            None => {
+                let mut spacer = crate::layout::elements::TextBlock::empty_spacer();
+                spacer.box_model.margins = BlockMargins::new(margin_top, 0.0);
+                children.insert(start + first, spacer.boxed());
+            }
+        }
+    }
+}
+
 /// Collapse two adjoining margins (CSS 2.1 § 8.3.1): both non-negative → the
 /// larger; both negative → the more negative; mixed signs → the sum (max
 /// positive plus min negative). Used both for parent/child collapse-through and
