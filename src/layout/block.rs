@@ -247,6 +247,17 @@ fn split_runs_at_text_len(runs: Vec<TextRun>, mut count: usize) -> (Vec<TextRun>
     (first, rest)
 }
 
+/// Anonymous block boxes around a flat block's children have no margins of
+/// their own: the block's margins belong at its outer edges
+/// ([`crate::layout::helpers::collapse_margins_into_children`]).
+fn clear_anonymous_block_margins(nodes: &mut [LayoutNode]) {
+    for node in nodes {
+        if let Some(flow) = node.block_flow_participant_mut() {
+            *flow.margins_mut() = BlockMargins::ZERO;
+        }
+    }
+}
+
 fn trim_leading_collapsible_space(runs: &mut Vec<TextRun>) {
     while let Some(first) = runs.first_mut() {
         if first.inline_box.is_some() {
@@ -812,7 +823,20 @@ pub(crate) fn layout_block_element(
         child_ancestors,
         env.font_metrics(),
     );
-    let requires_principal_box = early_has_visual || style.position.is_positioned();
+    // The flat path below lays block children out in this box's parent flow,
+    // so it keeps none of this box's own geometry. A box whose width, inline
+    // offset, height, transform or overflow clip applies to its block children
+    // keeps its principal box instead.
+    let keeps_box_geometry = (block_w - available_width).abs() > 0.01
+        || style.margin.left != 0.0
+        || auto_offset_left != 0.0
+        || effective_height.is_some()
+        || style.max_height.is_some()
+        || style.aspect_ratio.is_some()
+        || style.transform.is_some()
+        || overflow_axes.clips_any();
+    let requires_principal_box =
+        early_has_visual || style.position.is_positioned() || keeps_box_geometry;
     let has_block_kids_for_wrapper = nesting_depth < 40
         && (has_inflow_block_pseudo
             || early_has_visual && has_out_of_flow_children
@@ -945,7 +969,9 @@ pub(crate) fn layout_block_element(
         }
     });
 
-    if has_math_children {
+    // A box that keeps its principal box lays out every child, math included,
+    // in the Container wrapper below.
+    if has_math_children && !has_block_kids_for_wrapper {
         inline_sequence.append_before(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
         // Split mode: interleave TextBlocks and MathBlocks
         for (child_index, child) in el.children.iter().enumerate() {
@@ -1120,6 +1146,7 @@ pub(crate) fn layout_block_element(
                     .peek()
                     .is_some_and(|segment| segment.start() == child_index)
                 {
+                    let anonymous_start = target.len();
                     flush_runs(
                         &mut runs,
                         inner_width,
@@ -1132,6 +1159,8 @@ pub(crate) fn layout_block_element(
                         target,
                         env.fonts,
                     );
+                    clear_anonymous_block_margins(&mut target[anonymous_start..]);
+                    let anonymous_start = target.len();
                     if let Some(segment) = atomic_inline_segments.next()
                         && layout_inline_mixed_sequence_with_env(
                             segment,
@@ -1144,6 +1173,7 @@ pub(crate) fn layout_block_element(
                     {
                         emitted_atomic_until = segment.end();
                     }
+                    clear_anonymous_block_margins(&mut target[anonymous_start..]);
                 }
                 if child_index < emitted_atomic_until {
                     if matches!(child, DomNode::Element(_)) {
@@ -1171,6 +1201,7 @@ pub(crate) fn layout_block_element(
                         if inline_children.requires_independent_layout(child_el_idx) =>
                     {
                         // Flush inline runs before block child
+                        let anonymous_start = target.len();
                         flush_runs(
                             &mut runs,
                             inner_width,
@@ -1183,6 +1214,7 @@ pub(crate) fn layout_block_element(
                             target,
                             env.fonts,
                         );
+                        clear_anonymous_block_margins(&mut target[anonymous_start..]);
                         // Recurse into block child
                         let child_percent_cb = effective_height.map(|height| ContainingBlock {
                             x: 0.0,
@@ -1250,6 +1282,7 @@ pub(crate) fn layout_block_element(
                 &mut *env.resources,
             );
             // Flush remaining inline runs after the last block child.
+            let anonymous_start = target.len();
             flush_runs(
                 &mut runs,
                 inner_width,
@@ -1262,6 +1295,17 @@ pub(crate) fn layout_block_element(
                 target,
                 env.fonts,
             );
+            clear_anonymous_block_margins(&mut target[anonymous_start..]);
+            // This block has no box of its own here, so its vertical margins
+            // collapse with its first and last children's.
+            if !parent_has_visual {
+                crate::layout::helpers::collapse_margins_into_children(
+                    output,
+                    wrapper_output_idx,
+                    style.margin.top,
+                    style.margin.bottom,
+                );
+            }
             // For visual containers, propagate parent padding to children
             // so they render inside the padded area.
             if parent_has_visual {
@@ -1783,6 +1827,7 @@ pub(crate) fn layout_block_element(
     let has_abs_children = has_out_of_flow_children;
     let needs_wrapper = has_visual
         || style.position.is_positioned()
+        || keeps_box_geometry && has_block_kids_for_wrapper
         || style.aspect_ratio.is_some()
         || style.height.is_some()
         || !layout_padding.is_zero()
