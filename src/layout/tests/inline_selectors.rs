@@ -232,3 +232,34 @@ fn positioned_inline_inside_flex_item_uses_the_general_item_context() {
         "snapshots: {snapshots:#?}"
     );
 }
+
+#[test]
+fn list_item_inline_children_match_child_and_descendant_selectors() {
+    let runs = visible_runs(
+        r#"<style>
+            li > b { color: #c1121f; }
+            li.item > i { color: #1d4ed8; }
+            ul > li > span { color: #15803d; }
+        </style>
+        <ul><li class="item">Plain <b>bold</b> <i>italic</i> <span>span</span></li></ul>"#,
+    );
+    let color_of = |text: &str| {
+        runs.iter()
+            .find(|run| run.text.contains(text))
+            .unwrap_or_else(|| panic!("missing {text} run: {runs:#?}"))
+            .color
+    };
+
+    assert_eq!(color_of("bold"), Color::rgb(193, 18, 31), "runs: {runs:#?}");
+    assert_eq!(
+        color_of("italic"),
+        Color::rgb(29, 78, 216),
+        "runs: {runs:#?}"
+    );
+    assert_eq!(color_of("span"), Color::rgb(21, 128, 61), "runs: {runs:#?}");
+    assert_ne!(
+        color_of("Plain"),
+        Color::rgb(193, 18, 31),
+        "runs: {runs:#?}"
+    );
+}

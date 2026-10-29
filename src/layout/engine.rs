@@ -4403,7 +4403,7 @@ fn flatten_element_with_running_mode(
 
             let runs_before_inline = runs.len();
             InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect_box_content(&el.children, &style, &mut runs, None, ancestors);
+                .collect_box_content(&el.children, &style, &mut runs, None, &child_ancestors);
             append_pseudo_inline_run(
                 &mut runs,
                 generated_styles.after(),
