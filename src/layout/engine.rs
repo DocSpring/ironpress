@@ -234,6 +234,10 @@ impl PhysicalEdges<LayoutBorderSide> {
 pub(crate) struct CounterState {
     pub(crate) stacks: HashMap<String, Vec<i32>>,
     pub(crate) quote_depth: usize,
+    /// Set while a running element is captured: `counter(page)` and
+    /// `counter(pages)` there take the values of each page that displays it
+    /// ([`super::page_counters`]).
+    pub(crate) defer_page_counters: bool,
 }
 
 /// Counter operations attached to one generated element box.
@@ -2533,8 +2537,14 @@ fn resolve_target_placeholders_in_text(
             return out;
         };
         let payload = &rest[payload_start..payload_start + end_rel];
-        out.push_str(&resolve_target_payload(payload, dom_targets, page_by_id));
-        rest = &rest[payload_start + end_rel + TARGET_PLACEHOLDER_END.len()..];
+        let marker_end = payload_start + end_rel + TARGET_PLACEHOLDER_END.len();
+        if crate::layout::page_counters::is_page_counter_payload(payload) {
+            // Resolved per page by the renderer.
+            out.push_str(&rest[start..marker_end]);
+        } else {
+            out.push_str(&resolve_target_payload(payload, dom_targets, page_by_id));
+        }
+        rest = &rest[marker_end..];
     }
     out.push_str(rest);
     out
@@ -2574,6 +2584,7 @@ fn capture_running_element(
     env: &mut LayoutEnv,
 ) -> Option<LayoutNode> {
     let mut captured = Vec::new();
+    let defer_page_counters = std::mem::replace(&mut env.counter_state.defer_page_counters, true);
     flatten_element_with_running_mode(
         el,
         context,
@@ -2581,6 +2592,7 @@ fn capture_running_element(
         env,
         RunningElementMode::LayoutCapturedContent,
     );
+    env.counter_state.defer_page_counters = defer_page_counters;
     let element = if captured.len() == 1 {
         captured.pop()?
     } else {
