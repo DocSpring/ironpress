@@ -4487,7 +4487,7 @@ fn flatten_element_with_running_mode(
                         &style,
                         &mut runs,
                         None,
-                        ancestors,
+                        &child_ancestors,
                     );
                     append_pseudo_inline_run(
                         &mut runs,
