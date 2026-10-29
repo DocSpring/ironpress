@@ -14,8 +14,9 @@ use crate::parser::css::{AncestorInfo, CssRule, CssValue, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
-    BorderCollapse, BoxSizing, ComputedStyle, Display, TableLayout, VerticalAlign, Visibility,
-    WhiteSpace, compute_style_with_context, compute_style_with_context_with_font_metrics,
+    BorderCollapse, BoxSizing, ComputedStyle, Display, IntrinsicWidthKeyword, TableLayout,
+    VerticalAlign, Visibility, WhiteSpace, compute_style_with_context,
+    compute_style_with_context_with_font_metrics,
 };
 use crate::style::font_metrics::FontMetrics;
 use crate::types::EdgeSizes;
@@ -362,25 +363,41 @@ impl TableRootBoxModel {
 /// cell. Used so shrink-to-fit columns stay at least as wide as fixed-width
 /// block descendants, nested tables, and replaced content.
 fn nested_element_preferred_width(element: &dyn LayoutElement) -> f32 {
-    #[derive(Default)]
-    struct PreferredWidth(f32);
+    nested_layout_preferred_width(element, true)
+}
+
+/// The width a nested box wants inside an auto-sized table cell whose text
+/// blocks are measured from their content instead (`cell_flow_block_widths`):
+/// a text block laid out in the cell can fill the width it was given, which
+/// says nothing about the width it needs.
+fn nested_box_preferred_width(element: &dyn LayoutElement) -> f32 {
+    nested_layout_preferred_width(element, false)
+}
+
+fn nested_layout_preferred_width(element: &dyn LayoutElement, text_blocks: bool) -> f32 {
+    struct PreferredWidth {
+        width: f32,
+        text_blocks: bool,
+    }
 
     impl LayoutVisitor for PreferredWidth {
         fn visit_table_row(&mut self, element: &TableRow) {
-            self.0 = element.box_inline_extent();
+            self.width = element.box_inline_extent();
         }
 
         fn visit_text_block(&mut self, element: &TextBlock) {
-            self.0 = element
-                .box_model
-                .size
-                .width
-                .fixed_value()
-                .unwrap_or_default();
+            if self.text_blocks {
+                self.width = element
+                    .box_model
+                    .size
+                    .width
+                    .fixed_value()
+                    .unwrap_or_default();
+            }
         }
 
         fn visit_container(&mut self, element: &Container) {
-            self.0 = element
+            self.width = element
                 .box_model
                 .size
                 .width
@@ -389,17 +406,20 @@ fn nested_element_preferred_width(element: &dyn LayoutElement) -> f32 {
         }
 
         fn visit_image(&mut self, element: &Image) {
-            self.0 = element.geometry.size.width;
+            self.width = element.geometry.size.width;
         }
 
         fn visit_svg(&mut self, element: &Svg) {
-            self.0 = element.geometry.size.width;
+            self.width = element.geometry.size.width;
         }
     }
 
-    let mut width = PreferredWidth::default();
+    let mut width = PreferredWidth {
+        width: 0.0,
+        text_blocks,
+    };
     element.accept(&mut width);
-    width.0
+    width.width
 }
 
 /// Whether a `<td>`/`<th>` has no in-flow content for the purpose of
@@ -2475,6 +2495,7 @@ pub(crate) fn flatten_table(
                             let authored_generated = authored_generated.boxes(cell_el);
                             let mut runs = Vec::new();
                             let mut nested_rows = Vec::new();
+                            let block_widths;
                             let mut text_ancestors = cell_sizing_ctx.ancestors.clone();
                             push_table_dom_ancestor(&mut text_ancestors, cell_el, cell_siblings);
                             generated_cell_content.append_before_measurement(
@@ -2513,6 +2534,15 @@ pub(crate) fn flatten_table(
                                     },
                                     &mut measurement_env,
                                 );
+                                // The cell's blocks (paragraphs, divs, lists) sit on
+                                // lines of their own beside its inline content.
+                                block_widths = cell_flow_block_widths(
+                                    &cell_el.children,
+                                    &cell_style,
+                                    &text_ancestors,
+                                    inner_width,
+                                    &mut measurement_env,
+                                );
                             }
                             generated_cell_content.append_after_measurement(
                                 &mut runs,
@@ -2542,15 +2572,15 @@ pub(crate) fn flatten_table(
                                 table_cell_allows_soft_wrap(&cell_style),
                                 fonts,
                             );
-                            let content_width = intrinsic.max_content;
-                            let content_min_width = intrinsic.min_content;
+                            let content_width = intrinsic.max_content.max(block_widths.max);
+                            let content_min_width = intrinsic.min_content.max(block_widths.min);
                             // Nested block descendants (e.g. a fixed-width <div>) and
                             // nested tables both contribute a minimum content width so
                             // a shrink-to-fit cell does not crush them narrower than
                             // their own declared/intrinsic width.
                             let nested_width = nested_rows
                                 .iter()
-                                .map(|element| nested_element_preferred_width(element.as_ref()))
+                                .map(|element| nested_box_preferred_width(element.as_ref()))
                                 .fold(0.0f32, f32::max);
                             // An explicit width on the cell (CSS or `width` attribute)
                             // seeds the column's preferred width: the column is at least
@@ -3837,14 +3867,206 @@ fn table_cell_edge_block_margins(
             continue;
         }
 
-        first_margin_top.get_or_insert(child_style.margin.top);
-        last_margin_bottom = Some(child_style.margin.bottom);
+        // A child laid out as a block in the cell's block flow brings its
+        // own margins, inside the cell's content box.
+        let (margin_top, margin_bottom) = if table_cell_child_should_flatten(element, &child_style)
+        {
+            (0.0, 0.0)
+        } else {
+            (child_style.margin.top, child_style.margin.bottom)
+        };
+        first_margin_top.get_or_insert(margin_top);
+        last_margin_bottom = Some(margin_bottom);
     }
 
     (
         first_margin_top.unwrap_or(0.0),
         last_margin_bottom.unwrap_or(0.0),
     )
+}
+
+/// Min-content and max-content widths, in points.
+#[derive(Clone, Copy, Default)]
+struct FlowWidths {
+    min: f32,
+    max: f32,
+}
+
+impl FlowWidths {
+    fn include(&mut self, other: Self) {
+        self.min = self.min.max(other.min);
+        self.max = self.max.max(other.max);
+    }
+
+    fn widened(self, extra: f32) -> Self {
+        Self {
+            min: self.min + extra,
+            max: self.max + extra,
+        }
+    }
+}
+
+/// The widest min-content and max-content widths of the block-level boxes
+/// in a table cell's flow, each with its horizontal margins: a cell's
+/// content widths include its blocks' (CSS 2.1 §17.5.2.2). Nested tables,
+/// images and SVGs are measured from their layout instead
+/// (`nested_box_preferred_width`), and out-of-flow boxes take no part.
+fn cell_flow_block_widths(
+    nodes: &[DomNode],
+    style: &ComputedStyle,
+    ancestors: &[AncestorInfo],
+    available_width: f32,
+    env: &mut LayoutEnv,
+) -> FlowWidths {
+    cell_flow_widths(nodes, style, ancestors, available_width, false, env)
+}
+
+/// The content widths of a flow of nodes: the inline content between its
+/// blocks, when `with_inline` is set, and its block-level boxes. Text is
+/// measured from the runs its lines are laid out from.
+fn cell_flow_widths(
+    nodes: &[DomNode],
+    style: &ComputedStyle,
+    ancestors: &[AncestorInfo],
+    available_width: f32,
+    with_inline: bool,
+    env: &mut LayoutEnv,
+) -> FlowWidths {
+    let children = super::inline_formatting::InlineFormattingContext::new(
+        style,
+        env.rules,
+        ancestors,
+        env.font_metrics(),
+    )
+    .children(super::inline_formatting::InlineContentSequence::new(nodes));
+    let mut widths = FlowWidths::default();
+    let mut inline_start = 0;
+    let mut element_index = 0;
+    let measure_inline = |start: usize, end: usize, env: &mut LayoutEnv| {
+        if !with_inline || start >= end {
+            return FlowWidths::default();
+        }
+        let mut runs = Vec::new();
+        super::text::InlineRunCollector::new(
+            env.rules,
+            env.fonts,
+            env.counter_state,
+            &mut *env.resources,
+        )
+        .collect(
+            super::inline_formatting::InlineContentSequence::segment(nodes, start, end),
+            style,
+            &mut runs,
+            None,
+            ancestors,
+        );
+        if runs.is_empty() {
+            return FlowWidths::default();
+        }
+        let text = measure_text_intrinsic_widths(
+            runs,
+            table_cell_text_wrap_options(style, available_width, env.fonts),
+            table_cell_allows_soft_wrap(style),
+            env.fonts,
+        );
+        FlowWidths {
+            min: text.min_content,
+            max: text.max_content,
+        }
+    };
+    for (node_index, node) in nodes.iter().enumerate() {
+        let DomNode::Element(element) = node else {
+            continue;
+        };
+        let Some(child) = children.get(element_index) else {
+            break;
+        };
+        element_index += 1;
+        if child.role != InlineFormattingRole::Outside {
+            continue;
+        }
+        widths.include(measure_inline(inline_start, node_index, env));
+        inline_start = node_index + 1;
+        if matches!(element.tag, HtmlTag::Table | HtmlTag::Img | HtmlTag::Svg)
+            || child.style.position.is_absolute()
+        {
+            continue;
+        }
+        let selector = child
+            .source()
+            .as_context()
+            .selector_context(ancestors, element_is_empty(element));
+        let block = if matches!(child.style.display, Display::Block | Display::ListItem) {
+            cell_block_widths(
+                element,
+                &child.style,
+                &selector,
+                ancestors,
+                available_width,
+                env,
+            )
+        } else {
+            let widths = super::intrinsic_width::intrinsic_border_box_widths(
+                element,
+                &child.style,
+                env.rules,
+                env.fonts,
+                ancestors,
+                &selector,
+            );
+            FlowWidths {
+                min: widths.resolve(IntrinsicWidthKeyword::MinContent, 0.0),
+                max: widths.resolve(IntrinsicWidthKeyword::MaxContent, 0.0),
+            }
+        };
+        widths.include(block.widened(child.style.margin.horizontal()));
+    }
+    widths.include(measure_inline(inline_start, nodes.len(), env));
+    widths
+}
+
+/// The border-box content widths of a block in a table cell.
+fn cell_block_widths(
+    element: &ElementNode,
+    style: &ComputedStyle,
+    selector: &SelectorContext,
+    ancestors: &[AncestorInfo],
+    available_width: f32,
+    env: &mut LayoutEnv,
+) -> FlowWidths {
+    let extra = style.padding.horizontal() + style.border.horizontal_width();
+    if let Some(width) = style.width {
+        let width = if style.box_sizing == BoxSizing::BorderBox {
+            width
+        } else {
+            width + extra
+        };
+        return FlowWidths {
+            min: width,
+            max: width,
+        };
+    }
+    let mut child_ancestors = ancestors.to_vec();
+    child_ancestors.push(selector.as_ancestor(element));
+    let mut widths = cell_flow_widths(
+        &element.children,
+        style,
+        &child_ancestors,
+        available_width,
+        true,
+        env,
+    )
+    .widened(extra);
+    if let Some(max_width) = style.max_width {
+        let cap = if style.box_sizing == BoxSizing::BorderBox {
+            max_width
+        } else {
+            max_width + extra
+        };
+        widths.min = widths.min.min(cap);
+        widths.max = widths.max.min(cap);
+    }
+    widths
 }
 
 fn table_cell_child_should_flatten(el: &ElementNode, style: &ComputedStyle) -> bool {
