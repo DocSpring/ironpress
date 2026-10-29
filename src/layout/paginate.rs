@@ -562,6 +562,23 @@ fn collapse_pair(margin_top: f32, prev_margin_bottom: f32) -> f32 {
     }
 }
 
+/// How much of `child`'s top margin and the previous in-flow sibling's bottom
+/// margin overlap when they collapse: the amount a plain sum of outer heights
+/// over-counts between them.
+fn sibling_margin_overlap(prev_margin_bottom: Option<f32>, child: &dyn LayoutElement) -> f32 {
+    let Some(previous) = prev_margin_bottom else {
+        return 0.0;
+    };
+    if !element_collapses_margins(child) {
+        return 0.0;
+    }
+    let margin_top = child
+        .margin_holder()
+        .map(|holder| holder.margins().start)
+        .unwrap_or_default();
+    previous + margin_top - collapse_pair(margin_top, previous)
+}
+
 /// The placement of a single floated child, relative to the container's
 /// content-box top-left, computed by [`simulate_block_flow`]. The float's side
 /// is read from the element itself at paint time, so only its index and top are
@@ -1879,18 +1896,26 @@ fn split_container_node(
     }
 
     // Greedily keep whole children that fit, always retaining at least the first
-    // (forward progress). Children heights are summed the same way the container's
-    // own auto height is measured in `paginate` (plain outer-height sum), so the
-    // boundary the fit-decision saw and the boundary we cut at agree.
+    // (forward progress). Adjacent sibling margins collapse, as in the container's
+    // own auto height measured in `paginate`, so the boundary the fit-decision saw
+    // and the boundary we cut at agree.
     let mut acc = 0.0f32;
     let mut idx = 0usize;
+    let mut prev_margin_bottom = None;
     for (i, child) in children.iter().enumerate() {
-        let next = acc + estimate_element_height(child.as_ref());
+        let next = acc + estimate_element_height(child.as_ref())
+            - sibling_margin_overlap(prev_margin_bottom, child.as_ref());
         if i > 0 && next > avail_children {
             break;
         }
         acc = next;
         idx = i + 1;
+        prev_margin_bottom = element_collapses_margins(child.as_ref()).then(|| {
+            child
+                .margin_holder()
+                .map(|holder| holder.margins().end)
+                .unwrap_or_default()
+        });
     }
 
     // Partition the children into the first fragment's list and the continuation's
@@ -1930,7 +1955,9 @@ fn split_container_node(
             .margin_holder()
             .map(|holder| holder.margins().start)
             .unwrap_or_default();
-        let child_avail = (avail_children - acc - margin_start).max(0.0);
+        let child_avail = (avail_children - acc - margin_start
+            + sibling_margin_overlap(prev_margin_bottom, next_child.as_ref()))
+        .max(0.0);
         if is_positive_with_roundoff(child_avail) {
             if let Some((c_first, c_rest)) = split_element(next_child.as_ref(), child_avail, rule) {
                 let mut first_children = children[..idx].to_vec();
@@ -2604,11 +2631,9 @@ impl LayoutVisitor for ElementFlowGeometry {
     }
 
     fn visit_container(&mut self, element: &Container) {
-        let children_height = element
-            .children
-            .iter()
-            .map(|child| estimate_element_height(child.as_ref()))
-            .sum::<f32>();
+        // Adjacent sibling margins collapse (CSS 2.1 §8.3.1), as the renderer
+        // and the wrapper-height estimate lay the children out.
+        let children_height = simulate_block_flow(&element.children).height;
         let natural_content_height = element.box_model.padding.vertical()
             + children_height
             + element.box_model.border.vertical_width();
