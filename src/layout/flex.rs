@@ -22,10 +22,11 @@ use super::engine::{
     emit_page_break_after, emit_page_break_before, flatten_element, has_background_paint,
     measure_runs_width, resolve_padding_box_height,
 };
+use super::helpers::collapse_margin_pair;
 use super::inline_formatting::{
     GeneratedBox, GeneratedContentStyles, GeneratedInlineContent, InlineContentSequence,
 };
-use super::paginate::estimate_element_height;
+use super::paginate::{estimate_element_height, simulate_block_flow};
 use super::roundoff::{equal_with_roundoff, exceeds_with_roundoff, is_positive_with_roundoff};
 use super::text::{
     InlineRunCollector, InlineTextSequence, TextWrapOptions, estimate_word_width,
@@ -357,18 +358,82 @@ fn update_text_block_layout(
     update.updated
 }
 
-fn is_borderless_text_block(element: &dyn LayoutElement) -> bool {
-    struct BorderlessText(bool);
+/// Whether a text block laid out inside a flex item spans the item's whole
+/// content box: no inline offset from its own margins or a list's indent, no
+/// narrower width of its own and no first-line indent.
+///
+/// A cell paints its own lines from the item's content edge across the
+/// item's width, so only such a block can lend the cell its lines. Any other
+/// block is a nested element of the cell, which keeps its geometry.
+fn text_block_spans_flex_item(element: &dyn LayoutElement, item_width: f32) -> bool {
+    struct Spans {
+        item_width: f32,
+        spans: bool,
+    }
 
-    impl LayoutVisitor for BorderlessText {
+    impl LayoutVisitor for Spans {
         fn visit_text_block(&mut self, element: &TextBlock) {
-            self.0 = !element.box_model.border.has_any();
+            let spans_width = element
+                .box_model
+                .size
+                .width
+                .fixed_value()
+                .is_none_or(|width| {
+                    width >= self.item_width || equal_with_roundoff(width, self.item_width)
+                });
+            self.spans = spans_width
+                && equal_with_roundoff(element.positioning.insets.left, 0.0)
+                && equal_with_roundoff(element.text.indent, 0.0);
         }
     }
 
-    let mut result = BorderlessText(false);
-    element.accept(&mut result);
-    result.0
+    let mut spans = Spans {
+        item_width,
+        spans: false,
+    };
+    element.accept(&mut spans);
+    spans.spans
+}
+
+/// A text block's inline offset within its parent and its own fixed width.
+fn text_block_inline_geometry(element: &dyn LayoutElement) -> Option<(f32, Option<f32>)> {
+    struct Geometry(Option<(f32, Option<f32>)>);
+
+    impl LayoutVisitor for Geometry {
+        fn visit_text_block(&mut self, element: &TextBlock) {
+            self.0 = Some((
+                element.positioning.insets.left,
+                element.box_model.size.width.fixed_value(),
+            ));
+        }
+    }
+
+    let mut geometry = Geometry(None);
+    element.accept(&mut geometry);
+    geometry.0
+}
+
+/// Whether one of several text blocks in a flex item can be merged with its
+/// siblings into the item's cell lines. The merged cell stacks the blocks'
+/// lines with nothing between them and has a single padding and background and
+/// no borders, so only a block that spans the item and has no margins,
+/// padding, border or background of its own merges without losing them.
+fn is_mergeable_flex_text_block(element: &dyn LayoutElement, item_width: f32) -> bool {
+    struct Bare(bool);
+
+    impl LayoutVisitor for Bare {
+        fn visit_text_block(&mut self, element: &TextBlock) {
+            self.0 = !element.box_model.border.has_any()
+                && element.box_model.margins == BlockMargins::ZERO
+                && element.box_model.padding == EdgeSizes::ZERO
+                && element.paint.background.color.is_none()
+                && !element.paint.background.layers.has_image();
+        }
+    }
+
+    let mut bare = Bare(false);
+    element.accept(&mut bare);
+    bare.0 && text_block_spans_flex_item(element, item_width)
 }
 
 fn is_clipped_text_block(element: &dyn LayoutElement) -> bool {
@@ -443,6 +508,48 @@ fn is_empty_pullback_spacer(element: &dyn LayoutElement) -> bool {
     let mut pullback = Pullback(false);
     element.accept(&mut pullback);
     pullback.0
+}
+
+/// Whether the laid-out content of a flex item that has no box of its own
+/// becomes the lines of the item's cell: a single text block that spans the
+/// item and has no margins (the cell paints its padding, border and
+/// background), or several bare ones (see [`is_mergeable_flex_text_block`]).
+/// Any other content is laid out as nested block flow in the cell, which keeps
+/// each block's margins and geometry.
+fn flex_item_lends_cell_lines(elements: &[LayoutNode], item_width: f32) -> bool {
+    match elements {
+        [single] => {
+            text_block_spans_flex_item(single.as_ref(), item_width)
+                && single
+                    .margin_holder()
+                    .is_none_or(|holder| *holder.margins() == BlockMargins::ZERO)
+        }
+        _ => elements
+            .iter()
+            .all(|element| is_mergeable_flex_text_block(element.as_ref(), item_width)),
+    }
+}
+
+/// Whether a flex item's cell can take its lines from the item's one text
+/// block. Paths that don't merge several blocks into one cell use this; an
+/// item with more content keeps all of it as nested elements.
+fn item_lends_single_cell_lines(item: &FlexItem) -> bool {
+    !item.uses_general_layout
+        || (item.elements.len() == 1 && flex_item_lends_cell_lines(&item.elements, item.width))
+}
+
+/// The block extent of a flex item's laid-out content, measured the way its
+/// cell paints it: text blocks that become the cell's lines without their
+/// margins, nested block flow with its margins collapsing between siblings.
+fn flex_item_content_extent(elements: &[LayoutNode], item_width: f32) -> f32 {
+    if flex_item_lends_cell_lines(elements, item_width) {
+        elements
+            .iter()
+            .map(|element| flex_item_content_height(element.as_ref()))
+            .sum()
+    } else {
+        simulate_block_flow(elements).height
+    }
 }
 
 fn flex_item_content_height(element: &dyn LayoutElement) -> f32 {
@@ -2221,23 +2328,21 @@ pub(crate) fn layout_flex_container(
                         .is_some_and(|spacer| is_empty_pullback_spacer(spacer.as_ref()))
                 });
             let mut child_h = self_bg_natural.unwrap_or_else(|| {
-                child_elements_buf
-                    .iter()
-                    .map(|element| {
-                        if is_table {
-                            // A table decoration is a paint-only box whose
-                            // negative end margin pulls the row grid over it.
-                            // Generic flex measurement intentionally ignores
-                            // that pullback, so it double-counts the table box.
-                            // The shared block-flow estimator honors the paired
-                            // height/margin and returns the table's real outer
-                            // flow extent, including captions and expanded rows.
-                            estimate_element_height(element.as_ref())
-                        } else {
-                            flex_item_content_height(element.as_ref())
-                        }
-                    })
-                    .sum::<f32>()
+                if is_table {
+                    // A table decoration is a paint-only box whose negative end
+                    // margin pulls the row grid over it. Generic flex
+                    // measurement intentionally ignores that pullback, so it
+                    // double-counts the table box. The shared block-flow
+                    // estimator honors the paired height/margin and returns the
+                    // table's real outer flow extent, including captions and
+                    // expanded rows.
+                    child_elements_buf
+                        .iter()
+                        .map(|element| estimate_element_height(element.as_ref()))
+                        .sum::<f32>()
+                } else {
+                    flex_item_content_extent(&child_elements_buf, child_w_for_layout)
+                }
             });
             if let Some(specified_height) = child_style.height {
                 let specified_outer = flex_style_outer_height(&child_style, specified_height);
@@ -3126,6 +3231,7 @@ pub(crate) fn layout_flex_container(
             let mut cell = item
                 .elements
                 .iter()
+                .filter(|_| item_lends_single_cell_lines(item))
                 .find_map(|element| {
                     flex_cell_from_text_block(
                         element.as_ref(),
@@ -3459,11 +3565,18 @@ pub(crate) fn layout_flex_container(
                             );
                             if !relayout_buf.is_empty() {
                                 items[i].elements = relayout_buf;
-                                items[i].height = items[i]
-                                    .elements
-                                    .iter()
-                                    .map(|element| estimate_element_height(element.as_ref()))
-                                    .sum();
+                                items[i].height =
+                                    if flex_item_lends_cell_lines(&items[i].elements, final_w) {
+                                        items[i]
+                                            .elements
+                                            .iter()
+                                            .map(|element| {
+                                                estimate_element_height(element.as_ref())
+                                            })
+                                            .sum()
+                                    } else {
+                                        simulate_block_flow(&items[i].elements).height
+                                    };
                             }
                         } else {
                             let relayout_classes = child_el.class_list();
@@ -3761,13 +3874,14 @@ pub(crate) fn layout_flex_container(
                         let mut first_padding = EdgeSizes::ZERO;
                         let mut first_radii = CornerRadii::ZERO;
                         let mut is_first = true;
-                        // Check if all elements are TextBlocks without borders (mergeable).
-                        // TextBlocks with borders must go through nested_elements
-                        // so the renderer can draw their individual borders.
-                        let all_text_blocks = item
-                            .elements
-                            .iter()
-                            .all(|element| is_borderless_text_block(element.as_ref()));
+                        // Only bare text blocks that span the item merge into
+                        // one cell. The rest (a TableRow, a block with its own
+                        // margins, border, padding or background, a block
+                        // offset by a list's indent or narrower than the item)
+                        // go through nested_elements, where each keeps its own
+                        // box.
+                        let all_text_blocks =
+                            flex_item_lends_cell_lines(&item.elements, item.width);
 
                         if !all_text_blocks {
                             // Mixed elements (e.g. TextBlock + TableRow):
@@ -3833,17 +3947,25 @@ pub(crate) fn layout_flex_container(
                         continue;
                     }
 
-                    // Simple items: extract into FlexCell
-                    if let Some(mut cell) = item.elements.first().and_then(|element| {
-                        flex_cell_from_text_block(
-                            element.as_ref(),
-                            x,
-                            0.0,
-                            item.width,
-                            item.is_relative,
-                            item.z_index,
-                        )
-                    }) {
+                    // Simple items: extract into FlexCell. A text block inside
+                    // an item that has no box of its own becomes the cell only
+                    // when it spans the item; one with its own offset, width or
+                    // indent stays nested.
+                    if let Some(mut cell) = item
+                        .elements
+                        .first()
+                        .filter(|_| item_lends_single_cell_lines(item))
+                        .and_then(|element| {
+                            flex_cell_from_text_block(
+                                element.as_ref(),
+                                x,
+                                0.0,
+                                item.width,
+                                item.is_relative,
+                                item.z_index,
+                            )
+                        })
+                    {
                         let natural_height = cell.natural_height;
                         if item
                             .elements
@@ -4236,16 +4358,21 @@ pub(crate) fn layout_flex_container(
                             y_offset += item.rel_top;
                         }
 
-                        if let Some(cell) = item.elements.first().and_then(|element| {
-                            flex_cell_from_text_block(
-                                element.as_ref(),
-                                x_offset,
-                                y_offset,
-                                used_width,
-                                item.is_relative,
-                                item.z_index,
-                            )
-                        }) {
+                        if let Some(cell) = item
+                            .elements
+                            .first()
+                            .filter(|_| item_lends_single_cell_lines(item))
+                            .and_then(|element| {
+                                flex_cell_from_text_block(
+                                    element.as_ref(),
+                                    x_offset,
+                                    y_offset,
+                                    used_width,
+                                    item.is_relative,
+                                    item.z_index,
+                                )
+                            })
+                        {
                             all_flex_cells.push(cell);
                         } else {
                             all_flex_cells.push(flex_cell_with_nested_item(
@@ -4316,6 +4443,10 @@ pub(crate) fn layout_flex_container(
                             extra_gap
                         };
                         let mut item_first_elem = true;
+                        // The bottom margin of the block this item emitted last.
+                        // The item's own blocks are in one block formatting
+                        // context, so the margins between them collapse.
+                        let mut previous_block_end: Option<f32> = None;
                         // The bottom margin of this item's last emitted element,
                         // folded into the next item's leading (flex margins don't
                         // collapse). Reset per item.
@@ -4374,7 +4505,9 @@ pub(crate) fn layout_flex_container(
                                 } else {
                                     metrics.height
                                 };
-                                let leading = if y == 0.0 && !emitted_column_bg {
+                                let leading = if let Some(previous_end) = previous_block_end {
+                                    collapse_margin_pair(previous_end, metrics.margins.start)
+                                } else if y == 0.0 && !emitted_column_bg {
                                     style.margin.top
                                         + style.border.top.used_width()
                                         + style.padding.top
@@ -4390,13 +4523,27 @@ pub(crate) fn layout_flex_container(
                                         + prev_item_margin_bottom
                                         + metrics.margins.start
                                 };
-                                let inline_offset =
+                                let mut inline_offset =
                                     x_offset + style.padding.left + style.border.left.used_width();
+                                let mut block_width = effective_width;
+                                // A block inside an item without a box of its own
+                                // keeps its own offset and width within the item.
+                                if item.uses_general_layout
+                                    && !text_block_spans_flex_item(elem.as_ref(), item.width)
+                                    && let Some((offset, width)) =
+                                        text_block_inline_geometry(elem.as_ref())
+                                {
+                                    block_width = width.or_else(|| {
+                                        effective_width.map(|width| (width - offset).max(0.0))
+                                    });
+                                    inline_offset += offset;
+                                }
+                                previous_block_end = Some(metrics.margins.end);
                                 let mut emitted = elem.clone();
                                 adapt_column_text_block(
                                     emitted.as_mut(),
                                     BlockMargins::new(leading, 0.0),
-                                    effective_width,
+                                    block_width,
                                     resolved_height,
                                     inline_offset,
                                     inline_offset > 0.0,
@@ -4414,7 +4561,14 @@ pub(crate) fn layout_flex_container(
                                 } else {
                                     0.0
                                 };
-                                let leading = if y == 0.0 && !emitted_column_bg {
+                                // This element's own margins are inside the
+                                // wrapper, so only the previous block's bottom
+                                // margin comes before it.
+                                let leading = if let Some(previous_end) =
+                                    previous_block_end.replace(0.0)
+                                {
+                                    previous_end
+                                } else if y == 0.0 && !emitted_column_bg {
                                     style.margin.top
                                         + style.border.top.used_width()
                                         + style.padding.top
