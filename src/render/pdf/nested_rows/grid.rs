@@ -265,10 +265,28 @@ impl NestedRowsRenderer<'_, '_> {
                     let text_y = baseline_cursor.next_horizontal(metrics);
                     let text_content: String =
                         line.runs.iter().map(|run| run.text.as_str()).collect();
-                    if text_content.is_empty() {
+                    if text_content.is_empty()
+                        && line.runs.iter().all(|run| run.inline_box.is_none())
+                    {
                         continue;
                     }
                     let merged = crate::text::coalesce_text_runs(&line.runs);
+                    // Line-box and parent text content-area edges for the
+                    // vertical alignment of atomic inline boxes, as in a
+                    // block's text lines.
+                    let line_top_y = text_y + metrics.ascender + metrics.half_leading;
+                    let line_bottom_y = text_y - metrics.descender - metrics.half_leading;
+                    let (text_ascent, text_descent) = line_text_content_extents(line, custom_fonts);
+                    let line_text_top_y = if text_ascent > 0.0 {
+                        text_y + text_ascent
+                    } else {
+                        line_top_y
+                    };
+                    let line_text_bottom_y = if text_descent > 0.0 {
+                        text_y - text_descent
+                    } else {
+                        line_bottom_y
+                    };
                     let line_width = merged
                         .iter()
                         .map(|run| estimate_run_width_with_fonts(run, custom_fonts))
@@ -285,6 +303,34 @@ impl NestedRowsRenderer<'_, '_> {
                     let mut lx = text_x;
                     for (run_index, run) in merged.iter().enumerate() {
                         if let Some(advance) = run.atomic_inline_advance() {
+                            // An atomic inline box (`display: inline-block`, a
+                            // gauge) paints in its slot on the line.
+                            if let Some(inline) = run.inline_box.as_deref() {
+                                if !run.is_inline_edge() {
+                                    render_inline_box(
+                                        content,
+                                        inline,
+                                        lx + inline.margin_left,
+                                        text_y,
+                                        page_height,
+                                        line_top_y,
+                                        line_bottom_y,
+                                        line_text_top_y,
+                                        line_text_bottom_y,
+                                        run.font_size,
+                                        run_line_height_for_vertical_align(run),
+                                        line_primary_x_height_ratio(&merged, custom_fonts),
+                                        custom_fonts,
+                                        prepared_custom_fonts,
+                                        page_ext_gstates,
+                                        bg_alpha_counter,
+                                        page_shadings,
+                                        shading_counter,
+                                        pdf_writer,
+                                        page_images,
+                                    );
+                                }
+                            }
                             lx += advance;
                             continue;
                         }
