@@ -219,6 +219,79 @@ impl PageMarginBoxFrame {
         }
     }
 
+    /// Whether a page-margin box's width is set without its content: a corner,
+    /// left or right box is as wide as its page margin, and any box can
+    /// declare a width. The other top and bottom boxes are as wide as their
+    /// content.
+    pub(super) fn has_fixed_width(
+        position: crate::parser::css::MarginBoxPosition,
+        declared_width: Option<f32>,
+    ) -> bool {
+        use crate::parser::css::MarginBoxPosition;
+
+        declared_width.is_some()
+            || !matches!(
+                position,
+                MarginBoxPosition::TopLeft
+                    | MarginBoxPosition::TopCenter
+                    | MarginBoxPosition::TopRight
+                    | MarginBoxPosition::BottomLeft
+                    | MarginBoxPosition::BottomCenter
+                    | MarginBoxPosition::BottomRight
+            )
+    }
+
+    /// Place a running element's border box in a page-margin box (CSS GCPM 3
+    /// §1.2), where it is the box's block-level content. Returns the
+    /// element's left edge and its top edge, measured down from the page's
+    /// top.
+    ///
+    /// A block starts at the inline start edge of a box with a fixed width
+    /// (see [`Self::has_fixed_width`]). A box as wide as its content is
+    /// itself placed by its alignment, so the element goes where `layout`
+    /// puts the box's content; that also centers it in a center box that
+    /// fills the band. Vertically, the element is centered in the top and
+    /// bottom bands and sits at the top, middle or bottom of a left or right
+    /// box, as the box's default `vertical-align` is (CSS Paged Media 3 §5.3).
+    pub(super) fn running_element_origin(
+        self,
+        position: crate::parser::css::MarginBoxPosition,
+        layout: PageMarginBoxLayout,
+        declared_width: Option<f32>,
+        height: f32,
+    ) -> (f32, f32) {
+        use crate::parser::css::MarginBoxPosition;
+
+        let x = if Self::has_fixed_width(position, declared_width) {
+            layout.box_x
+        } else {
+            layout.text_x
+        };
+        let page_height = self.page_size.height;
+        let top = match position {
+            MarginBoxPosition::TopLeftCorner
+            | MarginBoxPosition::TopLeft
+            | MarginBoxPosition::TopCenter
+            | MarginBoxPosition::TopRight
+            | MarginBoxPosition::TopRightCorner => (self.margin.top - height) / 2.0,
+            MarginBoxPosition::BottomLeftCorner
+            | MarginBoxPosition::BottomLeft
+            | MarginBoxPosition::BottomCenter
+            | MarginBoxPosition::BottomRight
+            | MarginBoxPosition::BottomRightCorner => {
+                page_height - (self.margin.bottom + height) / 2.0
+            }
+            MarginBoxPosition::LeftTop | MarginBoxPosition::RightTop => self.margin.top,
+            MarginBoxPosition::LeftMiddle | MarginBoxPosition::RightMiddle => {
+                (self.margin.top + page_height - self.margin.bottom - height) / 2.0
+            }
+            MarginBoxPosition::LeftBottom | MarginBoxPosition::RightBottom => {
+                page_height - self.margin.bottom - height
+            }
+        };
+        (x, top)
+    }
+
     /// The physical background rectangle for a generated page-margin box.
     pub(super) fn background_rect(
         self,
@@ -457,6 +530,83 @@ mod page_margin_text_tests {
     }
 
     #[test]
+    fn running_element_origin_follows_each_margin_box() {
+        use crate::parser::css::MarginBoxPosition;
+
+        let frame = PageMarginBoxFrame::new(
+            PageSize::new(300.0, 200.0),
+            Margin::new(40.0, 50.0, 30.0, 60.0),
+        );
+        let origin = |position, declared_width, center_fills_band| {
+            let layout = frame.layout(position, declared_width, 20.0, center_fills_band);
+            frame.running_element_origin(position, layout, declared_width, 10.0)
+        };
+
+        // Corners: the start edge of a box as wide as the page margin, centered
+        // in the band.
+        assert_eq!(
+            origin(MarginBoxPosition::TopLeftCorner, None, false),
+            (0.0, 15.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::TopRightCorner, None, false),
+            (250.0, 15.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::BottomLeftCorner, None, false),
+            (0.0, 180.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::BottomRightCorner, None, false),
+            (250.0, 180.0)
+        );
+        // Boxes as wide as their content are placed by their alignment.
+        assert_eq!(
+            origin(MarginBoxPosition::TopLeft, None, false),
+            (60.0, 15.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::TopCenter, None, false),
+            (140.0, 15.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::TopCenter, None, true),
+            (140.0, 15.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::BottomRight, None, false),
+            (230.0, 180.0)
+        );
+        // A declared width fixes the box; the element starts at its left edge.
+        assert_eq!(
+            origin(MarginBoxPosition::TopRight, Some(100.0), false),
+            (150.0, 15.0)
+        );
+        // Sides run between the top and bottom margins: 40pt to 170pt.
+        assert_eq!(origin(MarginBoxPosition::LeftTop, None, false), (0.0, 40.0));
+        assert_eq!(
+            origin(MarginBoxPosition::LeftMiddle, None, false),
+            (0.0, 100.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::LeftBottom, None, false),
+            (0.0, 160.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::RightTop, None, false),
+            (250.0, 40.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::RightMiddle, None, false),
+            (250.0, 100.0)
+        );
+        assert_eq!(
+            origin(MarginBoxPosition::RightBottom, None, false),
+            (250.0, 160.0)
+        );
+    }
+
+    #[test]
     fn auto_width_running_element_uses_its_content_width() {
         let element = TextBlock::plain(vec![TextLine {
             runs: vec![TextRun {
@@ -574,24 +724,32 @@ impl RunningElementInlineSize<'_> {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// One page-margin box that shows a running element.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct RunningMarginBox {
+    pub(super) position: crate::parser::css::MarginBoxPosition,
+    /// The box's declared `width`, if any
+    pub(super) declared_width: Option<f32>,
+    /// Whether a center box takes the whole band (see
+    /// [`page_margin_box_center_fills_band`])
+    pub(super) center_fills_band: bool,
+    pub(super) background: Option<crate::types::Color>,
+}
+
 pub(super) fn render_running_margin_element(
     content: &mut String,
     element: &dyn LayoutElement,
-    align: crate::parser::css::MarginBoxAlign,
-    band: crate::parser::css::MarginBoxBand,
+    margin_box: RunningMarginBox,
     page_size: PageSize,
     margin: Margin,
-    margin_box_background: Option<crate::types::Color>,
     page_index: usize,
     ctx: &mut PageRenderContext<'_>,
 ) -> bool {
     struct Renderer<'call, 'page> {
         content: &'call mut String,
-        align: crate::parser::css::MarginBoxAlign,
-        band: crate::parser::css::MarginBoxBand,
+        margin_box: RunningMarginBox,
         page_size: PageSize,
         margin: Margin,
-        margin_box_background: Option<crate::types::Color>,
         page_index: usize,
         ctx: &'call mut PageRenderContext<'page>,
         rendered: bool,
@@ -606,39 +764,45 @@ pub(super) fn render_running_margin_element(
             .resolve(element)
         }
 
+        fn has_own_width(&self, element: &dyn LayoutElement) -> bool {
+            let size = RunningElementInlineSize {
+                available_width: 0.0,
+                custom_fonts: self.ctx.text.custom_fonts,
+            };
+            size.fixed_width(element).is_some() || size.replaced_width(element).is_some()
+        }
+
         fn render_layout_element(&mut self, element: &dyn LayoutElement) {
-            if let Some(background) = self.margin_box_background.take() {
-                let (r, g, b, alpha) = background.to_f32_rgba();
-                if alpha > 0.0 {
-                    let (y, height) = match self.band {
-                        crate::parser::css::MarginBoxBand::Top => {
-                            (self.page_size.height - self.margin.top, self.margin.top)
-                        }
-                        crate::parser::css::MarginBoxBand::Bottom => (0.0, self.margin.bottom),
-                    };
-                    self.content.push_str(&format!("{r} {g} {b} rg\n"));
-                    self.content
-                        .push_str(&format!("0 {y} {} {height} re f\n", self.page_size.width));
-                }
-            }
             let width = self.element_width(element);
             let height = crate::layout::paginate::estimate_element_height(element).max(0.0);
-            let x = match self.align {
-                crate::parser::css::MarginBoxAlign::Left => 0.0,
-                crate::parser::css::MarginBoxAlign::Center => {
-                    self.page_size.width / 2.0 - width / 2.0
+            let margin_frame = PageMarginBoxFrame::new(self.page_size, self.margin);
+            let RunningMarginBox {
+                position,
+                declared_width,
+                center_fills_band,
+                ..
+            } = self.margin_box;
+            let layout = margin_frame.layout(position, declared_width, width, center_fills_band);
+            if let Some(background) = self.margin_box.background.take() {
+                let (r, g, b, alpha) = background.to_f32_rgba();
+                if alpha > 0.0 {
+                    self.content.push_str(&format!("{r} {g} {b} rg\n"));
+                    self.content
+                        .push_str(&margin_frame.background_rect(position, layout).rect_path());
+                    self.content.push_str("f\n");
                 }
-                crate::parser::css::MarginBoxAlign::Right => {
-                    self.page_size.width - self.margin.right - width
-                }
+            }
+            let (x, top_inset) =
+                margin_frame.running_element_origin(position, layout, declared_width, height);
+            // An element without a width of its own fills a box whose width is
+            // fixed, as a block fills its containing block.
+            let width = if PageMarginBoxFrame::has_fixed_width(position, declared_width)
+                && !self.has_own_width(element)
+            {
+                layout.box_width
+            } else {
+                width
             };
-            let band_center_y = match self.band {
-                crate::parser::css::MarginBoxBand::Top => {
-                    self.page_size.height - self.margin.top / 2.0
-                }
-                crate::parser::css::MarginBoxBand::Bottom => self.margin.bottom / 2.0,
-            };
-            let top_inset = self.page_size.height - band_center_y - height / 2.0;
             let frame = PageElementFrame {
                 occlusion_coverers: &[],
                 page_size: self.page_size,
@@ -721,11 +885,9 @@ pub(super) fn render_running_margin_element(
 
     let mut renderer = Renderer {
         content,
-        align,
-        band,
+        margin_box,
         page_size,
         margin,
-        margin_box_background,
         page_index,
         ctx,
         rendered: false,
