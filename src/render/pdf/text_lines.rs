@@ -167,6 +167,22 @@ pub(super) fn render_inline_box(
             bg_alpha_counter,
         );
     }
+    if let Some(fill) = inline.paint.gauge_fill {
+        let track = background_box.rect;
+        let filled = PdfRect::new(
+            track.left,
+            track.bottom,
+            track.width * fill.fraction,
+            track.height,
+        );
+        paint_solid_background(
+            content,
+            fill.color,
+            RoundedRect::new(filled, CornerRadii::default()),
+            page_ext_gstates,
+            bg_alpha_counter,
+        );
+    }
 
     // Replaced-element image (pseudo `content: url(...)`): fill the content box
     // (inside the border) with the decoded raster, scaled to the box size.

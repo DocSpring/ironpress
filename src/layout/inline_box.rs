@@ -39,6 +39,17 @@ pub struct InlineBoxPaint {
     pub border_image: Option<BorderImagePaint>,
     pub border_radii: CornerRadii,
     pub centered_stroke: Option<CenteredStroke>,
+    /// The filled part of a `<progress>` or `<meter>` gauge, painted over the
+    /// background from the box's start edge.
+    pub gauge_fill: Option<GaugeFill>,
+}
+
+/// The filled share of a gauge's border box.
+#[derive(Debug, Clone, Copy)]
+pub struct GaugeFill {
+    /// Filled share of the box width, from 0 to 1.
+    pub fraction: f32,
+    pub color: Color,
 }
 
 /// An atomic inline-level box laid out inside a line of text.

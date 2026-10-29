@@ -31,9 +31,9 @@ pub(crate) use super::elements::{
     AvoidPageBreak, BackgroundBox, BackgroundBoxGeometry, BoxFragmentation, BoxModel, Container,
     FlexRow, GridRow, HorizontalRule, Image, ImagePaint, ImageSampling, IntoLayoutNode,
     LayoutElement, LayoutNode, LayoutSize, LayoutVisitor, LayoutVisitorMut, LineFragmentation,
-    MathBlock, NamedString, PageBreak, Positioning, ProgressBar, ProgressColors, ReplacedContent,
-    ReplacedFragment, ReplacedGeometry, RunningElement, Svg, SvgPaint, TableRow, TextBlock,
-    TextBlockStyle, TextFragmentation, TextSpacing, visit_layout_tree, visit_layout_tree_mut,
+    MathBlock, NamedString, PageBreak, Positioning, ProgressBar, ReplacedContent, ReplacedFragment,
+    ReplacedGeometry, RunningElement, Svg, SvgPaint, TableRow, TextBlock, TextBlockStyle,
+    TextFragmentation, TextSpacing, visit_layout_tree, visit_layout_tree_mut,
 };
 use super::flex::layout_flex_container;
 pub(crate) use super::flow_metrics::BlockMargins;
@@ -43,7 +43,7 @@ use super::images::*;
 use super::inline::{
     layout_inline_block_group_with_env_and_spacing, layout_inline_mixed_sequence_with_env,
 };
-pub use super::inline_box::{CenteredStroke, InlineBox, InlineBoxPaint};
+pub use super::inline_box::{CenteredStroke, GaugeFill, InlineBox, InlineBoxPaint};
 use super::inline_formatting::{
     AtomicInlineKind, GeneratedContentStyles, InlineContentSequence, InlineFormattingContext,
     InlineFormattingRole, PrincipalPseudoStyles,
@@ -3950,64 +3950,7 @@ fn flatten_element_with_running_mode(
 
         // Progress and meter elements — render as a horizontal bar
         if el.tag == HtmlTag::Progress || el.tag == HtmlTag::Meter {
-            let bar_width = style.width.unwrap_or(150.0).min(available_width);
-            let bar_height = style.height.unwrap_or(12.0);
-            let value: f32 = el
-                .attributes
-                .get("value")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0.0);
-            let max: f32 = el
-                .attributes
-                .get("max")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(1.0);
-            let fraction = if max > 0.0 {
-                (value / max).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-
-            let fill_color = if el.tag == HtmlTag::Progress {
-                (0.12, 0.53, 0.90)
-            } else {
-                let low: f32 = el
-                    .attributes
-                    .get("low")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(max * 0.25);
-                let high: f32 = el
-                    .attributes
-                    .get("high")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(max * 0.75);
-                if value <= low {
-                    (0.90, 0.20, 0.20)
-                } else if value >= high {
-                    (0.20, 0.78, 0.35)
-                } else {
-                    (0.95, 0.77, 0.06)
-                }
-            };
-
-            output.push(
-                ProgressBar {
-                    fraction,
-                    size: Size::new(bar_width, bar_height),
-                    colors: ProgressColors {
-                        fill: crate::types::Color::from_srgb(
-                            fill_color.0,
-                            fill_color.1,
-                            fill_color.2,
-                            1.0,
-                        ),
-                        track: crate::types::Color::from_srgb(0.88, 0.88, 0.88, 1.0),
-                    },
-                    margins: BlockMargins::new(style.margin.top, style.margin.bottom),
-                    group: super::elements::PaintGroup::from_style(&style),
-                }
-                .boxed(),
-            );
+            output.push(ProgressBar::for_element(el, &style, available_width).boxed());
             return;
         }
 
