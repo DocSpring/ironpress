@@ -695,7 +695,7 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
                     .resolve(element)
                 });
                 if let Some(element) = resolved_running_element.as_deref().or(running_element) {
-                    let rendered = band.is_some_and(|band| {
+                    let rendered = {
                         let document_transform = pdf_writer.page_content_transform;
                         pdf_writer.page_content_transform = physical_page_transform;
                         let rendered = {
@@ -719,18 +719,26 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
                             render_running_margin_element(
                                 &mut decoration_content,
                                 element,
-                                mb.position.align(),
-                                band,
+                                RunningMarginBox {
+                                    position: mb.position,
+                                    declared_width: mb.width,
+                                    center_fills_band: page_margin_box_center_fills_band(
+                                        &dec.margin_boxes,
+                                        mb_idx,
+                                        page,
+                                        page_num,
+                                    ),
+                                    background: mb.background_color,
+                                },
                                 page_size,
                                 page_margin,
-                                mb.background_color,
                                 page_idx,
                                 &mut margin_ctx,
                             )
                         };
                         pdf_writer.page_content_transform = document_transform;
                         rendered
-                    });
+                    };
                     if rendered {
                         continue;
                     }

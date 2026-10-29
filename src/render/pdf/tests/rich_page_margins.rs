@@ -115,3 +115,96 @@ fn footer_html_paints_styled_nested_content_on_each_page() {
         "styled footer background on both pages"
     );
 }
+
+/// The first rectangle filled in `color`, as (x, y, width, height) in PDF
+/// page space, whose y axis points up.
+fn filled_rect(syntax: &str, color: &str) -> (f32, f32, f32, f32) {
+    let mut lines = syntax.lines();
+    while let Some(line) = lines.next() {
+        if line == format!("{color} rg") {
+            let rect = lines.next().expect("a path after the fill color");
+            let numbers = rect
+                .strip_suffix(" re")
+                .expect("a rectangle after the fill color")
+                .split_whitespace()
+                .map(|number| number.parse::<f32>().expect("a number"))
+                .collect::<Vec<_>>();
+            return (numbers[0], numbers[1], numbers[2], numbers[3]);
+        }
+    }
+    panic!("nothing is filled in {color}");
+}
+
+fn assert_rect_near(actual: (f32, f32, f32, f32), expected: (f32, f32, f32, f32)) {
+    let near = |a: f32, b: f32| (a - b).abs() <= 0.5;
+    assert!(
+        near(actual.0, expected.0)
+            && near(actual.1, expected.1)
+            && near(actual.2, expected.2)
+            && near(actual.3, expected.3),
+        "painted {actual:?}, expected {expected:?}"
+    );
+}
+
+/// CSS Paged Media 3 §5.3: each margin box has its own rectangle, which its
+/// background fills. A running element is the box's block content: it starts
+/// at the box's left edge (filling the box when it has no width of its own),
+/// is centered in the top and bottom bands, and sits at the top, middle or
+/// bottom of a side box.
+#[test]
+fn running_elements_take_their_margin_box_rectangles() {
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(
+            r#"<html><head><style>
+                @page { size: 300pt 200pt; margin: 40pt 50pt 40pt 60pt;
+                    @top-left-corner { content: element(a) }
+                    @top-right-corner { content: element(b); background: #00ffff }
+                    @left-middle { content: element(c) }
+                    @right-bottom { content: element(d) }
+                    @bottom-left { content: element(e); width: 100pt } }
+                .r { width: 20pt; height: 10pt }
+                #a { position: running(a); background: #ff0000 }
+                #b { position: running(b); background: #00ff00 }
+                #c { position: running(c); background: #0000ff; width: auto }
+                #d { position: running(d); background: #ffff00 }
+                #e { position: running(e); background: #ff00ff }
+            </style></head><body>
+                <div class="r" id="a"></div><div class="r" id="b"></div><div class="r" id="c"></div>
+                <div class="r" id="d"></div><div class="r" id="e"></div><p>Body</p>
+            </body></html>"#,
+        )
+        .expect("margin box PDF");
+    let syntax = String::from_utf8_lossy(&pdf);
+
+    // Top band: 40pt, so a 10pt element's bottom is 15pt below the band's top
+    // edge at y=160. The corners are 60pt and 50pt wide.
+    assert_rect_near(filled_rect(&syntax, "1 0 0"), (0.0, 175.0, 20.0, 10.0));
+    assert_rect_near(filled_rect(&syntax, "0 1 0"), (250.0, 175.0, 20.0, 10.0));
+    // The box's own background fills its rectangle, not the whole band.
+    assert_rect_near(filled_rect(&syntax, "0 1 1"), (250.0, 160.0, 50.0, 40.0));
+    // The left side runs from y=40 to y=160; its middle is y=100.
+    assert_rect_near(filled_rect(&syntax, "0 0 1"), (0.0, 95.0, 60.0, 10.0));
+    assert_rect_near(filled_rect(&syntax, "1 1 0"), (250.0, 40.0, 20.0, 10.0));
+    // A declared width fixes the bottom-left box at the left page margin.
+    assert_rect_near(filled_rect(&syntax, "1 0 1"), (60.0, 15.0, 20.0, 10.0));
+}
+
+/// A page-wide running element in a center box, the usual full-width header,
+/// spans the page from its left edge.
+#[test]
+fn page_wide_running_element_in_a_center_box_spans_the_page() {
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(
+            r#"<html><head><style>
+                @page { size: 300pt 200pt; margin: 40pt 50pt 40pt 60pt;
+                    @top-center { content: element(h) } }
+                #h { position: running(h); width: 300pt; height: 40pt; background: #ff0000 }
+            </style></head><body><div id="h"></div><p>Body</p></body></html>"#,
+        )
+        .expect("running header PDF");
+    let syntax = String::from_utf8_lossy(&pdf);
+
+    assert_rect_near(filled_rect(&syntax, "1 0 0"), (0.0, 160.0, 300.0, 40.0));
+}
