@@ -238,6 +238,9 @@ pub(crate) struct CounterState {
     /// `counter(pages)` there take the values of each page that displays it
     /// ([`super::page_counters`]).
     pub(crate) defer_page_counters: bool,
+    /// The document's page count, once a first layout pass has found it: page
+    /// counter placeholders are measured with it.
+    pub(crate) page_count: Option<usize>,
 }
 
 /// Counter operations attached to one generated element box.
@@ -2062,6 +2065,10 @@ pub fn layout_with_rules_and_fonts(
 
 /// Lay out the DOM nodes into pages with stylesheet rules, custom fonts, and
 /// one conversion-owned raster quality policy.
+///
+/// When a running element shows page numbers that need more room than the
+/// first pass measured them with, the document is laid out again with its
+/// page count ([`super::page_counters`]).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     nodes: &[DomNode],
@@ -2073,6 +2080,48 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
+) -> Vec<Page> {
+    let pages = layout_document_pass(
+        nodes,
+        geometry,
+        rules,
+        custom_fonts,
+        font_locale,
+        page_background,
+        pagination_context.clone(),
+        raster_quality,
+        resources,
+        None,
+    );
+    match super::page_counters::page_count_to_measure(&pages) {
+        Some(page_count) => layout_document_pass(
+            nodes,
+            geometry,
+            rules,
+            custom_fonts,
+            font_locale,
+            page_background,
+            pagination_context,
+            raster_quality,
+            resources,
+            Some(page_count),
+        ),
+        None => pages,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn layout_document_pass(
+    nodes: &[DomNode],
+    geometry: DocumentGeometry,
+    rules: &[CssRule],
+    custom_fonts: &HashMap<String, TtfFont>,
+    font_locale: crate::font_pack::FontLocale,
+    page_background: &super::page_context::PageBackgroundContext,
+    pagination_context: super::paginate::PaginationContext,
+    raster_quality: crate::style::raster_quality::RasterQuality,
+    resources: &mut crate::security::resources::ResourceLoader,
+    page_count: Option<usize>,
 ) -> Vec<Page> {
     let DocumentGeometry {
         page_size,
@@ -2158,7 +2207,10 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     }
 
     let ancestors: Vec<AncestorInfo> = Vec::new();
-    let mut counter_state = CounterState::default();
+    let mut counter_state = CounterState {
+        page_count,
+        ..Default::default()
+    };
     counter_state.apply_resets(&parent_style.counter_reset);
     counter_state.apply_increments(&parent_style.counter_increment);
     let root_ctx = LayoutContext {

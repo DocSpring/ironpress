@@ -238,3 +238,64 @@ fn generated_block_remains_inside_its_absolute_originating_box() {
 
     assert_eq!(boxes.0, [(12.0, 9.0, 72.0, 1)]);
 }
+
+/// A running element is laid out once but shows each page's number, so the
+/// space laid out for `counter(page)` and `counter(pages)` must hold the widest
+/// value on any page: here "10/12", not the one-digit "0/0" layout starts with.
+#[test]
+fn running_page_numbers_get_room_for_their_widest_value() {
+    use crate::layout::engine::{FlexRow, TextRun};
+    use crate::style::computed::TARGET_PLACEHOLDER_START;
+
+    let body = (2..=12)
+        .map(|page| format!(r#"<div style="break-before: page">Page {page}</div>"#))
+        .collect::<String>();
+    let pages = layout_pages(&format!(
+        r#"<style>
+            .header {{ position: running(header); display: flex }}
+            .number::after {{ content: counter(page) "/" counter(pages) }}
+        </style>
+        <div class="header"><span class="number"></span><span>end</span></div>
+        <div>Page 1</div>{body}"#
+    ));
+    assert_eq!(pages.len(), 12);
+    let running = pages[0]
+        .generated_content
+        .running_element(&PageContentReference::new(
+            "header".into(),
+            PageContentPolicy::Last,
+        ))
+        .expect("running element");
+
+    #[derive(Default)]
+    struct NumberCell(Option<(f32, TextRun)>);
+
+    impl LayoutVisitor for NumberCell {
+        fn visit_flex_row(&mut self, row: &FlexRow) {
+            for cell in &row.content.cells {
+                let run = cell
+                    .lines
+                    .iter()
+                    .flat_map(|line| &line.runs)
+                    .find(|run| run.text.contains(TARGET_PLACEHOLDER_START));
+                if let Some(run) = run {
+                    self.0 = Some((cell.width, run.clone()));
+                }
+            }
+        }
+    }
+
+    let mut number = NumberCell::default();
+    visit_layout_tree(running, &mut number);
+    let (width, run) = number.0.expect("the page number's flex item");
+    let widest = TextRun {
+        text: "10/12".into(),
+        ..run
+    };
+    let widest_width =
+        crate::layout::text::measure_text_run_advance(&widest, &std::collections::HashMap::new());
+    assert!(
+        width >= widest_width - 0.01,
+        "the item is {width}pt wide, and \"10/12\" needs {widest_width}pt"
+    );
+}

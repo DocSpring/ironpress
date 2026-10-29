@@ -4,8 +4,14 @@
 //! where it occurs in the document, but it is displayed in a page-margin box on
 //! every page that refers to it, and the page counters there take that page's
 //! values (css-page-3 §4.3). Layout therefore leaves a placeholder for each such
-//! counter, measured like a one-digit number, and the renderer resolves it on
-//! each page that displays the element.
+//! counter, and the renderer resolves it on each page that displays the element.
+//!
+//! A placeholder is measured as the widest value it can take, so the text
+//! painted on any page fits the space laid out for it. The page count isn't
+//! known until the document is paginated: the first layout pass measures a
+//! one-digit number, and when the document needs more room for its page
+//! numbers, layout runs again with the page count ([`page_count_to_measure`]).
+//! Running elements are out of flow, so the second pass paginates the same way.
 
 use std::borrow::Cow;
 
@@ -20,8 +26,13 @@ use crate::style::computed::{ListStyleType, TARGET_PLACEHOLDER_END, TARGET_PLACE
 const PAYLOAD_PREFIX: &str = "page-counter|";
 
 /// The placeholder for `counter(<name>, <style>)` when `name` is a page
-/// counter, or `None` for any other counter.
-pub(crate) fn page_counter_placeholder(name: &str, style: &ListStyleType) -> Option<String> {
+/// counter, or `None` for any other counter. `page_count` is the document's
+/// page count when layout knows it, which the placeholder is measured with.
+pub(crate) fn page_counter_placeholder(
+    name: &str,
+    style: &ListStyleType,
+    page_count: Option<usize>,
+) -> Option<String> {
     let counter = if name.eq_ignore_ascii_case("page") {
         "page"
     } else if name.eq_ignore_ascii_case("pages") {
@@ -29,15 +40,75 @@ pub(crate) fn page_counter_placeholder(name: &str, style: &ListStyleType) -> Opt
     } else {
         return None;
     };
+    let keyword = style_keyword(style);
     Some(format!(
-        "{TARGET_PLACEHOLDER_START}{PAYLOAD_PREFIX}{counter}|{}{TARGET_PLACEHOLDER_END}",
-        style_keyword(style)
+        "{TARGET_PLACEHOLDER_START}{PAYLOAD_PREFIX}{counter}|{keyword}|{}{TARGET_PLACEHOLDER_END}",
+        measured_value(counter, keyword, page_count)
     ))
 }
 
 /// Whether a placeholder payload is a page counter's.
 pub(crate) fn is_page_counter_payload(payload: &str) -> bool {
     payload.starts_with(PAYLOAD_PREFIX)
+}
+
+/// The text a page counter placeholder is measured as, or `None` for another
+/// placeholder.
+pub(crate) fn placeholder_measure_text(payload: &str) -> Option<&str> {
+    let mut parts = payload.strip_prefix(PAYLOAD_PREFIX)?.split('|');
+    Some(parts.nth(2).unwrap_or("0"))
+}
+
+/// The widest text a page counter can show: the page count for `pages`, and
+/// for `page` the value with the most characters up to the page count. Without
+/// a page count, a one-digit number.
+fn measured_value(counter: &str, keyword: &str, page_count: Option<usize>) -> String {
+    let Some(page_count) = page_count.filter(|count| *count > 0) else {
+        return "0".to_string();
+    };
+    let style = keyword_style(keyword);
+    let format =
+        |value: usize| format_counter_value(&style, i32::try_from(value).unwrap_or(i32::MAX));
+    if counter == "pages" {
+        return format(page_count);
+    }
+    (1..=page_count)
+        .map(format)
+        .reduce(|widest, value| {
+            if value.chars().count() > widest.chars().count() {
+                value
+            } else {
+                widest
+            }
+        })
+        .unwrap_or_else(|| "0".to_string())
+}
+
+/// The page count to lay the document out again with, when a page counter
+/// placeholder in a running element was measured with fewer characters than
+/// the widest value it shows across `pages`.
+pub(crate) fn page_count_to_measure(pages: &[crate::layout::engine::Page]) -> Option<usize> {
+    let page_count = pages.len();
+    let mut payloads = PayloadCollector::default();
+    for page in pages {
+        for element in page.generated_content.running_elements() {
+            visit_layout_tree(element.as_ref(), &mut payloads);
+        }
+    }
+    payloads
+        .payloads
+        .iter()
+        .any(|payload| {
+            let mut parts = payload.trim_start_matches(PAYLOAD_PREFIX).split('|');
+            let counter = parts.next().unwrap_or_default();
+            let keyword = parts.next().unwrap_or("decimal");
+            let measured = parts.next().unwrap_or("0");
+            measured_value(counter, keyword, Some(page_count))
+                .chars()
+                .count()
+                > measured.chars().count()
+        })
+        .then_some(page_count)
 }
 
 /// The predefined counter style a placeholder names. Other styles format as
@@ -236,6 +307,57 @@ fn has_placeholder(lines: Vec<&TextLine>) -> bool {
     })
 }
 
+/// The payloads of the page counter placeholders in line boxes.
+#[derive(Default)]
+struct PayloadCollector {
+    payloads: Vec<String>,
+}
+
+impl PayloadCollector {
+    fn collect(&mut self, boxes: &dyn LineBoxes) {
+        collect_payloads(boxes.line_boxes(), &mut self.payloads);
+    }
+}
+
+fn collect_payloads(lines: Vec<&TextLine>, out: &mut Vec<String>) {
+    for run in lines.into_iter().flat_map(|line| &line.runs) {
+        if let Some(inline) = &run.inline_box {
+            collect_payloads(inline.lines.iter().collect(), out);
+            continue;
+        }
+        let mut rest = run.text.as_str();
+        while let Some(start) = rest.find(TARGET_PLACEHOLDER_START) {
+            let payload_start = start + TARGET_PLACEHOLDER_START.len();
+            let Some(end) = rest[payload_start..].find(TARGET_PLACEHOLDER_END) else {
+                break;
+            };
+            let payload = &rest[payload_start..payload_start + end];
+            if is_page_counter_payload(payload) {
+                out.push(payload.to_string());
+            }
+            rest = &rest[payload_start + end + TARGET_PLACEHOLDER_END.len()..];
+        }
+    }
+}
+
+impl LayoutVisitor for PayloadCollector {
+    fn visit_text_block(&mut self, element: &TextBlock) {
+        self.collect(element);
+    }
+
+    fn visit_flex_row(&mut self, element: &FlexRow) {
+        self.collect(element);
+    }
+
+    fn visit_grid_row(&mut self, element: &GridRow) {
+        self.collect(element);
+    }
+
+    fn visit_table_row(&mut self, element: &TableRow) {
+        self.collect(element);
+    }
+}
+
 #[derive(Default)]
 struct PlaceholderSearch {
     found: bool,
@@ -347,20 +469,77 @@ mod tests {
 
     #[test]
     fn only_page_counters_get_placeholders() {
-        assert!(page_counter_placeholder("page", &ListStyleType::Decimal).is_some());
-        assert!(page_counter_placeholder("PAGES", &ListStyleType::Decimal).is_some());
-        assert!(page_counter_placeholder("chapter", &ListStyleType::Decimal).is_none());
+        assert!(page_counter_placeholder("page", &ListStyleType::Decimal, None).is_some());
+        assert!(page_counter_placeholder("PAGES", &ListStyleType::Decimal, None).is_some());
+        assert!(page_counter_placeholder("chapter", &ListStyleType::Decimal, None).is_none());
     }
 
     #[test]
     fn placeholders_resolve_to_the_page_values_in_their_counter_style() {
         let text = format!(
             "Page {} of {} ({})",
-            page_counter_placeholder("page", &ListStyleType::Decimal).unwrap_or_default(),
-            page_counter_placeholder("pages", &ListStyleType::Decimal).unwrap_or_default(),
-            page_counter_placeholder("page", &ListStyleType::UpperRoman).unwrap_or_default(),
+            page_counter_placeholder("page", &ListStyleType::Decimal, None).unwrap_or_default(),
+            page_counter_placeholder("pages", &ListStyleType::Decimal, Some(12))
+                .unwrap_or_default(),
+            page_counter_placeholder("page", &ListStyleType::UpperRoman, Some(12))
+                .unwrap_or_default(),
         );
         assert_eq!(VALUES.resolve_text(&text), "Page 4 of 12 (IV)");
+    }
+
+    #[test]
+    fn placeholders_are_measured_as_their_widest_value() {
+        let measured = |name: &str, style: &ListStyleType, page_count| {
+            let placeholder = page_counter_placeholder(name, style, page_count).unwrap_or_default();
+            let payload = placeholder
+                .trim_start_matches(TARGET_PLACEHOLDER_START)
+                .trim_end_matches(TARGET_PLACEHOLDER_END)
+                .to_string();
+            placeholder_measure_text(&payload)
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        assert_eq!(measured("page", &ListStyleType::Decimal, None), "0");
+        assert_eq!(measured("page", &ListStyleType::Decimal, Some(12)), "10");
+        assert_eq!(measured("pages", &ListStyleType::Decimal, Some(12)), "12");
+        assert_eq!(
+            measured("page", &ListStyleType::UpperRoman, Some(12)),
+            "VIII"
+        );
+        assert_eq!(
+            measured("pages", &ListStyleType::UpperRoman, Some(12)),
+            "XII"
+        );
+        assert_eq!(placeholder_measure_text("text|#x"), None);
+    }
+
+    #[test]
+    fn only_wider_page_numbers_need_another_layout_pass() {
+        let needs_pass = |page_count: usize, style: &ListStyleType| {
+            let placeholder = page_counter_placeholder("pages", style, None).unwrap_or_default();
+            let lines = vec![TextLine {
+                runs: vec![TextRun {
+                    text: placeholder,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }];
+            let mut pages = (0..page_count)
+                .map(|_| crate::layout::engine::Page::default())
+                .collect::<Vec<_>>();
+            pages[0].generated_content.capture_running(
+                "header".into(),
+                crate::layout::elements::IntoLayoutNode::boxed(TextBlock::plain(lines)),
+                true,
+            );
+            page_count_to_measure(&pages)
+        };
+
+        assert_eq!(needs_pass(9, &ListStyleType::Decimal), None);
+        assert_eq!(needs_pass(10, &ListStyleType::Decimal), Some(10));
+        assert_eq!(needs_pass(1, &ListStyleType::UpperRoman), None);
+        assert_eq!(needs_pass(2, &ListStyleType::UpperRoman), Some(2));
     }
 
     #[test]
