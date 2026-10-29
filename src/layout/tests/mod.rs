@@ -1,3 +1,4 @@
+mod anonymous_blocks;
 mod atomic_inline;
 mod filter_cells;
 mod flex_intrinsic;
