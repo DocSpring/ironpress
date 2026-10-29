@@ -9,4 +9,5 @@ mod positioning;
 mod root_formatting_context;
 mod stacking;
 mod support;
+mod table_cell_blocks;
 mod text_decoration;
