@@ -3,6 +3,7 @@ mod atomic_inline;
 mod container_flow;
 mod filter_cells;
 mod flex_intrinsic;
+mod flex_item_blocks;
 mod generated_content;
 mod grid_red_team;
 mod inline_selectors;
