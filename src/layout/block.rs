@@ -34,8 +34,9 @@ use super::inline::{
     layout_inline_block_group_with_spacing, layout_inline_mixed_sequence_with_env,
 };
 use super::inline_formatting::{
-    AnonymousInlineFormattingContext, AtomicInlineEmission, GeneratedContentStyles,
-    InlineContentSequence, InlineFormattingContext, InlineFormattingRole,
+    AnonymousBlockFlow, AnonymousInlineFormattingContext, AtomicInlineEmission,
+    GeneratedContentStyles, InlineContentSequence, InlineFormattingChild, InlineFormattingContext,
+    InlineFormattingRole,
 };
 use super::paginate::estimate_element_height;
 use super::text::{
@@ -841,7 +842,6 @@ pub(crate) fn layout_block_element(
     // TextBlock, emit a MathBlock, then continue collecting.
     let mut runs = Vec::new();
     let mut mixed_inline_row_emitted = false;
-    let mut generated_inline_before_runs = Vec::new();
 
     // Helper closure: flush accumulated runs as a TextBlock
     let flush_runs = |runs: &mut Vec<TextRun>,
@@ -1356,20 +1356,23 @@ pub(crate) fn layout_block_element(
             return;
         } else if has_block_kids_for_wrapper {
             // Inline generated boundaries live on opposite sides of the real
-            // block children. Preserve the leading fragment now; the trailing
-            // fragment is resolved after the children so counters and quotes
-            // observe source order.
+            // block children. The leading fragment starts the first anonymous
+            // block; the trailing fragment ends the last one and is resolved
+            // after the children so counters and quotes observe source order.
             inline_sequence.append_before(
-                &mut generated_inline_before_runs,
+                &mut runs,
                 env.fonts,
                 env.counter_state,
                 &mut *env.resources,
             );
-            // Only collect inline children's text — block children will
-            // be handled by the needs_wrapper path via flatten_element.
+            // Only collect the inline content before the first block child.
+            // The wrapper path lays out the block children, and gives each
+            // later run of inline content an anonymous block box between
+            // them (CSS 2.1 §9.2.1.1).
             let mut child_el_idx = 0;
             for (child_index, child) in el.children.iter().enumerate() {
                 match child {
+                    DomNode::Element(_) if inline_children.is_outside(child_el_idx) => break,
                     DomNode::Text(_) => {
                         InlineRunCollector::new(
                             env.rules,
@@ -1816,11 +1819,6 @@ pub(crate) fn layout_block_element(
                 ));
             }
         }
-        if let Some(before) = AnonymousInlineFormattingContext::new(style, inner_width, env.fonts)
-            .layout_runs(std::mem::take(&mut generated_inline_before_runs))
-        {
-            child_elements.push(before);
-        }
         // If there's saved inline content, include it as the next child.
         if let Some(inline_el) = saved_inline_element.take() {
             child_elements.push(inline_el);
@@ -1859,12 +1857,76 @@ pub(crate) fn layout_block_element(
         } else {
             el.children.as_slice()
         };
-        for child in wrapper_children {
+        // An in-flow child's percentage height resolves against this box's
+        // *content-box* height (CSS 2.1 § 10.5), not its border-box
+        // `effective_height`. For `border-box` that means subtracting this
+        // box's own padding and border; for `content-box` the effective height
+        // already is the content height. (Absolute descendants use the padding
+        // box via `make_containing_block`, kept separate.)
+        let child_cb = effective_height.map(|height| ContainingBlock {
+            x: 0.0,
+            width: inner_width,
+            height: resolve_content_box_height(
+                height,
+                style.padding,
+                style.border.widths(),
+                style.box_sizing,
+            ),
+            depth: positioned_depth,
+        });
+        let child_ctx = ctx
+            .with_parent(inner_width, Some(available_height), style.font_size)
+            .with_cbs(forward_abs_cb, child_cb);
+        // From the first block child on, each run of inline content is an
+        // anonymous block box between the block children (CSS 2.1 §9.2.1.1).
+        // Set once that anonymous block flow has laid out the rest of the
+        // children, including the trailing generated content.
+        let mut tail_laid_out = false;
+        for (child_index, child) in wrapper_children.iter().enumerate() {
             match child {
                 DomNode::Text(text) => {
                     if text.chars().any(char::is_whitespace) {
                         pending_inline_space = true;
                     }
+                }
+                DomNode::Element(_) if inline_children.is_outside(child_el_idx) => {
+                    if !ib_group_wrapper.is_empty() {
+                        #[allow(clippy::drain_collect)]
+                        let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
+                        layout_inline_block_group_with_spacing(
+                            &taken,
+                            style,
+                            &ib_ctx,
+                            &mut child_elements,
+                            env.rules,
+                            child_ancestors,
+                            env.fonts,
+                        );
+                    }
+                    AnonymousBlockFlow::new(style, &child_ctx, child_ancestors).layout(
+                        inline_sequence.tail(child_index),
+                        &mut child_elements,
+                        env,
+                        &mut |element: &ElementNode,
+                              child: &InlineFormattingChild,
+                              output: &mut Vec<LayoutNode>,
+                              env: &mut LayoutEnv<'_>| {
+                            flatten_element(
+                                element,
+                                LayoutTreeContext::new(
+                                    child_parent_style,
+                                    &child_ctx,
+                                    child_ancestors,
+                                )
+                                .with_positioned_ancestor_depth(positioned_depth)
+                                .for_element(child.source().as_context()),
+                                output,
+                                env,
+                            );
+                        },
+                    );
+                    tail_laid_out = true;
+                    break;
                 }
                 DomNode::Element(child_el) => {
                     if inline_children.atomic_is_emitted(child_el_idx, atomic_inline_emission) {
@@ -1892,34 +1954,11 @@ pub(crate) fn layout_block_element(
                         if recurses_as_layout_child(child_el.tag)
                             || inline_children.requires_independent_layout(child_el_idx)
                         {
-                            // An in-flow child's percentage height resolves against
-                            // this box's *content-box* height (CSS 2.1 § 10.5), not
-                            // its border-box `effective_height`. For `border-box`
-                            // that means subtracting this box's own padding and
-                            // border; for `content-box` the effective height already
-                            // is the content height. (Absolute descendants use the
-                            // padding box via `make_containing_block`, kept separate.)
-                            let child_cb = effective_height.map(|h| ContainingBlock {
-                                x: 0.0,
-                                width: inner_width,
-                                height: resolve_content_box_height(
-                                    h,
-                                    style.padding,
-                                    style.border.widths(),
-                                    style.box_sizing,
-                                ),
-                                depth: positioned_depth,
-                            });
                             flatten_element(
                                 child_el,
                                 LayoutTreeContext::new(
                                     child_parent_style,
-                                    &ctx.with_parent(
-                                        inner_width,
-                                        Some(available_height),
-                                        style.font_size,
-                                    )
-                                    .with_cbs(forward_abs_cb, child_cb),
+                                    &child_ctx,
                                     child_ancestors,
                                 )
                                 .with_positioned_ancestor_depth(positioned_depth)
@@ -1961,17 +2000,20 @@ pub(crate) fn layout_block_element(
                 env.fonts,
             );
         }
-        let mut generated_inline_after_runs = Vec::new();
-        inline_sequence.append_after(
-            &mut generated_inline_after_runs,
-            env.fonts,
-            env.counter_state,
-            &mut *env.resources,
-        );
-        if let Some(after) = AnonymousInlineFormattingContext::new(style, inner_width, env.fonts)
-            .layout_runs(generated_inline_after_runs)
-        {
-            child_elements.push(after);
+        if !tail_laid_out {
+            let mut generated_inline_after_runs = Vec::new();
+            inline_sequence.append_after(
+                &mut generated_inline_after_runs,
+                env.fonts,
+                env.counter_state,
+                &mut *env.resources,
+            );
+            if let Some(after) =
+                AnonymousInlineFormattingContext::new(style, inner_width, env.fonts)
+                    .layout_runs(generated_inline_after_runs)
+            {
+                child_elements.push(after);
+            }
         }
         // A non-absolute block-level `::after` is the element's last in-flow
         // block child, laid out inside the wrapper after all real children

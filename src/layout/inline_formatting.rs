@@ -20,7 +20,7 @@ use super::text::{
 };
 
 mod flow;
-pub(crate) use flow::{IndependentFlowLayout, layout_mixed_flow_children};
+pub(crate) use flow::{AnonymousBlockFlow, IndependentFlowLayout, layout_mixed_flow_children};
 
 /// Source-order selector position for one inline sibling sequence.
 ///
@@ -410,6 +410,34 @@ impl<'a> InlineContentSequence<'a> {
         }
     }
 
+    /// The rest of this sequence from source index `start`: its `::after`
+    /// boundary stays at the end, and its `::before` belongs to the content
+    /// before `start`.
+    pub(crate) fn tail(self, start: usize) -> Self {
+        Self {
+            start: start.clamp(self.start, self.end),
+            generated: self
+                .generated
+                .map(|generated| GeneratedInlineContent::from_boxes(None, generated.after())),
+            ..self
+        }
+    }
+
+    /// This segment of `outer` with the generated boundaries it touches:
+    /// `outer`'s `::before` when it starts `outer`, its `::after` when it
+    /// ends it.
+    pub(crate) fn bounded_by(self, outer: Self) -> Self {
+        Self {
+            generated: outer.generated.map(|generated| {
+                GeneratedInlineContent::from_boxes(
+                    generated.before().filter(|_| self.start == outer.start),
+                    generated.after().filter(|_| self.end == outer.end),
+                )
+            }),
+            ..self
+        }
+    }
+
     pub(crate) fn nodes(self) -> &'a [DomNode] {
         self.source_nodes
             .get(self.start..self.end)
@@ -634,6 +662,10 @@ impl InlineFormattingChildren {
         self.0
             .get(element_index)
             .is_some_and(|child| emission.owns(child.role))
+    }
+
+    pub(crate) fn is_outside(&self, element_index: usize) -> bool {
+        self.0.get(element_index).map(|child| child.role) == Some(InlineFormattingRole::Outside)
     }
 
     pub(crate) fn is_inline_text(&self, element_index: usize) -> bool {

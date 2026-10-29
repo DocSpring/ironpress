@@ -28,14 +28,13 @@ use super::engine::{
 };
 use super::inline::layout_inline_mixed_sequence_with_env;
 use super::inline_formatting::{
-    AnonymousInlineFormattingContext, GeneratedContentStyles, GeneratedInlineContent,
-    InlineContentSequence, InlineFormattingContext, InlineFormattingRole,
+    AnonymousBlockFlow, GeneratedContentStyles, GeneratedInlineContent, InlineContentSequence,
+    InlineFormattingChild, InlineFormattingContext, InlineFormattingRole,
 };
 use super::table::TableLayoutContext;
 use super::text::{
     InlineRunCollector, TextWrapOptions, has_non_collapsible_text, measure_text_intrinsic_widths,
-    parent_line_strut, resolved_line_height_factor, text_run_line_height_factor, used_font_size,
-    wrap_text_runs,
+    parent_line_strut, text_run_line_height_factor, used_font_size, wrap_text_runs,
 };
 
 mod fragmentation;
@@ -1942,11 +1941,40 @@ fn layout_grid_item_content_inner(
         };
     }
 
-    let runs = if grid_item_has_block_child(item_el) {
-        collect_grid_item_leading_runs(item_style, env, item_el, item_ancestors)
-    } else {
-        collect_grid_item_runs(item_style, env, item_el, item_ancestors)
+    // A grid item is a block container (css-grid-1 §6.2). When block-level
+    // children sit beside its inline content, each run of that content is an
+    // anonymous block box in source order (CSS 2.1 §9.2.1.1).
+    let inline_children =
+        InlineFormattingContext::new(item_style, env.rules, &child_ancestors, env.font_metrics())
+            .children(inline_sequence);
+    let positioned_depth = frame.descendants.positioned_depth;
+    let mut lay_out_child = |element: &ElementNode,
+                             child: &InlineFormattingChild,
+                             output: &mut Vec<LayoutNode>,
+                             env: &mut LayoutEnv<'_>| {
+        flatten_element(
+            element,
+            LayoutTreeContext::new(item_style, &child_ctx, &child_ancestors)
+                .with_positioned_ancestor_depth(positioned_depth)
+                .for_element(child.source().as_context()),
+            output,
+            env,
+        );
     };
+    if inline_children.has_outside() {
+        AnonymousBlockFlow::new(item_style, &child_ctx, &child_ancestors).layout(
+            inline_sequence,
+            &mut out,
+            env,
+            &mut lay_out_child,
+        );
+        return CellContent {
+            lines: Vec::new(),
+            children: out,
+        };
+    }
+
+    let runs = collect_grid_item_runs(item_style, env, item_el, item_ancestors);
     let lines = wrap_text_runs(
         runs,
         TextWrapOptions::new(
@@ -1961,115 +1989,17 @@ fn layout_grid_item_content_inner(
         .with_bidi_override(item_style.bidi_override),
         env.fonts,
     );
-
-    let element_children: Vec<&ElementNode> = item_el
-        .children
-        .iter()
-        .filter_map(|c| match c {
-            DomNode::Element(e) => Some(e),
-            DomNode::Text(_) => None,
-        })
-        .collect();
-    let sibling_count = element_children.len();
-    let mut preceding: Vec<(String, Vec<String>)> = Vec::new();
-    let mut element_idx = 0usize;
-    let mut after_block = false;
-    for child in &item_el.children {
-        let DomNode::Element(child_el) = child else {
-            if after_block {
-                if let DomNode::Text(text) = child {
-                    if has_non_collapsible_text(text) {
-                        let mut text_block = ElementNode::new(crate::parser::dom::HtmlTag::Div);
-                        text_block.attributes.insert(
-                            "style".to_string(),
-                            format!(
-                                "margin:0; padding:0; background:transparent; font-size:{}pt; line-height:{};",
-                                item_style.font_size,
-                                resolved_line_height_factor(item_style, env.fonts)
-                            ),
-                        );
-                        text_block.children.push(DomNode::Text(text.clone()));
-                        crate::layout::engine::flatten_element(
-                            &text_block,
-                            LayoutTreeContext::new(item_style, &child_ctx, &child_ancestors)
-                                .with_positioned_ancestor_depth(frame.descendants.positioned_depth)
-                                .for_element(
-                                    ElementSiblingContext::new(element_idx, sibling_count)
-                                        .with_neighbors(&preceding, &[]),
-                                ),
-                            &mut out,
-                            env,
-                        );
-                    }
-                }
-            }
+    let mut element_index = 0;
+    for node in &item_el.children {
+        let DomNode::Element(element) = node else {
             continue;
         };
-        let idx = element_idx;
-        element_idx += 1;
-        // The shared inline-formatting classifier is authoritative here too:
-        // text and atomic inline boxes belong to the cell's line content;
-        // only an outside (block-level) participant becomes a nested row.
-        let child_style = compute_style_with_context_with_font_metrics(
-            child_el.tag,
-            child_el.style_attr(),
-            item_style,
-            env.rules,
-            child_el.tag_name(),
-            &child_el.class_list(),
-            child_el.id(),
-            &child_el.attributes,
-            &SelectorContext {
-                ancestors: child_ancestors.clone(),
-                child_index: idx,
-                sibling_count,
-                preceding_siblings: preceding.clone(),
-                following_siblings: Vec::new(),
-                is_empty: false,
-            },
-            env.font_metrics(),
-        );
-        let role = InlineFormattingRole::of(child_el, &child_style);
-        if matches!(
-            role,
-            InlineFormattingRole::Outside | InlineFormattingRole::OutOfFlow
-        ) {
-            after_block |= role == InlineFormattingRole::Outside;
-            crate::layout::engine::flatten_element(
-                child_el,
-                LayoutTreeContext::new(item_style, &child_ctx, &child_ancestors)
-                    .with_positioned_ancestor_depth(frame.descendants.positioned_depth)
-                    .for_element(
-                        ElementSiblingContext::new(idx, sibling_count)
-                            .with_neighbors(&preceding, &[]),
-                    ),
-                &mut out,
-                env,
-            );
-        }
-        preceding.push((
-            child_el.tag_name().to_string(),
-            child_el
-                .class_list()
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-        ));
-    }
-    if grid_item_has_block_child(item_el) {
-        let mut after_runs = Vec::new();
-        item_style.generated_content(item_el).append_after(
-            &mut after_runs,
-            env.fonts,
-            env.counter_state,
-            &mut *env.resources,
-        );
-        if let Some(after) =
-            AnonymousInlineFormattingContext::new(&item_style.principal, content_width, env.fonts)
-                .layout_runs(after_runs)
+        if let Some(child) = inline_children.get(element_index)
+            && child.role == InlineFormattingRole::OutOfFlow
         {
-            out.push(after);
+            lay_out_child(element, child, &mut out, env);
         }
+        element_index += 1;
     }
     CellContent {
         lines,
