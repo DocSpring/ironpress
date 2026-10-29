@@ -75,9 +75,6 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             style.set("margin-top", CssValue::Length(6.0));
             style.set("margin-bottom", CssValue::Length(6.0));
         }
-        HtmlTag::Li => {
-            style.set("margin-bottom", CssValue::Length(2.0));
-        }
         HtmlTag::Ul | HtmlTag::Ol => {
             // Chrome UA: margin 1em top/bottom, padding-left 40px (≈30pt).
             // Use padding-left (not margin-left) so user CSS `padding-left:0`
@@ -352,7 +349,8 @@ mod tests {
     fn list_defaults() {
         assert!(default_style(HtmlTag::Ul).get("padding-left").is_some());
         assert!(default_style(HtmlTag::Ol).get("padding-left").is_some());
-        assert!(default_style(HtmlTag::Li).get("margin-bottom").is_some());
+        // Chrome's UA stylesheet gives list items no margins.
+        assert!(default_style(HtmlTag::Li).get("margin-bottom").is_none());
         assert!(default_style(HtmlTag::Dl).get("margin-top").is_some());
         assert!(default_style(HtmlTag::Dt).get("font-weight").is_some());
         assert!(default_style(HtmlTag::Dd).get("margin-left").is_some());
