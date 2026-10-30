@@ -45,6 +45,9 @@ pub(crate) enum FormFieldKind {
         options: Vec<(String, String)>,
         selected: Option<usize>,
     },
+    /// An empty signature field, for `<input type="signature">` (not an HTML
+    /// input type): someone signs it in a PDF reader
+    Signature,
 }
 
 /// Text-like `<input>` types, which become text fields
@@ -84,6 +87,7 @@ impl FormField {
                         value: attribute("value").unwrap_or("on").to_string(),
                         checked: el.attributes.contains_key("checked"),
                     },
+                    "signature" => FormFieldKind::Signature,
                     other if TEXT_INPUT_TYPES.contains(&other) => FormFieldKind::Text {
                         value: attribute("value").unwrap_or_default().to_string(),
                         multiline: false,
@@ -217,6 +221,14 @@ mod tests {
     fn buttons_and_file_inputs_are_not_fields() {
         assert_eq!(field(r#"<input type="submit" value="Send">"#), None);
         assert_eq!(field(r#"<input type="file">"#), None);
+    }
+
+    #[test]
+    fn signature_inputs_are_signature_fields() {
+        let signature = field(r#"<input type="signature" name="signer" required>"#).unwrap();
+        assert_eq!(signature.kind, FormFieldKind::Signature);
+        assert_eq!(signature.name.as_deref(), Some("signer"));
+        assert!(signature.required);
     }
 
     #[test]

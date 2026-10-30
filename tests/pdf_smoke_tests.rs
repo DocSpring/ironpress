@@ -734,3 +734,32 @@ fn smoke_flex_row_item_margins_apply_once() {
         );
     }
 }
+
+// DocSpring's <input type="signature"> is an empty signature field, to sign in a PDF reader
+#[test]
+fn smoke_pdf_forms_signature_field() {
+    let html = r#"<input type="signature" name="signer" required style="display: block; width: 200pt; height: 50pt;">
+<input type="signature" name="witness" style="display: block; width: 200pt; height: 50pt;">"#;
+    let pdf = ironpress::HtmlConverter::new()
+        .compress(false)
+        .pdf_forms(true)
+        .convert(html)
+        .unwrap();
+    assert!(pdf_is_valid(&pdf));
+    let s = String::from_utf8_lossy(&pdf);
+    assert_eq!(s.matches("/Subtype /Widget").count(), 2);
+    assert!(s.contains("/FT /Sig /T (signer) /Ff 2 /AP << /N "));
+    assert!(s.contains("/FT /Sig /T (witness) /Ff 0 /AP << /N "));
+    // Unsigned: no value. SigFlags tells a reader the document has signature fields.
+    assert!(!s.contains("/FT /Sig /T (signer) /V"));
+    assert!(s.contains("/SigFlags 1"));
+
+    // Without pdf_forms it's an empty box, and the document has no form
+    let plain = ironpress::HtmlConverter::new()
+        .compress(false)
+        .convert(html)
+        .unwrap();
+    let plain = String::from_utf8_lossy(&plain);
+    assert!(!plain.contains("/AcroForm"));
+    assert!(!plain.contains("/FT /Sig"));
+}

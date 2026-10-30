@@ -38,6 +38,8 @@ pub(super) struct FormWriterState {
     /// Top-level fields, for `/AcroForm /Fields`
     fields: Vec<usize>,
     radio_groups: Vec<RadioGroup>,
+    /// Whether a field is a signature field, for `/SigFlags`
+    signatures: bool,
 }
 
 /// A radio group: one field, whose kids are its buttons' widgets
@@ -187,6 +189,19 @@ impl PdfWriter {
                     radio_group: None,
                 }
             }
+            FormFieldKind::Signature => {
+                // Unsigned: no value, and an empty appearance over the box the page draws
+                let ap = self.add_appearance_stream(rect, "", None);
+                let name = self.forms.unique_name(field.name.as_deref());
+                self.forms.signatures = true;
+                PreparedWidget {
+                    entries: format!(
+                        "/FT /Sig /T {} /Ff {flags} /AP << /N {ap} 0 R >>",
+                        pdf_text_string(&name),
+                    ),
+                    radio_group: None,
+                }
+            }
         }
     }
 
@@ -332,8 +347,10 @@ impl FormWriterState {
             .map(|id| format!("{id} 0 R"))
             .collect::<Vec<_>>()
             .join(" ");
+        // SigFlags 1: the document has signature fields (PDF 32000-1:2008, 12.7.2)
+        let sig_flags = if self.signatures { " /SigFlags 1" } else { "" };
         format!(
-            " /AcroForm << /Fields [{fields}] /DR << /Font << /Helv {helvetica} 0 R /ZaDb {zapf} 0 R >> >> /DA (/Helv 0 Tf 0 g) >>"
+            " /AcroForm << /Fields [{fields}] /DR << /Font << /Helv {helvetica} 0 R /ZaDb {zapf} 0 R >> >> /DA (/Helv 0 Tf 0 g){sig_flags} >>"
         )
     }
 }
