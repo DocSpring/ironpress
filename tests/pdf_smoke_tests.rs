@@ -196,6 +196,99 @@ fn smoke_image_png() {
     assert!(pdf_has_text(&pdf, "/Subtype /Image"));
 }
 
+fn png_data_uri(image: image::DynamicImage) -> String {
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    format!("data:image/png;base64,{}", base64_encode(&png))
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for (index, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+            if index <= chunk.len() {
+                out.push(ALPHABET[((n >> shift) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+// A 16-bit PNG with alpha is embedded as 8-bit colour and a soft mask of its own size, not read as twice as many
+// 8-bit pixels
+#[test]
+fn smoke_image_png_16_bit_alpha() {
+    let image =
+        image::ImageBuffer::from_pixel(7, 5, image::Rgba([0x1e1e_u16, 0x3a3a, 0x5f5f, 0x8000]));
+    let html = format!(
+        r#"<img src="{}" width="70" height="50">"#,
+        png_data_uri(image::DynamicImage::ImageRgba16(image))
+    );
+    let pdf = smoke_html_to_pdf(&html);
+    assert!(pdf_is_valid(&pdf));
+    let color = image_stream(&pdf, "/Width 7 /Height 5 /ColorSpace /DeviceRGB");
+    assert_eq!(color.len(), 7 * 5 * 3);
+    assert_eq!(&color[..3], &[0x1e, 0x3a, 0x5f]);
+    let alpha = image_stream(&pdf, "/Width 7 /Height 5 /ColorSpace /DeviceGray");
+    assert_eq!(alpha.len(), 7 * 5);
+    assert_eq!(alpha[0], 0x80);
+}
+
+// The inflated stream of the image whose dictionary has this text
+fn image_stream(pdf: &[u8], dictionary: &str) -> Vec<u8> {
+    use std::io::Read;
+
+    let find = |haystack: &[u8], needle: &[u8], from: usize| {
+        haystack[from..]
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .map(|position| position + from)
+    };
+    let start = find(pdf, dictionary.as_bytes(), 0).expect("no image with that dictionary");
+    let data = find(pdf, b"stream\n", start).expect("no stream") + b"stream\n".len();
+    let end = find(pdf, b"\nendstream", data).expect("no endstream");
+    let mut inflated = Vec::new();
+    flate2::read::ZlibDecoder::new(&pdf[data..end])
+        .read_to_end(&mut inflated)
+        .unwrap();
+    inflated
+}
+
+// A palette PNG is drawn as a CSS background (it drew nothing before)
+#[test]
+fn smoke_background_image_palette_png() {
+    let mut png = Vec::new();
+    let mut encoder = png_decoder::Encoder::new(&mut png, 2, 2);
+    encoder.set_color(png_decoder::ColorType::Indexed);
+    encoder.set_depth(png_decoder::BitDepth::Eight);
+    encoder.set_palette(vec![30, 58, 95, 255, 255, 255]);
+    encoder.set_trns(vec![255, 0]);
+    encoder
+        .write_header()
+        .unwrap()
+        .write_image_data(&[0, 1, 1, 0])
+        .unwrap();
+    let html = format!(
+        r#"<div style="width: 100pt; height: 100pt; background-image: url('data:image/png;base64,{}'); background-size: 100% 100%"></div>"#,
+        base64_encode(&png)
+    );
+    let pdf = smoke_html_to_pdf(&html);
+    assert!(pdf_is_valid(&pdf));
+    assert!(pdf_has_text(&pdf, "/Subtype /Image"));
+    assert!(pdf_has_text(&pdf, "/SMask"));
+}
+
 // === CSS features ===
 
 #[test]

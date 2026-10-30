@@ -29,6 +29,13 @@
 - Ruby binding: magnus 0.9 drops Ruby 3.0 (end of life since April 2024). The
   gem requires Ruby 3.1 or later.
 
+### Fixed
+
+- 16-bit PNGs with an alpha channel are drawn in their own colors and
+  transparency (each pixel's samples were read as two 8-bit pixels), palette
+  PNGs are drawn as CSS backgrounds (they drew nothing), and the transparency
+  in a `tRNS` chunk is kept.
+
 ## [1.7.0] — 2026-09-15
 
 ### Added
