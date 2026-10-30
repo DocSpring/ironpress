@@ -118,6 +118,58 @@ fn parse_png_with_limit(data: &[u8], max_idat: usize) -> Option<PngInfo> {
     })
 }
 
+/// Re-encode a PNG that the PDF embedding paths can't take as it is, as an
+/// 8-bit RGB or RGBA PNG: palette colours (which [`parse_png`] rejects, so a
+/// CSS background drew nothing), a `tRNS` transparency chunk (which the raw
+/// IDAT pass-through ignored), and 16-bit samples with alpha (which the alpha
+/// decoder read as twice as many 8-bit pixels: a garbled image). Other bytes,
+/// including every other PNG, come back unchanged.
+pub(crate) fn normalize_for_pdf(bytes: Vec<u8>) -> Vec<u8> {
+    if !needs_normalizing(&bytes) {
+        return bytes;
+    }
+    let Ok(image) = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png) else {
+        return bytes;
+    };
+    let image = if image.color().has_alpha() {
+        image::DynamicImage::ImageRgba8(image.to_rgba8())
+    } else {
+        image::DynamicImage::ImageRgb8(image.to_rgb8())
+    };
+    let mut encoded = Vec::new();
+    match image.write_to(
+        &mut std::io::Cursor::new(&mut encoded),
+        image::ImageFormat::Png,
+    ) {
+        Ok(()) => encoded,
+        Err(_) => bytes,
+    }
+}
+
+fn needs_normalizing(data: &[u8]) -> bool {
+    if !is_png(data) {
+        return false;
+    }
+    let mut pos = 8;
+    let mut bit_depth = 0u8;
+    let mut color_type = 0u8;
+    while pos + 8 <= data.len() {
+        let chunk_len = read_u32_be(data, pos) as usize;
+        let chunk_type = &data[pos + 4..pos + 8];
+        match chunk_type {
+            b"IHDR" if pos + 18 <= data.len() => {
+                bit_depth = data[pos + 16];
+                color_type = data[pos + 17];
+            }
+            b"tRNS" => return true,
+            b"IDAT" | b"IEND" => break,
+            _ => {}
+        }
+        pos = pos.saturating_add(12).saturating_add(chunk_len);
+    }
+    color_type == 3 || (bit_depth == 16 && matches!(color_type, 4 | 6))
+}
+
 fn read_u32_be(data: &[u8], offset: usize) -> u32 {
     ((data[offset] as u32) << 24)
         | ((data[offset + 1] as u32) << 16)
@@ -309,5 +361,94 @@ mod tests {
 
         // Limit of 50 bytes: third chunk pushes total to 60, should fail
         assert!(parse_png_with_limit(&png, 50).is_none());
+    }
+
+    fn encode(image: image::DynamicImage) -> Vec<u8> {
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        png
+    }
+
+    #[test]
+    fn normalize_for_pdf_makes_16_bit_alpha_8_bit() {
+        let image =
+            image::ImageBuffer::from_pixel(3, 2, image::Rgba([0x1e1e_u16, 0x3a3a, 0x5f5f, 0xffff]));
+        let png = encode(image::DynamicImage::ImageRgba16(image));
+        assert_eq!(parse_png(&png).unwrap().bit_depth, 16);
+
+        let normalized = normalize_for_pdf(png);
+        let info = parse_png(&normalized).unwrap();
+        assert_eq!(
+            (info.width, info.height, info.bit_depth, info.channels),
+            (3, 2, 8, 4)
+        );
+        let pixels = image::load_from_memory(&normalized).unwrap().to_rgba8();
+        assert_eq!(pixels.get_pixel(2, 1).0, [0x1e, 0x3a, 0x5f, 0xff]);
+
+        let gray = image::ImageBuffer::from_pixel(2, 2, image::LumaA([0x8080_u16, 0x4040]));
+        let normalized = normalize_for_pdf(encode(image::DynamicImage::ImageLumaA16(gray)));
+        let info = parse_png(&normalized).unwrap();
+        assert_eq!((info.bit_depth, info.channels), (8, 4));
+    }
+
+    #[test]
+    fn normalize_for_pdf_expands_a_palette_and_its_transparency() {
+        let indexed = |trns: Option<Vec<u8>>| {
+            let mut png = Vec::new();
+            let mut encoder = png_decoder::Encoder::new(&mut png, 2, 1);
+            encoder.set_color(png_decoder::ColorType::Indexed);
+            encoder.set_depth(png_decoder::BitDepth::Eight);
+            encoder.set_palette(vec![255, 0, 0, 0, 0, 255]);
+            if let Some(trns) = trns {
+                encoder.set_trns(trns);
+            }
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&[0, 1])
+                .unwrap();
+            png
+        };
+        assert!(parse_png(&indexed(None)).is_none());
+
+        // The first colour is transparent
+        let normalized = normalize_for_pdf(indexed(Some(vec![0])));
+        assert_eq!(parse_png(&normalized).unwrap().channels, 4);
+        let pixels = image::load_from_memory(&normalized).unwrap().to_rgba8();
+        assert_eq!(pixels.get_pixel(0, 0)[3], 0);
+        assert_eq!(pixels.get_pixel(1, 0).0, [0, 0, 255, 255]);
+
+        let opaque = normalize_for_pdf(indexed(None));
+        let info = parse_png(&opaque).unwrap();
+        assert_eq!((info.bit_depth, info.channels), (8, 3));
+        let pixels = image::load_from_memory(&opaque).unwrap().to_rgb8();
+        assert_eq!(pixels.get_pixel(0, 0).0, [255, 0, 0]);
+    }
+
+    #[test]
+    fn normalize_for_pdf_leaves_pngs_it_can_embed_and_other_bytes() {
+        let rgb = encode(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            2,
+            2,
+            image::Rgb([1, 2, 3]),
+        )));
+        let rgba = encode(image::DynamicImage::ImageRgba8(
+            image::RgbaImage::from_pixel(2, 2, image::Rgba([1, 2, 3, 4])),
+        ));
+        let rgb16 = encode(image::DynamicImage::ImageRgb16(
+            image::ImageBuffer::from_pixel(2, 2, image::Rgb([1_u16, 2, 3])),
+        ));
+        for png in [rgb, rgba, rgb16] {
+            assert_eq!(normalize_for_pdf(png.clone()), png);
+        }
+        assert_eq!(normalize_for_pdf(b"<svg/>".to_vec()), b"<svg/>".to_vec());
+        // A PNG it can't decode stays as it was
+        let mut broken = PNG_SIGNATURE.to_vec();
+        broken.extend_from_slice(&[
+            0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 1, 0, 0, 0, 1, 16, 6,
+        ]);
+        assert_eq!(normalize_for_pdf(broken.clone()), broken);
     }
 }
