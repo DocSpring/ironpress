@@ -158,7 +158,12 @@ impl ResourceLoader {
             #[cfg(not(feature = "remote"))]
             ResolvedResource::Remote(_) => return None,
         };
-        Some(loaded)
+        // Once per resource (the cache holds the result), so every image path
+        // gets a PNG it can embed
+        Some(LoadedResource {
+            bytes: crate::parser::png::normalize_for_pdf(loaded.bytes),
+            ..loaded
+        })
     }
 }
 
