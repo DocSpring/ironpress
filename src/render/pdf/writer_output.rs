@@ -155,26 +155,26 @@ impl PdfWriter {
         };
         // Form widgets' appearance streams come first, so the page's id
         // follows its annotations
-        let widgets: Vec<Option<PreparedWidget>> = annotations
+        let prepared: Vec<PreparedAnnotation<'_>> = annotations
             .iter()
             .map(|annot| match annot {
                 PageAnnotation::Widget { rect, field } => {
-                    Some(self.prepare_form_widget(*rect, field))
+                    PreparedAnnotation::Widget(*rect, self.prepare_form_widget(*rect, field))
                 }
-                PageAnnotation::Link { .. } => None,
+                PageAnnotation::Link { rect, url } => PreparedAnnotation::Link(*rect, url),
             })
             .collect();
         let page_id = self.objects.len() + annotations.len() + 1;
 
         // Annotation objects
         let mut annot_ids = Vec::new();
-        for (annot, widget) in annotations.iter().zip(widgets) {
+        for annot in prepared {
             let annot_id = self.next_id();
-            match (annot, widget) {
-                (PageAnnotation::Widget { rect, .. }, Some(widget)) => {
-                    self.add_form_widget(annot_id, page_id, *rect, widget);
+            match annot {
+                PreparedAnnotation::Widget(rect, widget) => {
+                    self.add_form_widget(annot_id, page_id, rect, widget);
                 }
-                (PageAnnotation::Link { rect, url }, _) => {
+                PreparedAnnotation::Link(rect, url) => {
                     self.objects.push(format!(
                         "{annot_id} 0 obj\n<< /Type /Annot /Subtype /Link /P {page_id} 0 R /Rect [{x1} {y1} {x2} {y2}] /Border [0 0 0] /A << /Type /Action /S /URI /URI ({uri}) >> >>\nendobj",
                         page_id = page_id,
@@ -185,7 +185,6 @@ impl PdfWriter {
                         uri = escape_pdf_string(url),
                     ));
                 }
-                (PageAnnotation::Widget { .. }, None) => unreachable!("every widget is prepared"),
             }
             annot_ids.push(annot_id);
         }

@@ -727,7 +727,9 @@ fn smoke_flex_row_item_margins_apply_once() {
     for (rect, expected) in rects.iter().zip(expected) {
         // Edges snap to the pixel grid (0.75pt)
         assert!(
-            rect.iter().zip(expected).all(|(a, b)| (a - b).abs() <= 0.75),
+            rect.iter()
+                .zip(expected)
+                .all(|(a, b)| (a - b).abs() <= 0.75),
             "{rect:?} should be {expected:?}"
         );
     }

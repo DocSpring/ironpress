@@ -60,6 +60,13 @@ pub(super) struct PreparedWidget {
     radio_group: Option<usize>,
 }
 
+/// A page annotation ready to write: a form widget with its appearance
+/// streams written, or a link
+pub(super) enum PreparedAnnotation<'a> {
+    Widget(PdfRect, PreparedWidget),
+    Link(PdfRect, &'a str),
+}
+
 impl PdfWriter {
     /// Write a widget's appearance streams (and the form fonts, the first time)
     pub(super) fn prepare_form_widget(
