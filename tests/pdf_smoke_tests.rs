@@ -677,3 +677,58 @@ fn smoke_pdf_forms_off_by_default() {
     assert!(!s.contains("/AcroForm"));
     assert!(!s.contains("/Widget"));
 }
+
+// === Flex item margins ===
+
+/// The rectangles a Letter page fills in pure red, as [x, top, width, height]
+fn red_rects(pdf: &[u8]) -> Vec<[f32; 4]> {
+    let s = String::from_utf8_lossy(pdf);
+    let lines: Vec<&str> = s.lines().collect();
+    lines
+        .windows(2)
+        .filter(|pair| pair[0] == "1 0 0 rg" && pair[1].ends_with(" re"))
+        .map(|pair| {
+            let v: Vec<f32> = pair[1]
+                .split_whitespace()
+                .take(4)
+                .map(|n| n.parse().unwrap())
+                .collect();
+            [v[0], 792.0 - v[1] - v[3], v[2], v[3]]
+        })
+        .collect()
+}
+
+// A row places each item by its margins once, whether the item is a box of its own (a background) or
+// only holds blocks; the margins were applied again inside the item, pushing it right and down
+#[test]
+fn smoke_flex_row_item_margins_apply_once() {
+    let html = r#"<style>body { margin: 0; } .row { display: flex; align-items: flex-start; } .row > div { flex: none; }</style>
+<div class="row"><div style="width: 150pt;"><div style="height: 12pt;"></div></div><div style="margin-left: 10pt; width: 185pt;"><div style="height: 12pt;"></div></div><div style="margin-left: 10pt; width: 185pt;"><div style="height: 12pt; background: #f00;"></div></div></div>
+<div class="row"><div style="width: 150pt; height: 12pt;"></div><div style="margin-left: 10pt; width: 185pt; background: #f00;"><div style="height: 12pt;"></div></div></div>
+<div class="row"><div style="width: 150pt; height: 12pt;"></div><div style="margin-top: 10pt; width: 185pt;"><div style="height: 12pt; background: #f00;"></div></div></div>
+<div class="row" style="align-items: stretch; height: 60pt;"><div style="width: 150pt;"></div><div style="margin: 10pt 0; width: 185pt; background: #f00;"><div style="height: 12pt;"></div></div></div>
+<div style="height: 10pt; background: #f00;"></div>"#;
+    let pdf = ironpress::HtmlConverter::new()
+        .compress(false)
+        .page_size(ironpress::PageSize::LETTER)
+        .margin(ironpress::Margin::uniform(0.0))
+        .convert(html)
+        .unwrap();
+    let rects = red_rects(&pdf);
+    let expected = [
+        [355.0, 0.0, 185.0, 12.0],
+        [160.0, 12.0, 185.0, 12.0],
+        [150.0, 34.0, 185.0, 12.0],
+        [150.0, 56.0, 185.0, 40.0],
+        // The rows are as tall as their items' margin boxes
+        [0.0, 106.0, 612.0, 10.0],
+    ];
+    assert_eq!(rects.len(), expected.len(), "{rects:?}");
+    for (rect, expected) in rects.iter().zip(expected) {
+        // Edges snap to the pixel grid (0.75pt)
+        assert!(
+            rect.iter().zip(expected).all(|(a, b)| (a - b).abs() <= 0.75),
+            "{rect:?} should be {expected:?}"
+        );
+    }
+}

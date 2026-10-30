@@ -18,9 +18,9 @@ use super::context::{ContainingBlock, LayoutContext, LayoutEnv};
 use super::engine::{
     CounterState, ElementSiblingPosition, FilterApplication, FlexCell, FlexItemFragmentation,
     FlexLineId, FlexNestedOrigin, ForcedFlexLineBreak, LayoutBorder, LayoutTreeContext,
-    PageBreakSide, PseudoBoxContext, TextLine, aspect_ratio_height, collects_as_inline_text,
-    emit_page_break_after, emit_page_break_before, flatten_element, has_background_paint,
-    measure_runs_width, resolve_padding_box_height,
+    MarginApplication, PageBreakSide, PseudoBoxContext, TextLine, aspect_ratio_height,
+    collects_as_inline_text, emit_page_break_after, emit_page_break_before, flatten_element,
+    has_background_paint, measure_runs_width, resolve_padding_box_height,
 };
 use super::helpers::collapse_margin_pair;
 use super::inline_formatting::{
@@ -1544,6 +1544,14 @@ pub(crate) fn layout_flex_container(
     // `block_w` is normalized to the border box for both box-sizing modes.
     let inner_width =
         (block_w - style.border.horizontal_width() - style.padding.horizontal()).max(0.0);
+    // A row places each item's cell by the item's margins (after its main-start
+    // margin, down by its cross-start one), so the item's own box must not be
+    // offset by them again.
+    let item_margin_application = if style.flex_direction.is_row() {
+        MarginApplication::ByFormattingItem
+    } else {
+        MarginApplication::Own
+    };
 
     // Collect child elements and lay each one out into a temporary buffer.
     // Per CSS Flexbox §4.1, an absolutely-positioned child of a flex container
@@ -2238,7 +2246,8 @@ pub(crate) fn layout_flex_container(
                 LayoutTreeContext::new(style, &probe_ctx, ancestors)
                     .with_positioned_ancestor_depth(positioned_depth)
                     .for_element(flex_child_positions[idx].as_context())
-                    .with_filter_application(FilterApplication::DeferToFormattingItem),
+                    .with_filter_application(FilterApplication::DeferToFormattingItem)
+                    .with_margin_application(item_margin_application),
                 &mut probe_buf,
                 env,
             );
@@ -2290,7 +2299,8 @@ pub(crate) fn layout_flex_container(
                 LayoutTreeContext::new(style, &child_ctx, ancestors)
                     .with_positioned_ancestor_depth(positioned_depth)
                     .for_element(flex_child_positions[idx].as_context())
-                    .with_filter_application(FilterApplication::DeferToFormattingItem),
+                    .with_filter_application(FilterApplication::DeferToFormattingItem)
+                    .with_margin_application(item_margin_application),
                 &mut child_elements_buf,
                 env,
             );
@@ -2357,6 +2367,11 @@ pub(crate) fn layout_flex_container(
                 if let Some(element) = child_elements_buf.first_mut() {
                     update_container_size(element.as_mut(), None, Some(child_h));
                 }
+            }
+            // A row item's box was laid out without its margins, which belong to
+            // its outer height, as a leaf item's do
+            if item_margin_application == MarginApplication::ByFormattingItem {
+                child_h += child_style.margin.vertical();
             }
 
             let contains_nested_forced_break = sequence_contains_page_break(&child_elements_buf);
@@ -2993,11 +3008,13 @@ pub(crate) fn layout_flex_container(
                 env.font_metrics(),
             );
             // Force the item's cross size (its main size as a column flex) to the
-            // stretched height. Translate the padding-box `inner_cross_size` to a
-            // value the container's box-sizing interprets as that border-box.
+            // stretched height. Translate the padding-box `inner_cross_size`, less
+            // the item's margins outside its box, to a value the container's
+            // box-sizing interprets as that border-box.
+            let stretched_h = (inner_cross_size - child_style.margin.vertical()).max(0.0);
             let forced_h = match child_style.box_sizing {
-                BoxSizing::BorderBox => inner_cross_size,
-                BoxSizing::ContentBox => (inner_cross_size
+                BoxSizing::BorderBox => stretched_h,
+                BoxSizing::ContentBox => (stretched_h
                     - child_style.border.vertical_width()
                     - child_style.padding.vertical())
                 .max(0.0),
@@ -3088,7 +3105,8 @@ pub(crate) fn layout_flex_container(
                     LayoutTreeContext::new(style, &child_ctx, ancestors)
                         .with_positioned_ancestor_depth(positioned_depth)
                         .for_element(flex_child_positions[child_idx].as_context())
-                        .with_filter_application(FilterApplication::DeferToFormattingItem),
+                        .with_filter_application(FilterApplication::DeferToFormattingItem)
+                        .with_margin_application(item_margin_application),
                     &mut buf,
                     env,
                 );
@@ -3489,6 +3507,7 @@ pub(crate) fn layout_flex_container(
                                 && inner_cross_size > 0.0
                             {
                                 let mut fstyle = relayout_child_style.clone();
+                                item_margin_application.apply(&mut fstyle);
                                 let stretches = matches!(items[i].align_self, AlignSelf::Stretch)
                                     || (matches!(items[i].align_self, AlignSelf::Auto)
                                         && align == AlignItems::Stretch);
@@ -3560,7 +3579,8 @@ pub(crate) fn layout_flex_container(
                                     .for_element(flex_child_positions[child_idx].as_context())
                                     .with_filter_application(
                                         FilterApplication::DeferToFormattingItem,
-                                    ),
+                                    )
+                                    .with_margin_application(item_margin_application),
                                 &mut relayout_buf,
                                 env,
                             );
@@ -3578,6 +3598,10 @@ pub(crate) fn layout_flex_container(
                                     } else {
                                         simulate_block_flow(&items[i].elements).height
                                     };
+                                // Its box was laid out without its margins
+                                if item_margin_application == MarginApplication::ByFormattingItem {
+                                    items[i].height += relayout_child_style.margin.vertical();
+                                }
                             }
                         } else {
                             let relayout_classes = child_el.class_list();

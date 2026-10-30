@@ -62,7 +62,7 @@ use super::table::{
 };
 pub(crate) use super::traversal::{
     ElementLayoutContext, ElementSiblingContext, ElementSiblingPosition, FilterApplication,
-    LayoutTreeContext,
+    LayoutTreeContext, MarginApplication,
 };
 
 #[cfg(test)]
@@ -3549,6 +3549,7 @@ fn flatten_element_with_running_mode(
         ),
         env.font_metrics(),
     );
+    context.margin_application().apply(&mut style);
     let authored_display_contents =
         authored_display_contents(el, env.rules, ancestors, &selector_ctx);
     apply_authored_insets(&mut style, el, env.rules, ancestors, &selector_ctx);

@@ -72,6 +72,7 @@ impl<'context, 'dom> LayoutTreeContext<'context, 'dom> {
             tree: self,
             siblings,
             filter_application: FilterApplication::Materialize,
+            margin_application: MarginApplication::Own,
         }
     }
 }
@@ -225,18 +226,56 @@ pub(crate) enum FilterApplication {
     DeferToFormattingItem,
 }
 
+/// Which of an element's margins offset its own box when it is laid out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum MarginApplication {
+    /// The box is offset by all of its margins, as in normal flow.
+    #[default]
+    Own,
+    /// The enclosing formatting item already places the box by its margins (a
+    /// flex item in a row, whose cell starts after its main-start margin and
+    /// below its cross-start one), so laying it out ignores them. Applying them
+    /// as well moved an item with a `margin-left` or `margin-top` by that
+    /// margin a second time.
+    ByFormattingItem,
+}
+
+impl MarginApplication {
+    /// The style the box is laid out with: without its margins when the
+    /// formatting item places it by them
+    pub(crate) fn apply(self, style: &mut ComputedStyle) {
+        if self == Self::ByFormattingItem {
+            style.margin = Default::default();
+            style.margin_left_auto = false;
+            style.margin_right_auto = false;
+            style.margin_top_auto = false;
+            style.margin_bottom_auto = false;
+        }
+    }
+}
+
 /// Complete semantic input for flattening one DOM element.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ElementLayoutContext<'context, 'siblings, 'dom> {
     tree: LayoutTreeContext<'context, 'dom>,
     siblings: ElementSiblingContext<'siblings>,
     filter_application: FilterApplication,
+    margin_application: MarginApplication,
 }
 
 impl<'context, 'siblings, 'dom> ElementLayoutContext<'context, 'siblings, 'dom> {
     pub(crate) const fn with_filter_application(mut self, application: FilterApplication) -> Self {
         self.filter_application = application;
         self
+    }
+
+    pub(crate) const fn with_margin_application(mut self, application: MarginApplication) -> Self {
+        self.margin_application = application;
+        self
+    }
+
+    pub(crate) const fn margin_application(self) -> MarginApplication {
+        self.margin_application
     }
 
     pub(crate) const fn tree(self) -> LayoutTreeContext<'context, 'dom> {
