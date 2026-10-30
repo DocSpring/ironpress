@@ -11,6 +11,8 @@ pub(crate) struct RenderOpts {
     /// Skip embedding raster images fully covered by a later fully-opaque
     /// rectangular element (default false). Conservative; zero visual change.
     pub occlusion_cull: bool,
+    /// Turn form controls into fillable AcroForm fields (default false)
+    pub pdf_forms: bool,
 }
 
 impl Default for RenderOpts {
@@ -21,6 +23,7 @@ impl Default for RenderOpts {
             auto_resize_images: true,
             raster_quality: crate::style::raster_quality::RasterQuality::default(),
             occlusion_cull: false,
+            pdf_forms: false,
         }
     }
 }
@@ -62,6 +65,8 @@ pub(crate) struct PdfWriter {
     pub(super) opts: RenderOpts,
     pub(super) page_content_transform: PageContentTransform,
     pub(super) graphics_state: PdfGraphicsState,
+    /// AcroForm fields (`RenderOpts::pdf_forms`)
+    pub(super) forms: FormWriterState,
 }
 
 /// Renderer-owned subset of the PDF graphics state which cannot be recovered

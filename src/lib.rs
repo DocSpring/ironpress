@@ -248,6 +248,8 @@ pub struct HtmlConverter {
     /// Skip embedding raster images that are fully covered by a later opaque
     /// rectangular element (default false). Conservative; zero visual change.
     occlusion_cull: bool,
+    /// Turn form controls into fillable AcroForm fields (default false).
+    pdf_forms: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -279,6 +281,7 @@ impl HtmlConverter {
             auto_resize_images: true,
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
+            pdf_forms: false,
         }
     }
 
@@ -350,6 +353,18 @@ impl HtmlConverter {
     /// Conservative and safe: only skips images that are guaranteed invisible.
     pub fn occlusion_cull(mut self, enabled: bool) -> Self {
         self.occlusion_cull = enabled;
+        self
+    }
+
+    /// Turn `<input>`, `<textarea>` and `<select>` elements into fillable
+    /// AcroForm fields (default false), as WeasyPrint's `pdf_forms` option does.
+    /// Text inputs (and the text-like types, such as `email` and `date`),
+    /// textareas, checkboxes, radio buttons (one field per `name`) and
+    /// drop-down lists get a field over the control's padding box, named by
+    /// its `name` attribute, with its value drawn in Helvetica. `readonly` and
+    /// `disabled` make a field read-only, `required` a required one.
+    pub fn pdf_forms(mut self, enabled: bool) -> Self {
+        self.pdf_forms = enabled;
         self
     }
 
@@ -832,6 +847,7 @@ impl HtmlConverter {
             auto_resize_images: self.auto_resize_images,
             raster_quality: self.raster_quality,
             occlusion_cull: self.occlusion_cull,
+            pdf_forms: self.pdf_forms,
         };
 
         render::pdf::render_pdf_to_writer_full_opts_with_resources(

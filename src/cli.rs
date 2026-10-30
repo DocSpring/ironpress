@@ -37,6 +37,8 @@ pub struct CliOptions {
     pub raster_quality: RasterQuality,
     /// Skip embedding raster images fully covered by a later opaque element.
     pub occlusion_cull: bool,
+    /// Turn form controls into fillable AcroForm fields.
+    pub pdf_forms: bool,
     /// Read from stdin instead of a file.
     pub from_stdin: bool,
     /// Positional arguments (input, output).
@@ -67,6 +69,7 @@ impl Default for CliOptions {
             auto_resize_images: true,
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
+            pdf_forms: false,
             from_stdin: false,
             positional: Vec::new(),
             help: false,
@@ -213,6 +216,11 @@ pub fn parse_args(args: &[String]) -> Result<CliOptions, String> {
                 let val = args.get(i).ok_or("--occlusion-cull requires a value")?;
                 opts.occlusion_cull = val != "false" && val != "0";
             }
+            "--pdf-forms" => {
+                i += 1;
+                let val = args.get(i).ok_or("--pdf-forms requires a value")?;
+                opts.pdf_forms = val != "false" && val != "0";
+            }
             "--base-path" => {
                 i += 1;
                 let val = args.get(i).ok_or("--base-path requires a value")?;
@@ -245,7 +253,8 @@ pub fn convert(opts: &CliOptions, html: &str) -> Result<Vec<u8>, IronpressError>
         .jpeg_quality(opts.jpeg_quality)
         .auto_resize_images(opts.auto_resize_images)
         .raster_quality(opts.raster_quality)
-        .occlusion_cull(opts.occlusion_cull);
+        .occlusion_cull(opts.occlusion_cull)
+        .pdf_forms(opts.pdf_forms);
 
     if let Some(ref h) = opts.header {
         converter = converter.header(h.as_str());
@@ -281,7 +290,8 @@ pub fn convert_markdown(opts: &CliOptions, md: &str) -> Result<Vec<u8>, Ironpres
         .jpeg_quality(opts.jpeg_quality)
         .auto_resize_images(opts.auto_resize_images)
         .raster_quality(opts.raster_quality)
-        .occlusion_cull(opts.occlusion_cull);
+        .occlusion_cull(opts.occlusion_cull)
+        .pdf_forms(opts.pdf_forms);
 
     if let Some(ref h) = opts.header {
         converter = converter.header(h.as_str());
@@ -333,6 +343,7 @@ OPTIONS:
     --background-raster-dpi <DPI>
                             Rasterization DPI for flattened backgrounds (default: 192)
     --occlusion-cull <BOOL> Skip raster images fully covered by a later opaque element (default: false)
+    --pdf-forms <BOOL>      Turn form controls into fillable PDF form fields (default: false)
     --base-path <DIR>       Base dir for relative @import / @font-face URLs
     --stdin                 Read HTML from stdin instead of a file
     --version               Print version

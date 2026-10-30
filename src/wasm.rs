@@ -110,6 +110,12 @@ impl WasmHtmlConverter {
         self.update(|converter| converter.occlusion_cull(enabled));
     }
 
+    /// Enable or disable fillable AcroForm fields for form controls.
+    #[wasm_bindgen(js_name = pdfForms)]
+    pub fn pdf_forms(&mut self, enabled: bool) {
+        self.update(|converter| converter.pdf_forms(enabled));
+    }
+
     /// Enable or disable HTML sanitization.
     pub fn sanitize(&mut self, enabled: bool) {
         self.update(|converter| converter.sanitize(enabled));

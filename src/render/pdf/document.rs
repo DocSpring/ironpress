@@ -1,12 +1,51 @@
 use super::*;
 
-/// A link annotation to be placed on a PDF page.
-pub(super) struct LinkAnnotation {
-    pub(super) rect: PdfRect,
-    pub(super) url: String,
+/// An annotation on a page: a link, or a form field's widget
+pub(super) enum PageAnnotation {
+    Link {
+        rect: PdfRect,
+        url: String,
+    },
+    /// A form control's field, over its padding box (`RenderOpts::pdf_forms`)
+    Widget {
+        rect: PdfRect,
+        field: Box<crate::layout::elements::FormField>,
+    },
 }
 
-pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<LinkAnnotation> {
+impl PageAnnotation {
+    pub(super) fn rect_mut(&mut self) -> &mut PdfRect {
+        match self {
+            Self::Link { rect, .. } | Self::Widget { rect, .. } => rect,
+        }
+    }
+}
+
+/// Whether a text block is drawn as a form field's widget, which shows its value, instead of as text
+pub(super) fn is_form_widget(
+    block: &crate::layout::elements::TextBlock,
+    opts: &RenderOpts,
+) -> bool {
+    opts.pdf_forms && block.semantics.form_field.is_some()
+}
+
+/// The widget for a form control's text block, given the border box it's painted at
+pub(super) fn form_widget_annotation(
+    block: &crate::layout::elements::TextBlock,
+    border_box: PdfRect,
+) -> Option<PageAnnotation> {
+    let field = block.semantics.form_field.clone()?;
+    let border = &block.box_model.border;
+    let rect = PdfRect::new(
+        border_box.left + border.left.width,
+        border_box.bottom + border.bottom.width,
+        (border_box.width - border.left.width - border.right.width).max(0.0),
+        (border_box.height - border.top.width - border.bottom.width).max(0.0),
+    );
+    Some(PageAnnotation::Widget { rect, field })
+}
+
+pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<PageAnnotation> {
     let url = run.link_url.as_ref()?;
     if decode_footnote_link(url).is_some() {
         return None;
@@ -14,7 +53,7 @@ pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<L
     if is_internal_target_anchor(url) {
         return None;
     }
-    Some(LinkAnnotation {
+    Some(PageAnnotation::Link {
         rect,
         url: url.clone(),
     })

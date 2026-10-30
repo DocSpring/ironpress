@@ -7,6 +7,7 @@
 mod background;
 mod container;
 mod flex;
+mod form;
 mod fragmentation;
 mod grid;
 mod media;
@@ -25,6 +26,7 @@ mod text;
 pub(crate) use background::{BackgroundBox, BackgroundBoxGeometry, PageAreaInFlowSpace};
 pub(crate) use container::Container;
 pub(crate) use flex::{FlexContent, FlexRow};
+pub(crate) use form::{FormField, FormFieldKind};
 pub(crate) use fragmentation::*;
 pub(crate) use grid::{GridContent, GridRow, GridRowStartSpace};
 pub(crate) use media::{

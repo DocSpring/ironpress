@@ -30,6 +30,7 @@ includes them, then goes back to the upstream packages.
 | `::before` and `::after` content on an inline-block is laid out | Not sent yet (`docspring-1.7.0.3`) |
 | `blockquote` has Chrome's UA margins and isn't italic | Not sent yet (`docspring-1.7.0.3`) |
 | A 16-bit PNG with alpha is drawn at its size and in its colours (its samples were read as twice as many 8-bit pixels), a palette PNG is drawn as a CSS background (it drew nothing), and a palette's or `tRNS` chunk's transparency is kept | Not sent yet (`docspring-1.7.0.4`) |
+| `pdf_forms` (off by default, `pdfForms` in JS, `--pdf-forms` on the CLI) turns `<input>` (text-like types, checkbox, radio), `<textarea>` and `<select>` into fillable AcroForm fields over the control's padding box, as WeasyPrint's option does. Values are drawn in Helvetica (WinAnsi) by the fields' appearance streams, and not by the page. Radio buttons with one `name` are one field; other repeated names get `_2`, `_3`. Not yet: a control that is itself a flex item (its text block becomes a flex cell, which drops it, as it drops the value without the option), and a widget doesn't turn with a transformed ancestor | Not sent yet (`docspring-1.7.0.4`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
@@ -38,7 +39,7 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
 ## Builds
 
 - `docspring-1.7.0.4`: everything in the table.
-- `docspring-1.7.0.3`: everything but the last row.
+- `docspring-1.7.0.3`: everything but the last two rows.
 - `docspring-1.7.0.2`: the first four rows.
 - `docspring-1.7.0.1`: the first three rows. Don't use it: a table with a forced break inside a cell can move onto an
   extra page.

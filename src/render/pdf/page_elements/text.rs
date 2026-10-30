@@ -133,6 +133,14 @@ pub(in crate::render::pdf) fn render_text_block(
     let tb_fragment_geometry = tb_box_geometry.fragment(element.fragmentation.box_fragmentation);
     let tb_paint_box = tb_paint_geometry.border_box;
     let tb_border_box = tb_paint_geometry.rounded_border_box(*tb_radii);
+    // A form field's widget draws its value, so the text block doesn't
+    let form_widget = is_form_widget(element, &ctx.text.pdf_writer.opts);
+    if form_widget
+        && phase.paints_contents()
+        && let Some(widget) = form_widget_annotation(element, tb_paint_box)
+    {
+        ctx.text.annotations.push(widget);
+    }
 
     // Apply transform if set (wrap in q/Q).
     // Rotate and scale are applied around the element's centre so
@@ -625,7 +633,7 @@ pub(in crate::render::pdf) fn render_text_block(
     } else {
         PdfContentSpace::page_css(ctx.text.pdf_writer.page_content_transform)
     };
-    if phase.paints_contents() {
+    if phase.paints_contents() && !form_widget {
         text_lines::render_text_block_lines(
             content,
             element,

@@ -57,6 +57,7 @@ mod container;
 mod document;
 mod flex_cell_shadows;
 mod flow_layout;
+mod forms;
 mod function_gradients;
 mod geometry;
 mod gradient_rasters;
@@ -116,6 +117,7 @@ use document::*;
 pub use document::{PageDecoration, render_pdf, render_pdf_to_writer, render_pdf_with_fonts};
 use flex_cell_shadows::FlexCellShadows;
 use flow_layout::*;
+use forms::*;
 use function_gradients::*;
 use geometry::{
     BoxPaintGeometry, BoxPaintGrid, FragmentPaintGeometry, LayoutBoxGeometry, PaintBoxGeometry,
@@ -474,7 +476,7 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
         let mut content = String::new();
         let mut page_background_content = String::new();
         let mut document_canvas_content = String::new();
-        let mut annotations: Vec<LinkAnnotation> = Vec::new();
+        let mut annotations: Vec<PageAnnotation> = Vec::new();
         let mut page_images: Vec<ImageRef> = Vec::new();
         let mut page_ext_gstates: Vec<(String, f32)> = Vec::new();
         let mut bg_alpha_counter: usize = 0;
@@ -863,7 +865,8 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
             .then(|| format!("q 1 0 0 1 0 0 cm\nq {page_matrix}{decoration_content}Q\nQ\n",));
 
         for annotation in &mut annotations {
-            annotation.rect = page_content_transform.transform_rect(annotation.rect);
+            let rect = annotation.rect_mut();
+            *rect = page_content_transform.transform_rect(*rect);
         }
 
         let paint_streams = match decoration_stream.as_deref() {

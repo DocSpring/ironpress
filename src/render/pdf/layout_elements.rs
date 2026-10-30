@@ -10,7 +10,7 @@ pub(super) struct TextRenderContext<'a> {
     pub(super) page_height: f32,
     pub(super) custom_fonts: &'a HashMap<String, TtfFont>,
     pub(super) prepared_custom_fonts: &'a PreparedCustomFonts,
-    pub(super) annotations: &'a mut Vec<LinkAnnotation>,
+    pub(super) annotations: &'a mut Vec<PageAnnotation>,
     // Threaded so `render_cell_text` can embed blurred `text-shadow` image
     // XObjects (it rasterizes + blurs the shadow glyphs, like the page path).
     pub(super) pdf_writer: &'a mut PdfWriter,
@@ -22,7 +22,7 @@ impl<'a> TextRenderContext<'a> {
         page_height: f32,
         custom_fonts: &'a HashMap<String, TtfFont>,
         prepared_custom_fonts: &'a PreparedCustomFonts,
-        annotations: &'a mut Vec<LinkAnnotation>,
+        annotations: &'a mut Vec<PageAnnotation>,
         pdf_writer: &'a mut PdfWriter,
         page_images: &'a mut Vec<ImageRef>,
     ) -> Self {
@@ -69,7 +69,7 @@ impl<'a> PageRenderContext<'a> {
         shading_counter: &'a mut usize,
         page_ext_gstates: &'a mut Vec<(String, f32)>,
         bg_alpha_counter: &'a mut usize,
-        annotations: &'a mut Vec<LinkAnnotation>,
+        annotations: &'a mut Vec<PageAnnotation>,
         paint_box: PdfRect,
         page_height: f32,
     ) -> Self {

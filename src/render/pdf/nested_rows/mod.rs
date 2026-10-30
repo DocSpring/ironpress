@@ -95,7 +95,7 @@ struct NestedRowsRenderer<'call, 'fonts> {
     shading_counter: &'call mut usize,
     pdf_writer: &'call mut PdfWriter,
     page_images: &'call mut Vec<ImageRef>,
-    annotations: &'call mut Vec<LinkAnnotation>,
+    annotations: &'call mut Vec<PageAnnotation>,
     stacking: &'call mut StackingTraversal,
     abs_origins: &'call mut HashMap<usize, PdfPoint>,
     page_paint_box: PdfRect,

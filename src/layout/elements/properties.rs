@@ -898,9 +898,11 @@ pub(crate) struct DescendantClip {
 }
 
 /// Document-level meaning carried by a laid-out text block.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct TextSemantics {
     pub(crate) heading_level: Option<u8>,
+    /// The form field of a form control laid out as this block
+    pub(crate) form_field: Option<Box<super::FormField>>,
 }
 
 /// Per-axis overflow behavior of a container.

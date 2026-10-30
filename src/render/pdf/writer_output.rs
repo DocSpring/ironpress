@@ -140,7 +140,7 @@ impl PdfWriter {
         width: f32,
         height: f32,
         paint: PagePaintStreams<'_>,
-        annotations: Vec<LinkAnnotation>,
+        annotations: Vec<PageAnnotation>,
         images: Vec<ImageRef>,
         ext_gstates: Vec<(String, f32)>,
         shadings: Vec<ShadingEntry>,
@@ -153,21 +153,40 @@ impl PdfWriter {
             }
             None => format!("{document_id} 0 R"),
         };
+        // Form widgets' appearance streams come first, so the page's id
+        // follows its annotations
+        let widgets: Vec<Option<PreparedWidget>> = annotations
+            .iter()
+            .map(|annot| match annot {
+                PageAnnotation::Widget { rect, field } => {
+                    Some(self.prepare_form_widget(*rect, field))
+                }
+                PageAnnotation::Link { .. } => None,
+            })
+            .collect();
         let page_id = self.objects.len() + annotations.len() + 1;
 
         // Annotation objects
         let mut annot_ids = Vec::new();
-        for annot in &annotations {
+        for (annot, widget) in annotations.iter().zip(widgets) {
             let annot_id = self.next_id();
-            self.objects.push(format!(
-                "{annot_id} 0 obj\n<< /Type /Annot /Subtype /Link /P {page_id} 0 R /Rect [{x1} {y1} {x2} {y2}] /Border [0 0 0] /A << /Type /Action /S /URI /URI ({uri}) >> >>\nendobj",
-                page_id = page_id,
-                x1 = annot.rect.left,
-                y1 = annot.rect.bottom,
-                x2 = annot.rect.right(),
-                y2 = annot.rect.top(),
-                uri = escape_pdf_string(&annot.url),
-            ));
+            match (annot, widget) {
+                (PageAnnotation::Widget { rect, .. }, Some(widget)) => {
+                    self.add_form_widget(annot_id, page_id, *rect, widget);
+                }
+                (PageAnnotation::Link { rect, url }, _) => {
+                    self.objects.push(format!(
+                        "{annot_id} 0 obj\n<< /Type /Annot /Subtype /Link /P {page_id} 0 R /Rect [{x1} {y1} {x2} {y2}] /Border [0 0 0] /A << /Type /Action /S /URI /URI ({uri}) >> >>\nendobj",
+                        page_id = page_id,
+                        x1 = rect.left,
+                        y1 = rect.bottom,
+                        x2 = rect.right(),
+                        y2 = rect.top(),
+                        uri = escape_pdf_string(url),
+                    ));
+                }
+                (PageAnnotation::Widget { .. }, None) => unreachable!("every widget is prepared"),
+            }
             annot_ids.push(annot_id);
         }
 
@@ -244,6 +263,7 @@ impl PdfWriter {
         // object. The remaining fields can still be read after this partial
         // move, and object order/IDs are unchanged.
         let mut all_objects = self.objects;
+        self.forms.write_radio_groups(&mut all_objects);
 
         for (i, name) in font_names.iter().enumerate() {
             let id = font_base_id + i;
@@ -558,7 +578,8 @@ impl PdfWriter {
         // Catalog
         let catalog_id = all_objects.len() + 1;
         all_objects.push(format!(
-            "{catalog_id} 0 obj\n<< /Type /Catalog /Pages {pages_id} 0 R{outlines_ref} >>\nendobj",
+            "{catalog_id} 0 obj\n<< /Type /Catalog /Pages {pages_id} 0 R{outlines_ref}{} >>\nendobj",
+            self.forms.acroform_entry(),
         ));
 
         // Write objects and track offsets for xref

@@ -629,3 +629,51 @@ fn smoke_filter_blur_text_element_no_crash() {
     assert!(pdf_has_text(&pdf, "/SMask"));
     assert!(pdf_has_text(&pdf, "Normal text"));
 }
+
+// With pdf_forms, form controls are fillable fields over their boxes, wherever they are in the layout
+#[test]
+fn smoke_pdf_forms_fields() {
+    let html = r#"<style>input, textarea, select { display: block; box-sizing: border-box; border: 1pt solid black; }</style>
+<input name="name" value="Ada (Countess)" placeholder="Name" style="width: 200pt; height: 20pt;" required>
+<textarea name="notes" style="width: 200pt; height: 50pt;">Two
+lines</textarea>
+<select name="country" style="width: 100pt; height: 20pt;"><option value="nz">New Zealand</option><option value="fr" selected>France</option></select>
+<input type="checkbox" name="agree" checked style="width: 12pt; height: 12pt;">
+<input type="radio" name="size" value="s" style="width: 12pt; height: 12pt;">
+<input type="radio" name="size" value="m" checked style="width: 12pt; height: 12pt;">
+<input type="submit" value="Send" style="width: 100pt; height: 20pt;">
+<div style="position: absolute; left: 300pt; top: 10pt; width: 100pt;"><div><input name="name" value="Zoë" style="width: 100pt; height: 20pt;"></div></div>
+<div style="display: flex;"><div style="width: 100pt;"><div style="height: 20pt;"><input name="in_flex" style="width: 100pt; height: 20pt;"></div></div></div>"#;
+    let pdf = ironpress::HtmlConverter::new()
+        .compress(false)
+        .pdf_forms(true)
+        .convert(html)
+        .unwrap();
+    assert!(pdf_is_valid(&pdf));
+    let s = String::from_utf8_lossy(&pdf);
+    assert_eq!(s.matches("/Subtype /Widget").count(), 8);
+    assert!(s.contains("/AcroForm << /Fields ["));
+    assert!(s.contains("/FT /Tx /T (name) /V (Ada \\(Countess\\)) /Ff 2 "));
+    assert!(s.contains("/FT /Tx /T (notes) /V (Two\\nlines) /Ff 4096 "));
+    assert!(s.contains(
+        "/FT /Ch /T (country) /V (fr) /Opt [[(nz) (New Zealand)] [(fr) (France)]] /Ff 131072 "
+    ));
+    assert!(s.contains("/FT /Btn /T (agree) /V /Yes /AS /Yes "));
+    assert!(s.contains("/FT /Btn /T (size) /V /m /Ff 49152 /Kids ["));
+    // A repeated name gets a suffix, and text outside ASCII is UTF-16
+    assert!(s.contains("/FT /Tx /T (name_2) /V <FEFF005A006F00EB> "));
+    assert!(s.contains("/T (in_flex)"));
+    assert!(!s.contains("Send) /"));
+    // The value is drawn by the widget, not the page
+    assert!(s.contains("(Ada \\(Countess\\)) Tj"));
+    assert_eq!(s.matches("(Ada \\(Countess\\)) Tj").count(), 1);
+}
+
+#[test]
+fn smoke_pdf_forms_off_by_default() {
+    let pdf =
+        smoke_html_to_pdf(r#"<input name="name" value="Ada" style="width: 100pt; height: 20pt;">"#);
+    let s = String::from_utf8_lossy(&pdf);
+    assert!(!s.contains("/AcroForm"));
+    assert!(!s.contains("/Widget"));
+}

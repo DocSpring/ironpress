@@ -3843,6 +3843,13 @@ fn flatten_element_with_running_mode(
                 border: LayoutBorder::from_computed(&style.border, style.color),
             };
             let mut control = TextBlock::from_style(lines, &style, box_model);
+            control.semantics.form_field = super::elements::FormField::from_element(
+                el,
+                used_font_size(&style, env.fonts),
+                style.color,
+                style.text_align,
+            )
+            .map(Box::new);
             control.paint.background.color =
                 Some(style.background_color.unwrap_or(crate::types::Color::WHITE));
             control.text.writing_mode = WritingMode::HorizontalTb;

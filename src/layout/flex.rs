@@ -811,7 +811,8 @@ fn adapt_column_text_block(
             element.positioning.containing_block = None;
             element.paint.group.stacking = Default::default();
             element.positioning.containing_block_depth = 0;
-            element.semantics = Default::default();
+            // A flex item is no heading, but a form control stays a field
+            element.semantics.heading_level = None;
         }
     }
 

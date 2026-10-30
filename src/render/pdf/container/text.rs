@@ -26,7 +26,10 @@ pub(super) fn render_text_child(
         previous_margin_bottom: mut prev_margin_bottom,
     } = flow_position;
     let mut y;
-    let lines = &child.lines;
+    // A form field's widget draws its value, so the text block doesn't
+    let form_widget = is_form_widget(child, &ctx.text.pdf_writer.opts);
+    let no_lines = Vec::new();
+    let lines = if form_widget { &no_lines } else { &child.lines };
     let margin_top = &child.box_model.margins.start;
     let margin_bottom = &child.box_model.margins.end;
     let padding = &child.box_model.padding;
@@ -92,6 +95,12 @@ pub(super) fn render_text_child(
         );
         let tb_box_geometry = ctx.text.pdf_writer.resolve_box_geometry(tb_geometry);
         let tb_paint_geometry = tb_box_geometry.painting();
+        if form_widget
+            && phase.paints_contents()
+            && let Some(widget) = form_widget_annotation(child, tb_paint_geometry.border_box)
+        {
+            ctx.text.annotations.push(widget);
+        }
         let tb_background_geometry =
             tb_box_geometry.background(*tb_bg_origin, *tb_bg_clip, *tb_radii);
         let tb_background_box = tb_background_geometry.painting_box;
@@ -323,6 +332,12 @@ pub(super) fn render_text_child(
     );
     let tb_box_geometry = ctx.text.pdf_writer.resolve_box_geometry(tb_geometry);
     let tb_paint_geometry = tb_box_geometry.painting();
+    if form_widget
+        && phase.paints_contents()
+        && let Some(widget) = form_widget_annotation(child, tb_paint_geometry.border_box)
+    {
+        ctx.text.annotations.push(widget);
+    }
     let tb_background_geometry = tb_box_geometry.background(*tb_bg_origin, *tb_bg_clip, *tb_radii);
     let tb_background_box = tb_background_geometry.painting_box;
     let tb_gradient_area = LayerPaintArea::new(
