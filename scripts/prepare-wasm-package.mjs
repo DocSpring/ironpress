@@ -8,6 +8,12 @@ if (manifest.name !== 'ironpress' || manifest.type !== 'module') {
   throw new Error('wasm-pack did not generate the expected Ironpress ESM package');
 }
 
+// DocSpring: the licenses of the crates and fonts in the WebAssembly build (docspring/notices/build.sh)
+await copyFile(
+  new URL('../THIRD_PARTY_NOTICES', import.meta.url),
+  new URL('THIRD_PARTY_NOTICES', packageDirectory),
+);
+
 await Promise.all(
   ['node.js', 'node.d.ts'].map((file) =>
     copyFile(
@@ -17,7 +23,7 @@ await Promise.all(
   ),
 );
 
-manifest.files = [...new Set([...manifest.files, 'node.js', 'node.d.ts'])];
+manifest.files = [...new Set([...manifest.files, 'node.js', 'node.d.ts', 'THIRD_PARTY_NOTICES'])];
 manifest.exports = {
   '.': {
     types: './ironpress.d.ts',

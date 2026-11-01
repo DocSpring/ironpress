@@ -1,0 +1,19 @@
+Third-party notices for ironpress's WebAssembly build
+
+ironpress_bg.wasm includes the Rust crates below, each listed with the license it is used under and a link to its
+source code on crates.io, and the Liberation fonts, whose license is at the end. ironpress itself is MIT-licensed (the
+LICENSE file beside this one).
+
+This file is made by docspring/notices/build.sh with cargo-about.
+{{#each licenses}}
+
+================================================================================
+{{{name}}} ({{{id}}})
+
+Used by:
+{{#each used_by}}
+- {{{crate.name}}} {{{crate.version}}}: https://crates.io/crates/{{{crate.name}}}/{{{crate.version}}}
+{{/each}}
+
+{{{text}}}
+{{/each}}
