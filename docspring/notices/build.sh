@@ -8,17 +8,22 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
+raw="$(mktemp)"
 output="$(mktemp)"
-trap 'rm -f "$output"' EXIT
+trap 'rm -f "$raw" "$output"' EXIT
 
 cargo about generate --config docspring/notices/about.toml --locked \
   --no-default-features --features wasm --target wasm32-unknown-unknown \
-  docspring/notices/notices.hbs -o "$output"
+  docspring/notices/notices.hbs -o "$raw"
 {
   printf '\n================================================================================\n'
   printf 'SIL Open Font License 1.1 (OFL-1.1)\n\nUsed by:\n- Liberation Sans, Serif and Mono (assets/Liberation*.ttf)\n\n'
   cat assets/LICENSE-LiberationFonts
-} >>"$output"
+} >>"$raw"
+# A crate can ship the same license twice, differing only in blank lines (miniz_oxide's LICENSE and LICENSE-MIT.md),
+# and cargo-about takes whichever the file system lists first, which differs between macOS and Linux. Squeezing runs
+# of blank lines makes the file the same on both.
+cat -s "$raw" >"$output"
 
 if [[ "${1:-}" == "--check" ]]; then
   diff -u THIRD_PARTY_NOTICES "$output" || {
