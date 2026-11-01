@@ -125,6 +125,7 @@ jobs:
         run: docspring/notices/build.sh --check
       - run: scripts/build-wasm-package.sh
       - run: node scripts/test-wasm-font-packs.mjs
+      - run: node docspring/test-wasm-package.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: wasm-package

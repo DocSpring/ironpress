@@ -1,0 +1,4 @@
+# The WebAssembly build's stack. Rust gives wasm32 1 MiB, and layout takes about 45 KB for each level of nested blocks,
+# so a document 23 <div>s deep ran off it and trapped with "memory access out of bounds". 8 MiB takes about 180 levels.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=8388608"]
