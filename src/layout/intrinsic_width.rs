@@ -1,7 +1,9 @@
 //! Intrinsic inline sizing shared by block and flex formatting contexts.
 
 use super::helpers::{collects_as_inline_text, recurses_as_layout_child};
-use super::text::{collapse_whitespace, estimate_word_width, resolve_style_font_family};
+use super::text::{
+    collapse_whitespace, estimate_word_width, is_collapsible_space, resolve_style_font_family,
+};
 use super::traversal::ElementSiblingPosition;
 use crate::parser::css::{AncestorInfo, CssRule, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode};
@@ -34,13 +36,31 @@ impl IntrinsicWidths {
                 .min(self.min_content.max(available_width.max(0.0))),
         }
     }
+}
 
+/// The widths of one run of inline content (text, inline elements and atomic inlines) between blocks. Whitespace
+/// collapses across the whole run, as layout collapses it, not within each text node: the space at the end of
+/// `Page ` before `<span>1</span>` (or at the start of the span's text) is one space between them, while a space at
+/// the run's end hangs and doesn't count.
+#[derive(Clone, Copy, Debug, Default)]
+struct InlineWidths {
+    widths: IntrinsicWidths,
+    /// Whether the run has anything in it yet, so a space before it doesn't count
+    has_content: bool,
+    /// The width of a collapsible space the run ended with, owed if more content follows
+    pending_space: f32,
+}
+
+impl InlineWidths {
     /// Append one atomic inline box to the current inline formatting sequence.
     /// Its max-content contribution stays on the same unwrapped line, while
     /// its min-content contribution remains one unbreakable unit.
-    fn append_atomic(&mut self, box_widths: Self) {
-        self.min_content = self.min_content.max(box_widths.min_content);
-        self.max_content += box_widths.max_content;
+    fn append_atomic(&mut self, box_widths: IntrinsicWidths) {
+        self.widths.max_content += self.pending_space;
+        self.widths.min_content = self.widths.min_content.max(box_widths.min_content);
+        self.widths.max_content += box_widths.max_content;
+        self.has_content = true;
+        self.pending_space = 0.0;
     }
 }
 
@@ -158,7 +178,7 @@ fn content_intrinsic_widths(
     measurement: IntrinsicMeasurement<'_, '_>,
 ) -> IntrinsicWidths {
     let mut contributions = Vec::new();
-    let mut inline = IntrinsicWidths::default();
+    let mut inline = InlineWidths::default();
     let text = TextMeasurement::new(style, measurement.fonts);
     let mut positions = element_positions(el);
     let mut child_ancestors = measurement.ancestors.to_vec();
@@ -328,11 +348,12 @@ fn child_style(
     )
 }
 
-fn flush_inline(contributions: &mut Vec<IntrinsicWidths>, inline: &mut IntrinsicWidths) {
-    if inline.min_content > 0.0 || inline.max_content > 0.0 {
-        contributions.push(*inline);
+fn flush_inline(contributions: &mut Vec<IntrinsicWidths>, inline: &mut InlineWidths) {
+    let widths = inline.widths;
+    if widths.min_content > 0.0 || widths.max_content > 0.0 {
+        contributions.push(widths);
     }
-    *inline = IntrinsicWidths::default();
+    *inline = InlineWidths::default();
 }
 
 struct TextMeasurement<'a> {
@@ -354,15 +375,36 @@ impl<'a> TextMeasurement<'a> {
         }
     }
 
-    fn accumulate(&self, text: &str, widths: &mut IntrinsicWidths) {
+    fn accumulate(&self, text: &str, inline: &mut InlineWidths) {
+        let starts_with_space = text.starts_with(is_collapsible_space);
+        let ends_with_space = text.ends_with(is_collapsible_space);
         let collapsed = collapse_whitespace(text);
         if collapsed.is_empty() {
+            if starts_with_space && inline.has_content && inline.pending_space == 0.0 {
+                inline.pending_space = self.width(" ");
+            }
             return;
         }
+        if inline.has_content {
+            inline.widths.max_content += if inline.pending_space > 0.0 {
+                inline.pending_space
+            } else if starts_with_space {
+                self.width(" ")
+            } else {
+                0.0
+            };
+        }
+        let widths = &mut inline.widths;
         widths.max_content += self.width(&collapsed);
         for word in collapsed.split(' ').filter(|word| !word.is_empty()) {
             widths.min_content = widths.min_content.max(self.width(word));
         }
+        inline.has_content = true;
+        inline.pending_space = if ends_with_space {
+            self.width(" ")
+        } else {
+            0.0
+        };
     }
 
     fn width(&self, text: &str) -> f32 {
@@ -381,7 +423,7 @@ fn accumulate_inline_element(
     el: &ElementNode,
     style: &ComputedStyle,
     measurement: IntrinsicMeasurement<'_, '_>,
-    inline: &mut IntrinsicWidths,
+    inline: &mut InlineWidths,
 ) {
     let text = TextMeasurement::new(style, measurement.fonts);
     let mut positions = element_positions(el);

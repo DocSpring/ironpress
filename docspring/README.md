@@ -39,6 +39,7 @@ includes them, then goes back to the upstream packages.
 | `@font-face`, `@page`, margin-box and `@footnote` declarations split only on a `;` outside strings and functions: `src: url("data:font/ttf;base64,...")` was cut at `data:font/ttf`, so no font from a `data:` URL loaded, and `content: "Draft; do not copy"` lost its text | Not sent yet (`docspring-1.7.0.8`) |
 | An element nested more than 31 deep fails the conversion with a layout error instead of being left out with everything in it (the PDF came out without that content). `max_nesting_depth` (`maxNestingDepth` in JS, `--max-nesting-depth` on the CLI) raises the limit for a larger stack: each level takes about 60 KB for a flex container in a release build | Not sent yet (`docspring-1.7.0.8`) |
 | A row flex item's bottom margin counts in `align-items: flex-end`, `center` and `stretch`: `flex-end` put the item's border box at the line's end and then moved it down by its top margin, so a `<p>` in a flex row sat below where browsers put it, and `stretch` ran into the bottom margin | Not sent yet (`docspring-1.7.0.8`) |
+| An element's max-content width (a flex item's, a `width: max-content` box's) collapses whitespace across text nodes and inline elements, as layout does: it trimmed each text node's spaces, so `Page <span>1</span>` measured a space short and a flex item holding it wrapped the span onto a second line | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
@@ -47,11 +48,11 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
 ## Builds
 
 - `docspring-1.7.0.8`: everything in the table.
-- `docspring-1.7.0.7`: everything but the last three rows.
-- `docspring-1.7.0.6`: everything but the last four rows.
-- `docspring-1.7.0.5`: everything but the last six rows.
-- `docspring-1.7.0.4`: everything but the last seven rows.
-- `docspring-1.7.0.3`: everything but the last ten rows.
+- `docspring-1.7.0.7`: everything but the last four rows.
+- `docspring-1.7.0.6`: everything but the last five rows.
+- `docspring-1.7.0.5`: everything but the last seven rows.
+- `docspring-1.7.0.4`: everything but the last eight rows.
+- `docspring-1.7.0.3`: everything but the last eleven rows.
 - `docspring-1.7.0.2`: the first four rows.
 - `docspring-1.7.0.1`: the first three rows. Don't use it: a table with a forced break inside a cell can move onto an
   extra page.

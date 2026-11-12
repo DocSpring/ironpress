@@ -5363,6 +5363,34 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
             .unwrap();
     }
 
+    /// The distinct baselines the page's runs of text sit on (the `y` of each text matrix), in a PDF converted without
+    /// compression
+    fn text_baselines(pdf: &[u8]) -> std::collections::BTreeSet<String> {
+        String::from_utf8_lossy(pdf)
+            .lines()
+            .filter_map(|line| line.strip_suffix(" Tm"))
+            .map(|matrix| matrix.rsplit(' ').next().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_flex_items_text_stays_on_one_line_when_a_space_meets_an_inline_element() {
+        // The item is as wide as its max-content width, which measured each text node with its own spaces trimmed:
+        // "Body page " lost its space before the <span>, so the item came out a space too narrow and "123" wrapped
+        for inner in [
+            "Body page <span>123</span>",
+            "Body page<span> 123</span>",
+            "Body page <b>123</b> end",
+        ] {
+            let html = format!(
+                r#"<div style="display: flex; align-items: flex-end"><div><p>{inner}</p></div></div>"#
+            );
+            let pdf = HtmlConverter::new().compress(false).convert(&html).unwrap();
+            let baselines = text_baselines(&pdf);
+            assert_eq!(baselines.len(), 1, "{inner}: {baselines:?}");
+        }
+    }
+
     #[test]
     fn max_nesting_depth_lays_out_deeper_documents_on_a_larger_stack() {
         // A debug build's flex containers take about 240 KB of stack a level
