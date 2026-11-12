@@ -4293,6 +4293,45 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn font_face_with_a_base64_data_url_draws_the_text() {
+        fn base64(bytes: &[u8]) -> String {
+            const ALPHABET: &[u8] =
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            let mut out = String::new();
+            for chunk in bytes.chunks(3) {
+                let n = chunk
+                    .iter()
+                    .enumerate()
+                    .fold(0u32, |n, (i, byte)| n | u32::from(*byte) << (16 - 8 * i));
+                for i in 0..4 {
+                    if i <= chunk.len() {
+                        out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+                    } else {
+                        out.push('=');
+                    }
+                }
+            }
+            out
+        }
+        // Noto Sans is otherwise only the fallback for characters the default
+        // fonts lack, so it draws "Hello" only when the @font-face rule loaded
+        let font = include_bytes!("../assets/NotoSans-Regular.ttf");
+        let html = format!(
+            r#"<html><head><style>
+            @font-face {{ font-family: "Inline"; src: url("data:font/ttf;base64,{}") format("truetype"); }}
+            p {{ font-family: "Inline"; }}
+        </style></head><body><p>Hello</p></body></html>"#,
+            base64(font)
+        );
+        let pdf = html_to_pdf(&html).unwrap();
+        assert!(
+            pdf.windows(b"NotoSans".len())
+                .any(|window| window == b"NotoSans"),
+            "the text isn't in the @font-face font"
+        );
+    }
+
+    #[test]
     #[cfg(not(feature = "remote"))]
     fn font_face_remote_url_rejected() {
         // Remote URLs in @font-face should be silently ignored

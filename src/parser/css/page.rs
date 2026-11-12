@@ -54,6 +54,38 @@ pub(crate) fn extract_font_face_rules(css: &str) -> Vec<FontFaceRule> {
     rules
 }
 
+/// Split a declaration block on its top-level `;`s, not one inside a string or
+/// a function such as `url()`: `src: url("data:font/ttf;base64,...")` and
+/// `content: "Draft; do not copy"` are one declaration each.
+fn split_declarations(block: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (index, ch) in block.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '"' | '\'' if quote == Some(ch) => quote = None,
+            '"' | '\'' if quote.is_none() => quote = Some(ch),
+            _ if quote.is_some() => {}
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ';' if depth == 0 => {
+                parts.push(&block[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&block[start..]);
+    parts
+}
+
 /// Parse the declarations inside an @font-face block.
 pub(crate) fn parse_font_face_declarations(decls: &str) -> Option<FontFaceRule> {
     let mut font_family: Option<String> = None;
@@ -64,7 +96,7 @@ pub(crate) fn parse_font_face_declarations(decls: &str) -> Option<FontFaceRule> 
     let mut size_adjust = 1.0;
     let mut unicode_ranges = Vec::new();
 
-    for declaration in decls.split(';') {
+    for declaration in split_declarations(decls) {
         let declaration = declaration.trim();
         if declaration.is_empty() {
             continue;
@@ -362,7 +394,7 @@ pub(crate) fn extract_page_rules(css: &str) -> Vec<PageRule> {
 
 fn parse_footnote_area_declarations(decls: &str) -> FootnoteAreaStyle {
     let mut style = FootnoteAreaStyle::default();
-    for declaration in decls.split(';') {
+    for declaration in split_declarations(decls) {
         let Some((prop, val)) = declaration.split_once(':') else {
             continue;
         };
@@ -568,7 +600,7 @@ fn extract_margin_box_decls(body: &str) -> Option<ParsedMarginBoxDecls> {
     let mut specified_color: Option<SpecifiedColor> = None;
     let mut specified_background_color: Option<SpecifiedColor> = None;
     let mut width = None;
-    for decl in body.split(';') {
+    for decl in split_declarations(body) {
         if let Some((prop, val)) = decl.split_once(':') {
             let prop = prop.trim();
             let val = val.trim();
@@ -691,8 +723,8 @@ pub(crate) fn parse_page_declarations(decls: &str) -> Option<PageRule> {
     let text_style = PageTextStyle {
         declarations: super::parse_inline_style(decls),
     };
-    let declarations: Vec<(String, String)> = decls
-        .split(';')
+    let declarations: Vec<(String, String)> = split_declarations(decls)
+        .into_iter()
         .filter_map(|declaration| {
             let declaration = declaration.trim();
             if declaration.is_empty() {
@@ -1187,6 +1219,48 @@ mod tests {
     fn extract_page_rules_malformed() {
         assert!(extract_page_rules("@page { bogus }").is_empty());
         assert!(extract_page_rules("@page no-brace").is_empty());
+    }
+
+    #[test]
+    fn font_face_src_keeps_a_base64_data_url_whole() {
+        // The `;` in `data:font/ttf;base64,` is inside the url(): splitting the
+        // block on every `;` cut the source at `data:font/ttf` and lost the
+        // declarations after it
+        let rules = parse_font_face_rules(
+            r#"@font-face { font-family: "X"; src: url("data:font/ttf;base64,AAEAAA==") format("truetype"); font-weight: bold }"#,
+        );
+        assert_eq!(rules.len(), 1);
+        assert_eq!(
+            rules[0].source_entries().collect::<Vec<_>>(),
+            vec![(false, "data:font/ttf;base64,AAEAAA==")]
+        );
+        assert!(rules[0].font_weight_bold);
+    }
+
+    #[test]
+    fn margin_box_content_keeps_a_semicolon_in_its_string() {
+        let rules = extract_page_rules(
+            r#"@page { @top-center { content: "Draft; do not copy"; color: red } }"#,
+        );
+        let content = &rules[0].margin_boxes[0].content;
+        assert!(
+            matches!(content.as_slice(), [MarginContentToken::Literal(text)] if text == "Draft; do not copy"),
+            "{content:?}"
+        );
+        assert!(rules[0].margin_boxes[0].color.is_some());
+    }
+
+    #[test]
+    fn page_declarations_keep_a_semicolon_in_a_url() {
+        let rule = parse_page_declarations(
+            r#"background-image: url("data:image/png;base64,AAAA"); size: a4; margin: 2cm"#,
+        )
+        .unwrap();
+        assert!(
+            rule.width.is_some(),
+            "size after the data: URL must not be dropped"
+        );
+        assert!(rule.margin_top.is_some());
     }
 
     #[test]
