@@ -250,6 +250,8 @@ pub struct HtmlConverter {
     occlusion_cull: bool,
     /// Turn form controls into fillable AcroForm fields (default false).
     pdf_forms: bool,
+    /// How many elements nested in each other are laid out (default 31); a deeper one fails the conversion.
+    max_nesting_depth: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -282,6 +284,7 @@ impl HtmlConverter {
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
             pdf_forms: false,
+            max_nesting_depth: layout::context::DepthLimit::DEFAULT_MAX,
         }
     }
 
@@ -365,6 +368,16 @@ impl HtmlConverter {
     /// `disabled` make a field read-only, `required` a required one.
     pub fn pdf_forms(mut self, enabled: bool) -> Self {
         self.pdf_forms = enabled;
+        self
+    }
+
+    /// How many elements nested in each other are laid out, counting the element itself but not `html` and `body`
+    /// (default 31). A document that nests deeper fails with [`IronpressError::LayoutError`], rather than leaving out
+    /// the deeper content. Each level takes stack: about 60 KB for a flex container in a release build and four times
+    /// that in a debug one, so the default suits a thread's 2 MiB stack in a release build. Raise it only with a larger
+    /// stack.
+    pub fn max_nesting_depth(mut self, levels: usize) -> Self {
+        self.max_nesting_depth = levels;
         self
     }
 
@@ -785,6 +798,7 @@ impl HtmlConverter {
         );
 
         // Step 5: Layout
+        let depth = layout::context::DepthLimit::new(self.max_nesting_depth);
         let mut pages = layout::engine::layout_with_rules_and_fonts_raster_quality(
             &result.nodes,
             layout::engine::DocumentGeometry::new(effective_page_size, effective_margin)
@@ -796,7 +810,14 @@ impl HtmlConverter {
             layout::paginate::PaginationContext::new(page_geometry, footnote_area, 0.0),
             self.raster_quality,
             &mut resource_loader,
+            &depth,
         );
+        if depth.exceeded() {
+            return Err(IronpressError::LayoutError(format!(
+                "elements are nested more than {} deep",
+                depth.max()
+            )));
+        }
         let mut footnote_area_for_overflow = footnote_area;
         footnote_area_for_overflow.content_width =
             effective_page_size.width - default_page_area_margin.horizontal();
@@ -5304,5 +5325,67 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
             let html = format!("<style>{s}</style><p>test</p>");
             let _ = html_to_pdf(&html);
         }
+    }
+
+    fn nested_divs(levels: usize) -> String {
+        format!(
+            "<html><body>{}Deep{}</body></html>",
+            "<div>".repeat(levels),
+            "</div>".repeat(levels)
+        )
+    }
+
+    /// Whether the page draws text ("Deep", the document's only text, as glyph IDs)
+    fn draws_deep(pdf: &[u8]) -> bool {
+        pdf.windows(b"] TJ".len()).any(|window| window == b"] TJ")
+    }
+
+    #[test]
+    fn an_element_nested_deeper_than_the_limit_fails_the_conversion() {
+        // 31 levels take more than a test thread's 2 MiB of stack in a debug build
+        std::thread::Builder::new()
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                let converter = HtmlConverter::new().compress(false);
+                assert!(draws_deep(&converter.convert(&nested_divs(31)).unwrap()));
+
+                // Until docspring-1.7.0.8, a PDF without the text
+                match converter.convert(&nested_divs(32)) {
+                    Err(IronpressError::LayoutError(message)) => {
+                        assert_eq!(message, "elements are nested more than 31 deep");
+                    }
+                    Err(error) => panic!("{error}"),
+                    Ok(_) => panic!("converted a document nested deeper than the limit"),
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn max_nesting_depth_lays_out_deeper_documents_on_a_larger_stack() {
+        // A debug build's flex containers take about 240 KB of stack a level
+        std::thread::Builder::new()
+            .stack_size(64 * 1024 * 1024)
+            .spawn(|| {
+                let converter = HtmlConverter::new().compress(false).max_nesting_depth(100);
+                assert!(draws_deep(&converter.convert(&nested_divs(100)).unwrap()));
+                let flex = format!(
+                    "{}Deep{}",
+                    r#"<div style="display: flex">"#.repeat(100),
+                    "</div>".repeat(100)
+                );
+                assert!(draws_deep(&converter.convert(&flex).unwrap()));
+
+                let error = converter.convert(&nested_divs(101)).err().unwrap();
+                assert_eq!(
+                    error.to_string(),
+                    "Layout error: elements are nested more than 100 deep"
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

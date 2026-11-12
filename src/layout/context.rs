@@ -2,6 +2,7 @@ use crate::parser::css::CssRule;
 use crate::parser::dom::ElementNode;
 use crate::parser::ttf::TtfFont;
 use crate::style::font_metrics::FontMetrics;
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use super::elements::TableSourcePath;
@@ -30,6 +31,54 @@ pub(crate) struct LayoutEnv<'a> {
     /// measured exponentially often; borrowing the memo from here keeps it alive
     /// exactly as long as the DOM it describes.
     pub table_cell_sizing: TableCellSizingContext<'a>,
+    /// How deeply elements may nest, and whether a deeper one was met.
+    pub depth: &'a DepthLimit,
+}
+
+/// How many elements nested in each other the layout traverses (each level takes stack), counting the element
+/// itself but not `html` and `body`. An element deeper than that isn't laid out, and `exceeded` records it, so the
+/// conversion fails instead of leaving out content.
+#[derive(Debug)]
+pub(crate) struct DepthLimit {
+    max: usize,
+    exceeded: Cell<bool>,
+}
+
+impl DepthLimit {
+    /// What the layout traversed before this limit could be set. Each level of a flex container takes about 60 KB
+    /// of stack in a release build (four times that in a debug one), so on the 2 MiB stack of a thread from
+    /// `std::thread::spawn` this is about as deep as a release build can go.
+    pub(crate) const DEFAULT_MAX: usize = 31;
+
+    pub(crate) const fn new(max: usize) -> Self {
+        Self {
+            max,
+            exceeded: Cell::new(false),
+        }
+    }
+
+    /// Whether an element with these ancestors is laid out; records it when it isn't
+    pub(crate) fn allows(&self, ancestors: usize) -> bool {
+        let allowed = ancestors < self.max;
+        if !allowed {
+            self.exceeded.set(true);
+        }
+        allowed
+    }
+
+    pub(crate) fn exceeded(&self) -> bool {
+        self.exceeded.get()
+    }
+
+    pub(crate) const fn max(&self) -> usize {
+        self.max
+    }
+}
+
+impl Default for DepthLimit {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MAX)
+    }
 }
 
 impl<'a> LayoutEnv<'a> {
@@ -53,6 +102,7 @@ impl<'a> LayoutEnv<'a> {
             filter_defs: self.filter_defs,
             filter_dpi: self.filter_dpi,
             table_cell_sizing: self.table_cell_sizing.source_descendants(source_path),
+            depth: self.depth,
         }
     }
 }

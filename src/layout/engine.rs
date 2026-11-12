@@ -2061,6 +2061,7 @@ pub fn layout_with_rules_and_fonts(
         ),
         crate::style::raster_quality::RasterQuality::default(),
         &mut resources,
+        &super::context::DepthLimit::default(),
     )
 }
 
@@ -2081,6 +2082,7 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
+    depth: &super::context::DepthLimit,
 ) -> Vec<Page> {
     let pages = layout_document_pass(
         nodes,
@@ -2092,6 +2094,7 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
         pagination_context.clone(),
         raster_quality,
         resources,
+        depth,
         None,
     );
     match super::page_counters::page_count_to_measure(&pages) {
@@ -2105,6 +2108,7 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
             pagination_context,
             raster_quality,
             resources,
+            depth,
             Some(page_count),
         ),
         None => pages,
@@ -2122,6 +2126,7 @@ fn layout_document_pass(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
+    depth: &super::context::DepthLimit,
     page_count: Option<usize>,
 ) -> Vec<Page> {
     let DocumentGeometry {
@@ -2245,6 +2250,7 @@ fn layout_document_pass(
         filter_defs: &filter_defs,
         filter_dpi: raster_quality.filter_dpi,
         table_cell_sizing: super::table::TableCellSizingContext::root(&mut table_cell_sizing),
+        depth,
     };
     if let Some(root) =
         RootFormattingContext::from_projected_body(nodes, &body_style, available_width)
@@ -3584,8 +3590,8 @@ fn flatten_element_with_running_mode(
     // fixed-position metadata, counter cleanup, and trailing page breaks from
     // depending on which element kind happened to produce the layout nodes.
     (|| {
-        // Bail out on excessively deep nesting to prevent stack overflow.
-        if ancestors.len() > 30 {
+        // Each level takes stack: an element nested deeper than the limit isn't laid out, and the conversion fails
+        if !env.depth.allows(ancestors.len()) {
             return;
         }
 

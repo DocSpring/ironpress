@@ -116,6 +116,14 @@ impl WasmHtmlConverter {
         self.update(|converter| converter.pdf_forms(enabled));
     }
 
+    /// How many elements nested in each other are laid out (default 31); a document that nests deeper fails. Each
+    /// level takes stack: this package's 8 MiB stack (`.cargo/config.toml`) is enough for about 130 levels of flex
+    /// containers, the deepest-stacked layout.
+    #[wasm_bindgen(js_name = maxNestingDepth)]
+    pub fn max_nesting_depth(&mut self, levels: usize) {
+        self.update(|converter| converter.max_nesting_depth(levels));
+    }
+
     /// Enable or disable HTML sanitization.
     pub fn sanitize(&mut self, enabled: bool) {
         self.update(|converter| converter.sanitize(enabled));

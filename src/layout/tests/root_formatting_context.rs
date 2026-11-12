@@ -142,6 +142,7 @@ fn projected_body_padding_is_not_subtracted_from_root_percentages_twice() {
         ),
         RasterQuality::default(),
         &mut resources,
+        &crate::layout::context::DepthLimit::default(),
     );
     let mut width = GreenWidth::default();
     for (_, element) in &pages[0].elements {
@@ -220,6 +221,7 @@ fn viewport_math_uses_page_area_before_projected_body_padding() {
         ),
         RasterQuality::default(),
         &mut resources,
+        &crate::layout::context::DepthLimit::default(),
     );
     let mut width = BarWidth::default();
     for (_, element) in &pages[0].elements {

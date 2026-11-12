@@ -39,6 +39,8 @@ pub struct CliOptions {
     pub occlusion_cull: bool,
     /// Turn form controls into fillable AcroForm fields.
     pub pdf_forms: bool,
+    /// How many elements nested in each other are laid out.
+    pub max_nesting_depth: usize,
     /// Read from stdin instead of a file.
     pub from_stdin: bool,
     /// Positional arguments (input, output).
@@ -70,6 +72,7 @@ impl Default for CliOptions {
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
             pdf_forms: false,
+            max_nesting_depth: crate::layout::context::DepthLimit::DEFAULT_MAX,
             from_stdin: false,
             positional: Vec::new(),
             help: false,
@@ -221,6 +224,13 @@ pub fn parse_args(args: &[String]) -> Result<CliOptions, String> {
                 let val = args.get(i).ok_or("--pdf-forms requires a value")?;
                 opts.pdf_forms = val != "false" && val != "0";
             }
+            "--max-nesting-depth" => {
+                i += 1;
+                let val = args.get(i).ok_or("--max-nesting-depth requires a value")?;
+                opts.max_nesting_depth = val
+                    .parse()
+                    .map_err(|_| format!("--max-nesting-depth requires a number, got: {val}"))?;
+            }
             "--base-path" => {
                 i += 1;
                 let val = args.get(i).ok_or("--base-path requires a value")?;
@@ -254,7 +264,8 @@ pub fn convert(opts: &CliOptions, html: &str) -> Result<Vec<u8>, IronpressError>
         .auto_resize_images(opts.auto_resize_images)
         .raster_quality(opts.raster_quality)
         .occlusion_cull(opts.occlusion_cull)
-        .pdf_forms(opts.pdf_forms);
+        .pdf_forms(opts.pdf_forms)
+        .max_nesting_depth(opts.max_nesting_depth);
 
     if let Some(ref h) = opts.header {
         converter = converter.header(h.as_str());
@@ -291,7 +302,8 @@ pub fn convert_markdown(opts: &CliOptions, md: &str) -> Result<Vec<u8>, Ironpres
         .auto_resize_images(opts.auto_resize_images)
         .raster_quality(opts.raster_quality)
         .occlusion_cull(opts.occlusion_cull)
-        .pdf_forms(opts.pdf_forms);
+        .pdf_forms(opts.pdf_forms)
+        .max_nesting_depth(opts.max_nesting_depth);
 
     if let Some(ref h) = opts.header {
         converter = converter.header(h.as_str());
@@ -344,6 +356,8 @@ OPTIONS:
                             Rasterization DPI for flattened backgrounds (default: 192)
     --occlusion-cull <BOOL> Skip raster images fully covered by a later opaque element (default: false)
     --pdf-forms <BOOL>      Turn form controls into fillable PDF form fields (default: false)
+    --max-nesting-depth <N> Elements nested in each other that are laid out; a deeper document fails
+                            (default: 31; each level takes stack)
     --base-path <DIR>       Base dir for relative @import / @font-face URLs
     --stdin                 Read HTML from stdin instead of a file
     --version               Print version
@@ -356,6 +370,14 @@ mod tests {
 
     fn args(s: &str) -> Vec<String> {
         s.split_whitespace().map(String::from).collect()
+    }
+
+    #[test]
+    fn parse_max_nesting_depth() {
+        assert_eq!(parse_args(&args("in.html")).unwrap().max_nesting_depth, 31);
+        let opts = parse_args(&args("--max-nesting-depth 100 in.html")).unwrap();
+        assert_eq!(opts.max_nesting_depth, 100);
+        assert!(parse_args(&args("--max-nesting-depth deep in.html")).is_err());
     }
 
     #[test]
