@@ -75,6 +75,46 @@ fn nesting_depth_check() {
 }
 
 #[test]
+fn nesting_depth_counts_only_elements_that_hold_content() {
+    // Void elements, self-closing tags, comments, the doctype and processing instructions hold nothing, so they add
+    // no depth however many there are
+    let flat = "<!DOCTYPE html><p>".to_string()
+        + &"a<br>b<hr><input type=checkbox><img src=x.png><wbr><!-- note --><col><meta charset=utf-8>".repeat(600)
+        + "<span/><?xml version=\"1.0\"?></p>";
+    assert_eq!(check_nesting_depth(&flat), 1);
+    assert!(sanitize_html(&flat).is_ok());
+    assert_eq!(check_nesting_depth("<BR><Img SRC=x><DIV></DIV>"), 1);
+}
+
+#[test]
+fn nesting_depth_ignores_slashes_inside_attributes() {
+    // A `/` in an attribute (a URL, a data URL's MIME type) doesn't make an opening tag a closing one
+    let html = r#"<div class="a/b"><a href="https://example.com/x"><img src="data:image/png;base64,AA/B"></a></div>"#;
+    assert_eq!(check_nesting_depth(html), 2);
+    // Nor does a `>` inside a quoted attribute end the tag
+    assert_eq!(
+        check_nesting_depth(r#"<div title="a > b"><p>x</p></div>"#),
+        2
+    );
+}
+
+#[test]
+fn nesting_depth_skips_the_text_of_scripts_styles_and_comments() {
+    let html = "<style>a > b { color: red } /* <div><div> */</style>\
+                <script>if (a<b && c>d) { x = '<div>'; }</script>\
+                <!-- <div><div><div> -->\
+                <textarea><div><div></textarea><title><div></title><p>x</p>";
+    assert_eq!(check_nesting_depth(html), 1);
+}
+
+#[test]
+fn accepts_a_document_with_many_line_breaks_inside_deep_nesting() {
+    let html = "<div>".repeat(400) + &"line<br>".repeat(2000) + &"</div>".repeat(400);
+    assert_eq!(check_nesting_depth(&html), 400);
+    assert!(sanitize_html(&html).is_ok());
+}
+
+#[test]
 fn rejects_excessive_nesting() {
     let html = "<div>".repeat(501) + &"</div>".repeat(501);
     let result = sanitize_html(&html);

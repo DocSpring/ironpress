@@ -345,36 +345,107 @@ fn remove_event_handlers(html: &str) -> String {
     result
 }
 
+/// Elements that never have content (HTML's void elements), so they add no depth.
+const VOID_ELEMENTS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
+];
+
+/// Elements whose content is text, up to their end tag, whatever `<` it contains.
+const RAW_TEXT_ELEMENTS: &[&str] = &["script", "style", "textarea", "title", "xmp", "noscript"];
+
+/// How deeply elements nest: each start tag of an element that can hold content opens a level and its end tag closes
+/// it. Comments, the doctype, processing instructions, void elements and self-closing tags hold nothing, so they don't
+/// count, and neither does a `/` or `>` inside a quoted attribute value, or a tag in the text of a raw text element
+/// (a `<style>`, a `<script>`).
 fn check_nesting_depth(html: &str) -> usize {
+    let bytes = html.as_bytes();
     let mut depth: usize = 0;
     let mut max_depth: usize = 0;
+    let mut i = 0;
 
-    let mut in_tag = false;
-    let mut is_closing = false;
-
-    for c in html.chars() {
-        match c {
-            '<' => {
-                in_tag = true;
-                is_closing = false;
+    while let Some(offset) = bytes[i..].iter().position(|&b| b == b'<') {
+        let start = i + offset;
+        let rest = &bytes[start + 1..];
+        match rest.first() {
+            Some(b'!') if rest.starts_with(b"!--") => {
+                i = find(bytes, start + 4, b"-->").map_or(bytes.len(), |end| end + 3);
             }
-            '/' if in_tag => {
-                is_closing = true;
+            Some(b'!') | Some(b'?') => {
+                i = find(bytes, start + 1, b">").map_or(bytes.len(), |end| end + 1);
             }
-            '>' if in_tag => {
-                if is_closing {
-                    depth = depth.saturating_sub(1);
-                } else {
-                    depth += 1;
-                    max_depth = max_depth.max(depth);
+            Some(b'/') => {
+                depth = depth.saturating_sub(1);
+                i = find(bytes, start + 1, b">").map_or(bytes.len(), |end| end + 1);
+            }
+            Some(c) if c.is_ascii_alphabetic() => {
+                let name_end = start
+                    + 1
+                    + rest
+                        .iter()
+                        .position(|b| b.is_ascii_whitespace() || *b == b'/' || *b == b'>')
+                        .unwrap_or(rest.len());
+                let name = html[start + 1..name_end].to_ascii_lowercase();
+                let (tag_end, self_closing) = tag_end(bytes, name_end);
+                i = tag_end;
+                if self_closing || VOID_ELEMENTS.contains(&name.as_str()) {
+                    continue;
                 }
-                in_tag = false;
+                if RAW_TEXT_ELEMENTS.contains(&name.as_str()) {
+                    // Its text runs to its end tag, which closes it again
+                    let close = format!("</{name}");
+                    i = find_ignoring_case(bytes, i, close.as_bytes())
+                        .and_then(|end| find(bytes, end, b">"))
+                        .map_or(bytes.len(), |end| end + 1);
+                    max_depth = max_depth.max(depth + 1);
+                    continue;
+                }
+                depth += 1;
+                max_depth = max_depth.max(depth);
             }
-            _ => {}
+            // A `<` that starts no tag is text
+            _ => i = start + 1,
         }
     }
 
     max_depth
+}
+
+/// Where the start tag whose name ends at `from` ends (just after its `>`), and whether it ends with `/>`. Quoted
+/// attribute values may hold `>` and `/`.
+fn tag_end(bytes: &[u8], from: usize) -> (usize, bool) {
+    let mut quote: Option<u8> = None;
+    let mut last = 0u8;
+    let mut i = from;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match quote {
+            Some(q) if b == q => quote = None,
+            Some(_) => {}
+            None if b == b'"' || b == b'\'' => quote = Some(b),
+            None if b == b'>' => return (i + 1, last == b'/'),
+            None if !b.is_ascii_whitespace() => last = b,
+            None => {}
+        }
+        i += 1;
+    }
+    (bytes.len(), false)
+}
+
+fn find(bytes: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    bytes
+        .get(from..)?
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|p| from + p)
+}
+
+fn find_ignoring_case(bytes: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    bytes
+        .get(from..)?
+        .windows(needle.len())
+        .position(|w| w.eq_ignore_ascii_case(needle))
+        .map(|p| from + p)
 }
 
 #[cfg(test)]

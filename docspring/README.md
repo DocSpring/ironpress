@@ -35,6 +35,7 @@ includes them, then goes back to the upstream packages.
 | With `pdf_forms`, `<input type="signature">` (not an HTML input type) becomes an empty signature field (`/FT /Sig`, and `/SigFlags 1` on the form) over its box, which someone signs in a PDF reader. Without `pdf_forms` it is an empty box | Not sent yet (`docspring-1.7.0.5`) |
 | The WebAssembly build has an 8 MiB stack (`.cargo/config.toml`), so a document nested as deep as ironpress allows (500 levels) renders. With Rust's 1 MiB default, 23 nested `<div>`s trapped with "memory access out of bounds", and every later call trapped too | Not sent yet (`docspring-1.7.0.6`) |
 | The npm package includes `THIRD_PARTY_NOTICES`: the licenses of the crates and the Liberation fonts in the WebAssembly build, each crate with a link to its source (`docspring/notices/build.sh`, with cargo-about; CI checks it's up to date) | Not sent yet (`docspring-1.7.0.6`) |
+| The nesting depth limit (500) counts how deeply elements nest: void elements (`<br>`, `<input>`), self-closing tags, comments and the doctype no longer count as levels, a `/` or `>` inside a quoted attribute no longer ends or closes a tag, and the text of `<script>`, `<style>` and other raw text elements is skipped. A flat document with about 500 `<br>`s or comments was refused as nested too deep | Not sent yet (`docspring-1.7.0.7`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
@@ -42,10 +43,11 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
 
 ## Builds
 
-- `docspring-1.7.0.6`: everything in the table.
-- `docspring-1.7.0.5`: everything but the last two rows.
-- `docspring-1.7.0.4`: everything but the last three rows.
-- `docspring-1.7.0.3`: everything but the last six rows.
+- `docspring-1.7.0.7`: everything in the table.
+- `docspring-1.7.0.6`: everything but the last row.
+- `docspring-1.7.0.5`: everything but the last three rows.
+- `docspring-1.7.0.4`: everything but the last four rows.
+- `docspring-1.7.0.3`: everything but the last seven rows.
 - `docspring-1.7.0.2`: the first four rows.
 - `docspring-1.7.0.1`: the first three rows. Don't use it: a table with a forced break inside a cell can move onto an
   extra page.
