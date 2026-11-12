@@ -537,6 +537,9 @@ pub struct FlexCell {
     /// FlexRow carrying cells from multiple wrapped lines still aligns each
     /// item against its own line rather than the entire row.
     pub line_cross_size: f32,
+    /// The item's fixed cross-axis margins added together (margin-top and margin-bottom in a row). `y_offset`
+    /// already includes the leading one; alignment fits the margin box, not the border box, in the line.
+    pub cross_margins: f32,
     /// Semantic ownership by a flex line. Geometry may move independently via
     /// margins, relative positioning, and alignment.
     pub line_id: FlexLineId,
@@ -579,15 +582,17 @@ impl FlexCell {
         let clamp = |size: f32| size.min(self.cross_max).max(self.cross_min);
         let natural_size = clamp(self.natural_height);
         let alignment = self.effective_cross_alignment(container_alignment);
+        // The room the item's border box has in the line once its margins are taken out
+        let room = line_size - self.cross_margins;
         let (size, alignment_offset) = match alignment {
             AlignItems::Stretch if self.fragmentation.block_size.is_explicit() => {
                 (natural_size, 0.0)
             }
-            AlignItems::Stretch => (clamp(line_size), 0.0),
+            AlignItems::Stretch => (clamp(room.max(0.0)), 0.0),
             AlignItems::Baseline => (natural_size, baseline_shift.max(0.0)),
             AlignItems::FlexStart => (natural_size, 0.0),
-            AlignItems::FlexEnd => (natural_size, line_size - natural_size),
-            AlignItems::Center => (natural_size, (line_size - natural_size) / 2.0),
+            AlignItems::FlexEnd => (natural_size, room - natural_size),
+            AlignItems::Center => (natural_size, (room - natural_size) / 2.0),
         };
         FlexCellCrossGeometry {
             size,
@@ -647,6 +652,7 @@ impl Default for FlexCell {
             role: FlexItemRole::default(),
             y_offset: 0.0,
             line_cross_size: 0.0,
+            cross_margins: 0.0,
             line_id: FlexLineId::default(),
         }
     }
@@ -7365,6 +7371,70 @@ mod tests {
         let t = items.iter().find(|i| i.3 == "T").unwrap();
         let s = items.iter().find(|i| i.3 == "S").unwrap();
         assert!(s.0 >= t.0);
+    }
+
+    /// Each flex item's text, cross-axis offset and size, and the row's height
+    fn flex_cross_geometry(html: &str) -> (Vec<(String, f32, f32)>, f32) {
+        let nodes = parse_html(html).unwrap();
+        let pages = layout(&nodes, PageSize::A4, Margin::default());
+        let mut cells = Vec::new();
+        let mut row_height = 0.0;
+        for (_, element) in pages.iter().flat_map(|page| &page.elements) {
+            element.inspect_flex(|row| {
+                row_height = row.content.row_height;
+                for cell in &row.content.cells {
+                    let text = cell
+                        .lines
+                        .iter()
+                        .flat_map(|line| line.runs.iter().map(|run| run.text.clone()))
+                        .collect::<String>();
+                    let cross =
+                        cell.cross_geometry(row.content.row_height, row.content.alignment, 0.0);
+                    cells.push((text, cross.offset, cross.size));
+                }
+            });
+        }
+        (cells, row_height)
+    }
+
+    #[test]
+    fn flex_cross_alignment_fits_each_items_margin_box_in_the_line() {
+        let item = |text: &str, margins: &str| {
+            format!(r#"<div style="width: 50pt; height: 20pt; margin: {margins}">{text}</div>"#)
+        };
+        let row = |align: &str| {
+            format!(
+                r#"<div style="display: flex; height: 100pt; align-items: {align}">{}{}</div>"#,
+                item("A", "0"),
+                item("B", "5pt 0 15pt")
+            )
+        };
+        let offset = |cells: &[(String, f32, f32)], text: &str| {
+            cells.iter().find(|cell| cell.0 == text).unwrap().1
+        };
+
+        // The bottom margin keeps the item 15pt above the line's end: 100 - 15 - 20
+        let (cells, _) = flex_cross_geometry(&row("flex-end"));
+        assert!((offset(&cells, "A") - 80.0).abs() < 0.01, "{cells:?}");
+        assert!((offset(&cells, "B") - 65.0).abs() < 0.01, "{cells:?}");
+
+        // Centred in what's left once both margins are out: 5 + (100 - 20 - 20) / 2
+        let (cells, _) = flex_cross_geometry(&row("center"));
+        assert!((offset(&cells, "B") - 35.0).abs() < 0.01, "{cells:?}");
+
+        // Stretched to the line less its margins
+        let stretched = r#"<div style="display: flex; height: 100pt"><div style="width: 50pt; margin: 5pt 0 15pt">S</div></div>"#;
+        let (cells, _) = flex_cross_geometry(stretched);
+        assert!((cells[0].1 - 5.0).abs() < 0.01, "{cells:?}");
+        assert!((cells[0].2 - 80.0).abs() < 0.01, "{cells:?}");
+
+        // A row without a height is as tall as its tallest margin box
+        let auto = format!(
+            r#"<div style="display: flex">{}</div>"#,
+            item("M", "5pt 0 15pt")
+        );
+        let (_, row_height) = flex_cross_geometry(&auto);
+        assert!((row_height - 40.0).abs() < 0.01, "{row_height}");
     }
 
     #[test]

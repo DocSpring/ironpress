@@ -77,6 +77,9 @@ struct FlexItem {
     margin_main_start: f32,
     margin_main_end: f32,
     margin_cross_start: f32,
+    /// The fixed margin at the item's cross end (margin-bottom in a row). `flex-end`, `center` and `stretch` fit the
+    /// item's margin box in the line, not its border box.
+    margin_cross_end: f32,
     rel_left: f32,
     rel_top: f32,
     is_relative: bool,
@@ -1839,6 +1842,11 @@ pub(crate) fn layout_flex_container(
                         generated_style.margin.left,
                     )
                 };
+            let margin_cross_end = if style.flex_direction.is_row() {
+                generated_style.margin.bottom
+            } else {
+                generated_style.margin.right
+            };
             let (margin_main_start, margin_main_end) = if style.flex_direction.is_row() {
                 (generated_style.margin.left, generated_style.margin.right)
             } else {
@@ -1903,6 +1911,7 @@ pub(crate) fn layout_flex_container(
                 margin_main_start,
                 margin_main_end,
                 margin_cross_start,
+                margin_cross_end,
                 rel_left,
                 rel_top,
                 is_relative,
@@ -2006,6 +2015,11 @@ pub(crate) fn layout_flex_container(
                 child_style.margin.bottom,
                 child_style.margin.left,
             )
+        };
+        let m_cross_end = if style.flex_direction.is_row() {
+            child_style.margin.bottom
+        } else {
+            child_style.margin.right
         };
         // `position: relative` offsets on a flex item. `left`/`top` win over
         // `right`/`bottom`; an unset axis is 0. The item lays out statically and
@@ -2415,6 +2429,7 @@ pub(crate) fn layout_flex_container(
                 margin_main_start: m_main_start,
                 margin_main_end: m_main_end,
                 margin_cross_start: m_cross_start,
+                margin_cross_end: m_cross_end,
                 rel_left: item_rel_left,
                 rel_top: item_rel_top,
                 is_relative: item_is_relative,
@@ -2710,6 +2725,7 @@ pub(crate) fn layout_flex_container(
             margin_main_start: m_main_start,
             margin_main_end: m_main_end,
             margin_cross_start: m_cross_start,
+            margin_cross_end: m_cross_end,
             rel_left: item_rel_left,
             rel_top: item_rel_top,
             is_relative: item_is_relative,
@@ -4112,6 +4128,7 @@ pub(crate) fn layout_flex_container(
                 for (cell, &item_idx) in flex_cells.iter_mut().zip(line_items.iter()) {
                     let it = &items[item_idx];
                     cell.y_offset += it.margin_cross_start;
+                    cell.cross_margins = it.margin_cross_start + it.margin_cross_end;
                     if it.is_relative {
                         cell.x_offset += it.rel_left;
                         cell.y_offset += it.rel_top;
