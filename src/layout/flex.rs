@@ -56,6 +56,8 @@ struct FlexItem {
     break_after: Option<PageBreakSide>,
     width: f32,
     base_width: f32,
+    /// The item's padding and border on the main axis, which its flex base size includes
+    main_decorations: f32,
     flex_grow: f32,
     flex_shrink: f32,
     height: f32,
@@ -982,6 +984,8 @@ struct FlexIntrinsicWidth {
 #[derive(Clone, Copy, Debug)]
 struct FlexibleLength {
     base: f32,
+    /// The base size less padding and border: css-flexbox-1 §9.7 scales the shrink factor by it
+    inner_base: f32,
     target: f32,
     constraints: SizeConstraints,
     grow: f32,
@@ -994,6 +998,7 @@ struct FlexibleLength {
 impl FlexibleLength {
     fn new(
         base: f32,
+        decorations: f32,
         constraints: SizeConstraints,
         grow: f32,
         shrink: f32,
@@ -1001,6 +1006,7 @@ impl FlexibleLength {
     ) -> Self {
         Self {
             base,
+            inner_base: (base - decorations).max(0.0),
             target: base,
             constraints,
             grow,
@@ -1116,11 +1122,11 @@ fn resolve_flexible_lengths(items: &mut [FlexibleLength], available: f32) {
                 let scaled_sum: f32 = items
                     .iter()
                     .filter(|item| !item.frozen)
-                    .map(|item| item.shrink * item.base.max(0.0))
+                    .map(|item| item.shrink * item.inner_base)
                     .sum();
                 if scaled_sum > 0.0 {
                     for item in items.iter_mut().filter(|item| !item.frozen) {
-                        let scaled = item.shrink * item.base.max(0.0);
+                        let scaled = item.shrink * item.inner_base;
                         item.target = item.base - remaining.abs() * scaled / scaled_sum;
                     }
                 }
@@ -1909,6 +1915,8 @@ pub(crate) fn layout_flex_container(
                     .then(|| PageBreakSide::from(generated_style.break_after)),
                 width,
                 base_width: width,
+                main_decorations: generated_style.padding.horizontal()
+                    + generated_style.border.horizontal_width(),
                 flex_grow: generated_style.flex_grow,
                 flex_shrink: generated_style.flex_shrink,
                 height,
@@ -2422,6 +2430,8 @@ pub(crate) fn layout_flex_container(
                     .then(|| PageBreakSide::from(child_style.break_after)),
                 width: child_w_for_flex,
                 base_width: child_w_for_flex,
+                main_decorations: child_style.padding.horizontal()
+                    + child_style.border.horizontal_width(),
                 flex_grow: child_style.flex_grow,
                 flex_shrink: child_style.flex_shrink,
                 height: child_h,
@@ -2718,6 +2728,8 @@ pub(crate) fn layout_flex_container(
                 .then(|| PageBreakSide::from(child_style.break_after)),
             width: child_w,
             base_width: child_w,
+            main_decorations: child_style.padding.horizontal()
+                + child_style.border.horizontal_width(),
             flex_grow: child_style.flex_grow,
             flex_shrink: child_style.flex_shrink,
             height: item_border_box_h + child_style.margin.vertical(),
@@ -3440,6 +3452,7 @@ pub(crate) fn layout_flex_container(
                         let item = &items[index];
                         FlexibleLength::new(
                             item.base_width,
+                            item.main_decorations,
                             item.main_constraints,
                             item.flex_grow,
                             item.flex_shrink,
@@ -4893,9 +4906,33 @@ mod cutoff_tests {
     }
 
     #[test]
+    fn shrinking_scales_by_the_inner_base_size() {
+        // css-flexbox-1 §9.7: the scaled flex shrink factor is the shrink factor times the inner flex base size, so
+        // padding and border don't make an item shrink more. Free space -143 splits 300 : 200.
+        let mut lengths = [
+            FlexibleLength::new(343.0, 43.0, SizeConstraints::new(None, None), 0.0, 1.0, 0.0),
+            FlexibleLength::new(200.0, 0.0, SizeConstraints::new(None, None), 0.0, 1.0, 0.0),
+        ];
+
+        resolve_flexible_lengths(&mut lengths, 400.0);
+
+        assert!(
+            (lengths[0].target - 257.2).abs() < 0.01,
+            "{}",
+            lengths[0].target
+        );
+        assert!(
+            (lengths[1].target - 142.8).abs() < 0.01,
+            "{}",
+            lengths[1].target
+        );
+    }
+
+    #[test]
     fn inflexible_main_size_freezes_to_its_maximum() {
         let mut lengths = [FlexibleLength::new(
             108.75,
+            0.0,
             SizeConstraints::new(None, Some(99.0)),
             0.0,
             1.0,
