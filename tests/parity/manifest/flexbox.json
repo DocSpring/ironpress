@@ -1841,5 +1841,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "flexbox-item-blocks-text-align",
+    "category": "flexbox",
+    "feature": "flex-item-content",
+    "subfeature": "block-text-align",
+    "description": "Paragraphs in a flex item keep their own text-align, inherited or set on each paragraph.",
+    "file": "cases/flexbox/flexbox-item-blocks-text-align.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

@@ -727,5 +727,17 @@
       "probe-text-baseline",
       "probe-color-swatch"
     ]
+  },
+  {
+    "id": "inline-text-inline-block-nested-five-deep",
+    "category": "inline-text",
+    "feature": "inline-block",
+    "subfeature": "nested-inline-blocks",
+    "description": "Five inline-blocks nested in each other each draw their box and their text.",
+    "file": "cases/inline-text/inline-text-inline-block-nested-five-deep.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

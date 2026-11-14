@@ -1398,5 +1398,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow", "probe-text-baseline"]
+  },
+  {
+    "id": "grid-nested-auto-height-items",
+    "category": "grid",
+    "feature": "grid-auto-rows",
+    "subfeature": "nested-grid-item-heights",
+    "description": "Four grids nested in grid items size each auto-height row to the wrapped text of the innermost item.",
+    "file": "cases/grid/grid-nested-auto-height-items.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

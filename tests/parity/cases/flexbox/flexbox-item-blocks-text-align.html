@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>blocks in a flex item keep their own text-align</title>
+<style>
+  @page { size: 320px 112px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  .flex { display: flex; gap: 8px; }
+  .item { width: 136px; border: 2px solid #1f4fa8; background: #e8eefb; }
+  .center { text-align: center; }
+  .right { text-align: right; }
+</style>
+</head>
+<body>
+  <div class="flex">
+    <div class="item"><p class="center">Centred</p><p class="right">Right</p><p>Left</p></div>
+    <div class="item right"><p>Right</p><p class="center">Centred</p></div>
+  </div>
+</body>
+</html>

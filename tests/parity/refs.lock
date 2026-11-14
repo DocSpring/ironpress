@@ -4466,6 +4466,20 @@
       "reference_file": "cases/flexbox/flexbox-invalid-negative-flex-grow-preserves-prior-value.html",
       "reference_html_sha256": "ad65920ed7160a197a383c6b239ae277108d5b65eb440eef2e1a5a8c30d0a697"
     },
+    "flexbox-item-blocks-text-align": {
+      "category": "flexbox",
+      "file": "cases/flexbox/flexbox-item-blocks-text-align.html",
+      "html_sha256": "db6e7ff7a38cff7cf6e813b70aa534d50563dcb173723780e960f455ad3d2e07",
+      "manifest_sha256": "b215b5d50b734fa0b918afe41c072e19b89e754354f58ff2c1ac6ec0175bf901",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/flexbox/flexbox-item-blocks-text-align.pdf",
+        "sha256": "8bec2d5c384fa7519a486727420e5da1a4e6123f30e9c04af16b50ea40e43893"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/flexbox/flexbox-item-blocks-text-align.html",
+      "reference_html_sha256": "db6e7ff7a38cff7cf6e813b70aa534d50563dcb173723780e960f455ad3d2e07"
+    },
     "flexbox-item-img-sizing-child": {
       "category": "flexbox",
       "file": "cases/flexbox/flexbox-item-img-sizing-child.html",
@@ -5894,6 +5908,20 @@
       "reference_file": "cases/generated-content/generated-content-first-line-text-transform.html",
       "reference_html_sha256": "5da3b1cfe55449c9a0d96f2171742f49cd024a9b0cd46d6acf0882d00361a558"
     },
+    "generated-content-flex-item-width": {
+      "category": "generated-content",
+      "file": "cases/generated-content/generated-content-flex-item-width.html",
+      "html_sha256": "d97b90fc6220fd7337b6dd543611fb39c381f18450c3fb0e6d63ca0faa8d7411",
+      "manifest_sha256": "a0af028396977aa309b0f1ff588dbe1740bc39a05c3907a414d30a332a73d47e",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/generated-content/generated-content-flex-item-width.pdf",
+        "sha256": "0be03f95e61fc2a625e3b617e207af23446c34591433f83afc8a9bc92608f5b5"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/generated-content/generated-content-flex-item-width.html",
+      "reference_html_sha256": "d97b90fc6220fd7337b6dd543611fb39c381f18450c3fb0e6d63ca0faa8d7411"
+    },
     "generated-content-leader-function": {
       "category": "generated-content",
       "file": "cases/generated-content/generated-content-leader-function.html",
@@ -6789,6 +6817,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/grid/grid-negative-grid-line-numbers-count-from-the-end.html",
       "reference_html_sha256": "21520b07e4c6115bee7f4963292db4338f5f660b463f6b71bf1047c463565762"
+    },
+    "grid-nested-auto-height-items": {
+      "category": "grid",
+      "file": "cases/grid/grid-nested-auto-height-items.html",
+      "html_sha256": "4621574df4548307069919569b5eefe1efc5dca7112f6574dd27a8f571f21a26",
+      "manifest_sha256": "fe1e6a03b5affd48e0c69d792e00a9faf9d1c1a2d699c8e40a367cf5f5d4a42c",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/grid/grid-nested-auto-height-items.pdf",
+        "sha256": "16eac463b81240f5333f4b40e83f860cd7d44a42befb7cd73b0a626d6c8d2fea"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/grid/grid-nested-auto-height-items.html",
+      "reference_html_sha256": "4621574df4548307069919569b5eefe1efc5dca7112f6574dd27a8f571f21a26"
     },
     "grid-order-auto-placement": {
       "category": "grid",
@@ -7923,6 +7965,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/inline-text/inline-text-inline-block-baseline-multiline.html",
       "reference_html_sha256": "1446c0237af2758faf8d17392c85e2b940af703a59e682e83f15e20b8a757699"
+    },
+    "inline-text-inline-block-nested-five-deep": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-inline-block-nested-five-deep.html",
+      "html_sha256": "928ebe03ee9046204bc2636f9dc457a9a2bf9d315c85020ee0383c9668072da9",
+      "manifest_sha256": "76dc53cc85f351a8754cc1f3aad50599e2bedc5b60d38f3e9675f447b989c676",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-inline-block-nested-five-deep.pdf",
+        "sha256": "3b2e326941a869e8d8b9bfb5211044a8555838b41b8017286513f8b823603815"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-inline-block-nested-five-deep.html",
+      "reference_html_sha256": "928ebe03ee9046204bc2636f9dc457a9a2bf9d315c85020ee0383c9668072da9"
     },
     "inline-text-inline-block-shrink-to-fit": {
       "category": "inline-text",
@@ -23509,6 +23565,27 @@
       "pagedjs": false,
       "renderer": "chromium",
       "renderer_version": "Chromium 150.0.7871.114 snap",
+      "ua_stylesheet_sha256": "eb00e832fd15f723c74042b2529d22b5e2ba9a948453aa08ef0a8045f610bab9"
+    },
+    "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665": {
+      "font_backend": {
+        "features": [
+          "FontationsFontBackend",
+          "FontationsLinuxSystemFonts"
+        ],
+        "launcher": {
+          "file": "scripts/chromium-fontations.sh",
+          "sha256": "df49ea112040760049e7826a035f508d70e038a8566dab927a391606c6dfd112"
+        },
+        "name": "fontations"
+      },
+      "font_bundle_sha256": "14e0dabd41048ffc7d0ba142a3c166656b4d14dabba93dd9185fb9aa4d9e5542",
+      "generator": "scripts/parity-gen-refs.sh",
+      "generator_sha256": "58edd23b0dfe07611bbf291af7a0b1aa6e6a457891d23a316210f46d75f8c192",
+      "oracle": "chrome",
+      "pagedjs": false,
+      "renderer": "chromium",
+      "renderer_version": "Google Chrome for Testing 156.0.8078.80 ",
       "ua_stylesheet_sha256": "eb00e832fd15f723c74042b2529d22b5e2ba9a948453aa08ef0a8045f610bab9"
     },
     "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f": {

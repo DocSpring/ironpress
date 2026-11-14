@@ -633,5 +633,17 @@
       "probe-fill-box",
       "probe-border-box"
     ]
+  },
+  {
+    "id": "generated-content-flex-item-width",
+    "category": "generated-content",
+    "feature": "pseudo-element-content",
+    "subfeature": "intrinsic-width",
+    "description": "A flex item's max-content width includes its ::before and ::after text, inline and inline-block, so the text stays on one line.",
+    "file": "cases/generated-content/generated-content-flex-item-width.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

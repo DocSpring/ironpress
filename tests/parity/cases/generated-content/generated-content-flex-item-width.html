@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a flex item's width includes its generated text</title>
+<style>
+  @page { size: 320px 112px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .row > div { background: #e8eefb; border: 2px solid #1f4fa8; padding: 2px 6px; }
+  .page::after { content: "12 of 40"; }
+  .quoted::before { content: open-quote; }
+  .quoted::after { content: close-quote; }
+  .marker::before { content: "Step"; display: inline-block; margin-right: 6px; padding: 0 4px; background: #fbe9e9; }
+</style>
+</head>
+<body>
+  <div class="row"><div>Page <span class="page"></span></div><div>Next</div></div>
+  <div class="row"><div class="quoted">Quoted</div><div class="marker">two</div><div>End</div></div>
+</body>
+</html>

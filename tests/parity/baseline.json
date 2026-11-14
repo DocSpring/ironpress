@@ -5,17 +5,17 @@
     "dpi": 300,
     "pdftoppm_available": true,
     "rasterizer_source_path": "/usr/bin/pdftoppm",
-    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-5827-1788561594503082027-0/pdftoppm",
+    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-635-1794640813818379793-0/pdftoppm",
     "rasterizer_arguments": "[-r, 300, -png, <PDF>, <PREFIX>]",
     "rasterizer_version": "pdftoppm version 24.08.0",
     "rasterizer_sha256": "b1f76a56605df368efd233e09faad3bd910e50c0d6556c616a7c0b0adebf6013"
   },
   "overall": {
     "score_pct": 100.0,
-    "pass": 1657,
+    "pass": 1661,
     "fail": 0,
     "reference_disputed": 20,
-    "total": 1677
+    "total": 1681
   },
   "categories": [
     {
@@ -95815,7 +95815,7 @@
       "category": "flexbox",
       "score_pct": 100.0,
       "counts": {
-        "pass": 132,
+        "pass": 133,
         "fail": 0,
         "reference_disputed": 0
       },
@@ -100206,6 +100206,61 @@
                     "height": 425,
                     "rgba_sha256": "5796d344c4ee3f32656cf33437a4b8c11e340b64e0aa3ea265a821f49d535332",
                     "painted_pixels": 63756
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "feature": "flex-item-content",
+          "score_pct": 100.0,
+          "counts": {
+            "pass": 1,
+            "fail": 0,
+            "reference_disputed": 0
+          },
+          "fixtures": [
+            {
+              "id": "flexbox-item-blocks-text-align",
+              "category": "flexbox",
+              "feature": "flex-item-content",
+              "subfeature": "block-text-align",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.0,
+              "semantic_diff_pct": 0.0,
+              "description": "Paragraphs in a flex item keep their own text-align, inherited or set on each paragraph.",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "db6e7ff7a38cff7cf6e813b70aa534d50563dcb173723780e960f455ad3d2e07",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 350,
+                    "rgba_sha256": "a1106bd270243f18428fd2c10f83c4325a1f0cc6f11ac07559f96675a8d3cd2d",
+                    "painted_pixels": 201450
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 350,
+                    "rgba_sha256": "a1106bd270243f18428fd2c10f83c4325a1f0cc6f11ac07559f96675a8d3cd2d",
+                    "painted_pixels": 201450
                   }
                 ]
               }
@@ -105907,7 +105962,7 @@
       "category": "generated-content",
       "score_pct": 100.0,
       "counts": {
-        "pass": 36,
+        "pass": 37,
         "fail": 0,
         "reference_disputed": 2
       },
@@ -111469,6 +111524,197 @@
           ]
         },
         {
+          "feature": "pseudo-element-content",
+          "score_pct": 100.0,
+          "counts": {
+            "pass": 1,
+            "fail": 0,
+            "reference_disputed": 0
+          },
+          "fixtures": [
+            {
+              "id": "generated-content-flex-item-width",
+              "category": "generated-content",
+              "feature": "pseudo-element-content",
+              "subfeature": "intrinsic-width",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.11257142857142857,
+              "semantic_diff_pct": 0.10914285714285714,
+              "description": "A flex item's max-content width includes its ::before and ::after text, inline and inline-block, so the text stays on one line.",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "d97b90fc6220fd7337b6dd543611fb39c381f18450c3fb0e6d63ca0faa8d7411",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 350,
+                    "rgba_sha256": "ef9dc190dfa73df8529fd38be13741b03377547662862706250de51766e3974e",
+                    "painted_pixels": 128700
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 350,
+                    "rgba_sha256": "f39b92ab28fa2ad5d7f2b2b7dcdeff099248e5ef2133262d942c6a5d36ae00d8",
+                    "painted_pixels": 128700
+                  }
+                ]
+              },
+              "diagnosis": {
+                "primary_class": "AntialiasCoverage",
+                "secondary": [],
+                "headline": "visually accepted coverage phase; raw antialiasing coverage residue on a shared outline",
+                "magnitude": {
+                  "missing_area_pct": 0.0,
+                  "extra_area_pct": 0.0,
+                  "modal_drgba": [
+                    1,
+                    1,
+                    1,
+                    0
+                  ],
+                  "delta_e": 35.32527233248028,
+                  "recovered_alpha": null,
+                  "colorspace": null
+                },
+                "region_count": 5,
+                "region_classes": [
+                  {
+                    "class": "ColorErr",
+                    "region_count": 5,
+                    "total_pixels": 394,
+                    "total_area_pct": 0.225078548986004,
+                    "union_bbox_css": [
+                      163.84,
+                      51.84,
+                      175.68,
+                      60.48
+                    ],
+                    "largest_region_pixels": 94,
+                    "largest_region_area_pct": 0.0536989431590974,
+                    "max_delta_e": 0.0
+                  }
+                ],
+                "region_examples": [
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      167.68,
+                      53.44,
+                      171.84,
+                      60.48
+                    ],
+                    "area_pct": 0.0536989431590974,
+                    "modal_drgba": [
+                      2,
+                      2,
+                      2,
+                      0
+                    ],
+                    "delta_e": 0.0,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  },
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      170.56,
+                      51.84,
+                      174.4,
+                      58.56
+                    ],
+                    "area_pct": 0.051985147100828334,
+                    "modal_drgba": [
+                      -1,
+                      -1,
+                      -1,
+                      0
+                    ],
+                    "delta_e": 0.0,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  },
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      165.12,
+                      51.84,
+                      168.96,
+                      58.56
+                    ],
+                    "area_pct": 0.05141388174807198,
+                    "modal_drgba": [
+                      4,
+                      4,
+                      4,
+                      0
+                    ],
+                    "delta_e": 0.0,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  },
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      173.12,
+                      51.84,
+                      175.68,
+                      60.48
+                    ],
+                    "area_pct": 0.03427592116538132,
+                    "modal_drgba": [
+                      103,
+                      106,
+                      112,
+                      0
+                    ],
+                    "delta_e": 0.0,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  },
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      163.84,
+                      51.84,
+                      166.4,
+                      60.48
+                    ],
+                    "area_pct": 0.03370465581262497,
+                    "modal_drgba": [
+                      -105,
+                      -108,
+                      -114,
+                      0
+                    ],
+                    "delta_e": 0.0,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  }
+                ],
+                "confidence": 1.0,
+                "different_pixels": 394,
+                "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
+              }
+            }
+          ]
+        },
+        {
           "feature": "quotes",
           "score_pct": 100.0,
           "counts": {
@@ -115942,7 +116188,7 @@
       "category": "grid",
       "score_pct": 100.0,
       "counts": {
-        "pass": 96,
+        "pass": 97,
         "fail": 0,
         "reference_disputed": 0
       },
@@ -117837,7 +118083,7 @@
           "feature": "grid-auto-rows",
           "score_pct": 100.0,
           "counts": {
-            "pass": 2,
+            "pass": 3,
             "fail": 0,
             "reference_disputed": 0
           },
@@ -117926,6 +118172,50 @@
                     "height": 700,
                     "rgba_sha256": "d2820814d2e013b2be6711f4d1809c8576e67746c0405350475ea941dc1509d5",
                     "painted_pixels": 288392
+                  }
+                ]
+              }
+            },
+            {
+              "id": "grid-nested-auto-height-items",
+              "category": "grid",
+              "feature": "grid-auto-rows",
+              "subfeature": "nested-grid-item-heights",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.0,
+              "semantic_diff_pct": 0.0,
+              "description": "Four grids nested in grid items size each auto-height row to the wrapped text of the innermost item.",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "4621574df4548307069919569b5eefe1efc5dca7112f6574dd27a8f571f21a26",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 775,
+                    "rgba_sha256": "9c6f9560001e25ecda9b00a6c96afe28edc2fc7dd5a1e5fcc1324ec7524e8ef3",
+                    "painted_pixels": 227669
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 775,
+                    "rgba_sha256": "9c6f9560001e25ecda9b00a6c96afe28edc2fc7dd5a1e5fcc1324ec7524e8ef3",
+                    "painted_pixels": 227669
                   }
                 ]
               }
@@ -130122,7 +130412,7 @@
       "category": "inline-text",
       "score_pct": 100.0,
       "counts": {
-        "pass": 51,
+        "pass": 52,
         "fail": 0,
         "reference_disputed": 1
       },
@@ -131476,7 +131766,7 @@
           "feature": "inline-block",
           "score_pct": 100.0,
           "counts": {
-            "pass": 4,
+            "pass": 5,
             "fail": 0,
             "reference_disputed": 0
           },
@@ -131722,6 +132012,50 @@
                 "confidence": 1.0,
                 "different_pixels": 207,
                 "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
+              }
+            },
+            {
+              "id": "inline-text-inline-block-nested-five-deep",
+              "category": "inline-text",
+              "feature": "inline-block",
+              "subfeature": "nested-inline-blocks",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.0,
+              "semantic_diff_pct": 0.0,
+              "description": "Five inline-blocks nested in each other each draw their box and their text.",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "928ebe03ee9046204bc2636f9dc457a9a2bf9d315c85020ee0383c9668072da9",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 375,
+                    "rgba_sha256": "268df9b0b3ed97e59e935622890b147158fab61a9a8a75724df66a4e93fbfad4",
+                    "painted_pixels": 225844
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 375,
+                    "rgba_sha256": "268df9b0b3ed97e59e935622890b147158fab61a9a8a75724df66a4e93fbfad4",
+                    "painted_pixels": 225844
+                  }
+                ]
               }
             },
             {
@@ -283943,8 +284277,8 @@
               ],
               "base_ids": [],
               "status": "PASS",
-              "diff_pct": 0.06311384615384616,
-              "semantic_diff_pct": 0.061833846153846156,
+              "diff_pct": 0.0,
+              "semantic_diff_pct": 0.0,
               "description": "Cartesian family interaction for grid and positioning: both representatives compose on one element and in both outer/inner orders. Paged-media representatives force actual page breaks.",
               "note": "",
               "kind": "interaction",
@@ -283967,7 +284301,7 @@
                   {
                     "width": 1625,
                     "height": 625,
-                    "rgba_sha256": "2ee87c51c72b46a873cb969324436a91e162c74da5a7848c96f152ac8a4edcf1",
+                    "rgba_sha256": "c228045d8bbe9eddbd3c31daf702a9534004ef49abb8ecd6aa22c3256d91aa18",
                     "painted_pixels": 748544
                   }
                 ],
@@ -283979,332 +284313,6 @@
                     "painted_pixels": 748544
                   }
                 ]
-              },
-              "diagnosis": {
-                "primary_class": "AntialiasCoverage",
-                "secondary": [],
-                "headline": "visually accepted coverage phase; raw antialiasing coverage residue on a shared outline",
-                "magnitude": {
-                  "missing_area_pct": 0.0,
-                  "extra_area_pct": 0.0,
-                  "modal_drgba": [
-                    -152,
-                    -143,
-                    -130,
-                    0
-                  ],
-                  "delta_e": 43.055213631753105,
-                  "recovered_alpha": null,
-                  "colorspace": null
-                },
-                "region_count": 15,
-                "region_classes": [
-                  {
-                    "class": "ColorErr",
-                    "region_count": 15,
-                    "total_pixels": 641,
-                    "total_area_pct": 0.08280113260582012,
-                    "union_bbox_css": [
-                      113.6,
-                      94.08,
-                      133.44,
-                      109.12
-                    ],
-                    "largest_region_pixels": 146,
-                    "largest_region_area_pct": 0.018859540343915345,
-                    "max_delta_e": 0.0
-                  }
-                ],
-                "region_examples": [
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      126.72,
-                      103.36,
-                      133.44,
-                      109.12
-                    ],
-                    "area_pct": 0.018859540343915345,
-                    "modal_drgba": [
-                      -206,
-                      -193,
-                      -176,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      116.48,
-                      95.36,
-                      121.28,
-                      98.88
-                    ],
-                    "area_pct": 0.016276041666666668,
-                    "modal_drgba": [
-                      -204,
-                      -192,
-                      -175,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      116.48,
-                      100.16,
-                      121.6,
-                      103.04
-                    ],
-                    "area_pct": 0.013563368055555556,
-                    "modal_drgba": [
-                      -138,
-                      -129,
-                      -118,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      128.96,
-                      97.92,
-                      132.48,
-                      104.64
-                    ],
-                    "area_pct": 0.009429770171957673,
-                    "modal_drgba": [
-                      -101,
-                      -96,
-                      -87,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      125.44,
-                      98.56,
-                      126.08,
-                      104.0
-                    ],
-                    "area_pct": 0.005166997354497355,
-                    "modal_drgba": [
-                      -113,
-                      -106,
-                      -97,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      122.24,
-                      102.72,
-                      124.16,
-                      105.6
-                    ],
-                    "area_pct": 0.005037822420634921,
-                    "modal_drgba": [
-                      -181,
-                      -170,
-                      -155,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      113.6,
-                      102.08,
-                      114.88,
-                      105.6
-                    ],
-                    "area_pct": 0.004650297619047619,
-                    "modal_drgba": [
-                      -188,
-                      -176,
-                      -161,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      131.84,
-                      96.96,
-                      133.44,
-                      99.2
-                    ],
-                    "area_pct": 0.0032293733465608467,
-                    "modal_drgba": [
-                      -72,
-                      -68,
-                      -62,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      127.68,
-                      96.96,
-                      130.56,
-                      98.24
-                    ],
-                    "area_pct": 0.0025834986772486773,
-                    "modal_drgba": [
-                      -85,
-                      -80,
-                      -73,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      127.68,
-                      104.64,
-                      128.96,
-                      105.6
-                    ],
-                    "area_pct": 0.0014209242724867726,
-                    "modal_drgba": [
-                      -87,
-                      -82,
-                      -74,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      120.96,
-                      99.2,
-                      121.92,
-                      99.84
-                    ],
-                    "area_pct": 0.0011625744047619048,
-                    "modal_drgba": [
-                      -75,
-                      -70,
-                      -64,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      118.08,
-                      94.08,
-                      120.0,
-                      94.08
-                    ],
-                    "area_pct": 0.000904224537037037,
-                    "modal_drgba": [
-                      -52,
-                      -49,
-                      -45,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      128.32,
-                      104.32,
-                      128.64,
-                      104.32
-                    ],
-                    "area_pct": 0.0002583498677248677,
-                    "modal_drgba": [
-                      -1,
-                      -1,
-                      -1,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      128.64,
-                      98.24,
-                      128.64,
-                      98.24
-                    ],
-                    "area_pct": 0.00012917493386243386,
-                    "modal_drgba": [
-                      -1,
-                      -1,
-                      -1,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  },
-                  {
-                    "class": "AntialiasCoverage",
-                    "bbox_css": [
-                      122.24,
-                      100.16,
-                      122.24,
-                      100.16
-                    ],
-                    "area_pct": 0.00012917493386243386,
-                    "modal_drgba": [
-                      -11,
-                      -10,
-                      -9,
-                      0
-                    ],
-                    "delta_e": 0.0,
-                    "recovered_alpha": null,
-                    "headline": "antialiasing coverage residue on a shared outline"
-                  }
-                ],
-                "confidence": 1.0,
-                "different_pixels": 641,
-                "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
               }
             },
             {
@@ -379775,7 +379783,7 @@
   ],
   "corpus_issues": [],
   "coverage": {
-    "features_with_fixture": 516,
+    "features_with_fixture": 518,
     "covered": [
       "backgrounds-borders/background-attachment",
       "backgrounds-borders/background-blend-mode",
@@ -379967,6 +379975,7 @@
       "flexbox/flex-grow",
       "flexbox/flex-item",
       "flexbox/flex-item-children",
+      "flexbox/flex-item-content",
       "flexbox/flex-item-positioning",
       "flexbox/flex-items",
       "flexbox/flex-shorthand",
@@ -380029,6 +380038,7 @@
       "generated-content/open-quote/close-quote quote depth across nested elements",
       "generated-content/position:running() and element()",
       "generated-content/pseudo-element",
+      "generated-content/pseudo-element-content",
       "generated-content/quotes",
       "generated-content/string-set and string()",
       "generated-content/target-counter(attr(href), page)",
@@ -380294,7 +380304,7 @@
       "units-values/percentage",
       "units-values/viewport-units"
     ],
-    "implemented": 1640,
+    "implemented": 1644,
     "partial": 37,
     "unsupported": 0,
     "interaction_families": 25,
@@ -380307,6 +380317,6 @@
   "suspect_unsupported_pass": [],
   "stale_refs": [],
   "refs_lock_present": true,
-  "refs_lock_sha256": "54fdef0f5d84105b0eef0fc61041651fc1f84cdeb30d39ae9aad7539cc67e107",
+  "refs_lock_sha256": "117e3fae7169d69230a086f8d78f837eccc9917993357246366b70c109f3435a",
   "baseline_present": true
 }

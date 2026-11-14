@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>nested grids size their auto-height rows to their items</title>
+<style>
+  @page { size: 320px 248px; margin: 0; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  .g { display: grid; grid-template-columns: 24px 1fr; gap: 4px; padding: 4px; border: 2px solid #1f4fa8; background: #e8eefb; }
+  .g .g { border-color: #2e7d32; background: #e7f4e8; }
+  .g .g .g { border-color: #c62828; background: #fbe9e9; }
+  .g .g .g .g { border-color: #6a1b9a; background: #f3e8f8; }
+  .label { background: #ffffff; padding: 2px; }
+</style>
+</head>
+<body>
+  <div class="g">
+    <div class="label">A</div>
+    <div class="g">
+      <div class="label">B</div>
+      <div class="g">
+        <div class="label">C</div>
+        <div class="g">
+          <div class="label">D</div>
+          <div class="label">The innermost item wraps onto several lines, and every row above it grows to fit it.</div>
+        </div>
+      </div>
+    </div>
+    <div class="label">E</div>
+    <div class="label">After the nested grids</div>
+  </div>
+</body>
+</html>
