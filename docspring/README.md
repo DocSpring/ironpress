@@ -40,6 +40,10 @@ includes them, then goes back to the upstream packages.
 | An element nested more than 31 deep fails the conversion with a layout error instead of being left out with everything in it (the PDF came out without that content). `max_nesting_depth` (`maxNestingDepth` in JS, `--max-nesting-depth` on the CLI) raises the limit for a larger stack: each level takes about 60 KB for a flex container in a release build | Not sent yet (`docspring-1.7.0.8`) |
 | A row flex item's bottom margin counts in `align-items: flex-end`, `center` and `stretch`: `flex-end` put the item's border box at the line's end and then moved it down by its top margin, so a `<p>` in a flex row sat below where browsers put it, and `stretch` ran into the bottom margin | Not sent yet (`docspring-1.7.0.8`) |
 | An element's max-content width (a flex item's, a `width: max-content` box's) collapses whitespace across text nodes and inline elements, as layout does: it trimmed each text node's spaces, so `Page <span>1</span>` measured a space short and a flex item holding it wrapped the span onto a second line | Not sent yet (`docspring-1.7.0.8`) |
+| An inline-block nested in three or more others draws its text: the third level was laid out without the layout environment, which collected only text runs, so a fourth inside it was left out with everything it held | Not sent yet (`docspring-1.7.0.8`) |
+| Each auto-height grid item is measured once per layout: row sizing laid it out to measure it and the cell pass again, so the work doubled with every level of nested grids (twenty took about a minute) | Not sent yet (`docspring-1.7.0.8`) |
+| An element's min- and max-content widths include its `::before` and `::after` text, so a flex item holding `Page <span class="page"></span>` with the number in `::after` keeps the number on its line | Not sent yet (`docspring-1.7.0.8`) |
+| A flex item's blocks keep their own `text-align`: they were merged into one cell whose lines were all left-aligned | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
@@ -47,15 +51,19 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
 
 ## Builds
 
-- `docspring-1.7.0.8`: everything in the table.
-- `docspring-1.7.0.7`: everything but the last four rows.
-- `docspring-1.7.0.6`: everything but the last five rows.
-- `docspring-1.7.0.5`: everything but the last seven rows.
-- `docspring-1.7.0.4`: everything but the last eight rows.
-- `docspring-1.7.0.3`: everything but the last eleven rows.
+- `docspring-1.7.0.3` to `docspring-1.7.0.8`: the rows up to and including that build's.
 - `docspring-1.7.0.2`: the first four rows.
 - `docspring-1.7.0.1`: the first three rows. Don't use it: a table with a forced break inside a cell can move onto an
   extra page.
+
+## Parity suite
+
+`tests/parity/` compares ironpress's pages with Chromium's, fixture by fixture (`tests/parity/README.md`). It needs
+Ubuntu 24.04 on amd64 with pinned fonts and Poppler, so we run it in Docker on an amd64 Linux host:
+`docspring/parity/run.sh scripts/parity.sh` builds the image (`docspring/parity/Dockerfile`, with Chrome for Testing
+for new oracles) and runs the command in it with the checkout at `/src`. A fix that changes layout gets a fixture
+with a Chromium oracle (`docspring/parity/run.sh scripts/parity-gen-refs.sh <category>`), and a run that improves a
+fixture updates the baseline (`PARITY_UPDATE_BASELINE=1`).
 
 ## Releasing
 
