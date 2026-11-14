@@ -5609,6 +5609,7 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         assert_eq!(generated, element);
     }
 
+
     #[test]
     fn a_flex_item_growing_from_zero_is_as_tall_as_its_text_at_its_resolved_width() {
         // `flex: 1` (a zero basis) wrapped the item's own text at the basis width, a word to a line, and the flex
@@ -5628,6 +5629,26 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         assert_eq!(content_basis.len(), 2);
         assert_eq!(text_positions("1"), content_basis);
         assert_eq!(text_positions("1 1 0"), content_basis);
+    }
+
+    #[test]
+    fn a_nested_flex_containers_inline_children_are_its_items() {
+        // A flex item that is itself a flex container took the text-only path when its children were inline, which
+        // merged them into one run, so `justify-content` had nothing to separate
+        let converter = HtmlConverter::new().compress(false);
+        let text_positions = |tag: &str| {
+            let html = format!(
+                r#"<div style="display: flex"><div style="display: flex; width: 100%; justify-content: space-between"><{tag}>L</{tag}><{tag}>R</{tag}></div></div>"#
+            );
+            let pdf = String::from_utf8_lossy(&converter.convert(&html).unwrap()).into_owned();
+            pdf.lines()
+                .filter(|line| line.ends_with(" Tm"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let blocks = text_positions("div");
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(text_positions("span"), blocks);
     }
 
     #[test]

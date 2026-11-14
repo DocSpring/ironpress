@@ -1446,7 +1446,16 @@ fn classify_flex_item_contents(
     ancestors: &[AncestorInfo],
     env: &LayoutEnv,
 ) -> FlexItemContents {
-    let mut contents = FlexItemContents::default();
+    // The children of a flex or grid container are its own items (css-flexbox-1 §4, css-grid-1 §6), which only its
+    // own layout places: the text-only shortcut merged inline children into one run, so `justify-content` had
+    // nothing to separate
+    let mut contents = FlexItemContents {
+        structured: matches!(
+            item_style.display,
+            Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+        ),
+        ..FlexItemContents::default()
+    };
     let sibling_count = item
         .children
         .iter()
