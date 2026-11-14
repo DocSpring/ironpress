@@ -312,7 +312,6 @@ impl NestedRowsRenderer<'_, '_> {
                                         inline,
                                         lx + inline.margin_left,
                                         text_y,
-                                        page_height,
                                         line_top_y,
                                         line_bottom_y,
                                         line_text_top_y,

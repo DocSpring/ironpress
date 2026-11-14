@@ -25,10 +25,14 @@ use super::engine::{
 };
 use super::helpers::DropCap;
 use super::inline_formatting::{
-    GeneratedContentStyles, InlineContentSequence, InlineFormattingRole, InlineSiblingCursor,
+    AtomicInlineKind, GeneratedContentStyles, InlineContentSequence, InlineFormattingRole,
+    InlineSiblingCursor,
 };
 use super::list_markers::format_counter_value;
 use super::text_emphasis::TextEmphasisMetrics;
+
+mod nested_inline;
+use nested_inline::{CollectedAs, CollectorState, NestedBlock};
 
 fn footnote_pseudo_content(style: Option<&ComputedStyle>, marker: &str) -> Option<String> {
     let items = &style?.content;
@@ -3247,6 +3251,7 @@ fn build_inline_box(
 
     let mut runs = Vec::new();
     InlineRunCollector::new(rules, fonts, counter_state, resources)
+        .in_context(InlineRunContext::InlineBlockContent)
         .collect(content, style, &mut runs, None, ancestors);
     let wrap_inner_width = if !has_explicit_width
         && style.width_keyword == Some(IntrinsicWidthKeyword::MinContent)
@@ -3384,6 +3389,8 @@ pub(crate) enum InlineRunContext {
     #[default]
     Standard,
     TableCell,
+    /// The contents of an inline-block laid out as its lines, where an inline-block of any tag is an atomic box
+    InlineBlockContent,
 }
 
 impl InlineRunContext {
@@ -3391,6 +3398,11 @@ impl InlineRunContext {
         match self {
             Self::Standard => role.uses_text_run_layout(element),
             Self::TableCell => role.participates_in_table_cell_text_flow(),
+            Self::InlineBlockContent => matches!(
+                role,
+                InlineFormattingRole::Text
+                    | InlineFormattingRole::Atomic(AtomicInlineKind::InlineBlock)
+            ),
         }
     }
 }
@@ -3615,7 +3627,56 @@ fn collect_text_runs_inner(
                     FontMetrics::new(fonts),
                 );
                 let role = InlineFormattingRole::of(el, &style);
-                if context.accepts(role, el) {
+                let nested =
+                    inline_parent || matches!(context, InlineRunContext::InlineBlockContent);
+                let collected_as = CollectedAs::of(context, nested, role, el, &style);
+                let collected_as_float_box = matches!(collected_as, CollectedAs::FloatBox);
+                match collected_as {
+                    CollectedAs::Runs | CollectedAs::FloatBox => {}
+                    CollectedAs::Skipped => continue,
+                    CollectedAs::Image => {
+                        if let Some(boxed) = nested_inline::image_box(el, &style, resources) {
+                            runs.push(TextRun {
+                                font_size: used_font_size(parent_style, fonts),
+                                color: parent_style.color,
+                                link_url: link_url.map(String::from),
+                                font_family: resolve_style_font_family(parent_style, fonts),
+                                line_height_factor: text_run_line_height_factor(
+                                    parent_style,
+                                    fonts,
+                                ),
+                                inline_box: Some(Box::new(boxed)),
+                                ..Default::default()
+                            });
+                        }
+                        continue;
+                    }
+                    CollectedAs::Lines => {
+                        let counter_scope = counter_state.enter_element(&style);
+                        nested_inline::collect_block_lines(
+                            NestedBlock {
+                                element: el,
+                                style: &style,
+                                selector_context: &selector_ctx,
+                                link_url,
+                                context,
+                            },
+                            parent_style,
+                            first_run,
+                            runs,
+                            CollectorState {
+                                rules,
+                                fonts,
+                                counter_state,
+                                resources,
+                                next_inline_decoration,
+                            },
+                        );
+                        counter_state.leave_element(counter_scope);
+                        continue;
+                    }
+                }
+                {
                     if el.attributes.contains_key("data-math") {
                         // Math elements are rendered as MathBlock by
                         // flatten_element, not as inline text runs.
@@ -3769,7 +3830,14 @@ fn collect_text_runs_inner(
                         // takes part in line layout with its own box geometry
                         // rather than flowing its content as bare text. SVGs are
                         // excluded (they need their own block layout via cm).
-                        let is_atomic_inline_block = style.display == Display::InlineBlock
+                        let is_atomic_inline_block = (collected_as_float_box
+                            || matches!(
+                                style.display,
+                                Display::InlineBlock
+                                    | Display::InlineFlex
+                                    | Display::InlineGrid
+                                    | Display::InlineTable
+                            ))
                             && el.tag != HtmlTag::Svg
                             && !el
                                 .children

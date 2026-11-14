@@ -77,13 +77,52 @@ impl UprightLinePosition {
 /// text baseline of the enclosing line; `line_top_y`/`line_bottom_y` bound the
 /// line box. The box is positioned vertically per its `vertical_align`, then its
 /// background, border, and pre-wrapped inner text are drawn.
+/// The edges an atomic inline box aligns to in one line (CSS 2.1 §10.8.1): the line box's top and bottom, the parent
+/// text content area's (the line box's when the line has no parent text), and the parent font's x-height ratio.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct InlineBoxLine {
+    pub(super) top: f32,
+    pub(super) bottom: f32,
+    pub(super) text_top: f32,
+    pub(super) text_bottom: f32,
+    pub(super) x_height_ratio: f32,
+}
+
+impl InlineBoxLine {
+    pub(super) fn new(
+        line: &crate::layout::engine::TextLine,
+        merged: &[crate::layout::engine::TextRun],
+        baseline_y: f32,
+        metrics: LineBoxMetrics,
+        custom_fonts: &HashMap<String, TtfFont>,
+    ) -> Self {
+        let top = baseline_y + metrics.ascender + metrics.half_leading;
+        let bottom = baseline_y - metrics.descender - metrics.half_leading;
+        let (text_ascent, text_descent) = line_text_content_extents(line, custom_fonts);
+        Self {
+            top,
+            bottom,
+            text_top: if text_ascent > 0.0 {
+                baseline_y + text_ascent
+            } else {
+                top
+            },
+            text_bottom: if text_descent > 0.0 {
+                baseline_y - text_descent
+            } else {
+                bottom
+            },
+            x_height_ratio: line_primary_x_height_ratio(merged, custom_fonts),
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_inline_box(
     content: &mut String,
     inline: &crate::layout::engine::InlineBox,
     box_x: f32,
     baseline_y: f32,
-    _page_height: f32,
     line_top_y: f32,
     line_bottom_y: f32,
     line_text_top_y: f32,
@@ -271,7 +310,6 @@ pub(super) fn render_inline_box(
                             nested,
                             x + nested.margin_left,
                             inner_y,
-                            _page_height,
                             line_top_y,
                             line_bottom_y,
                             line_text_top_y,

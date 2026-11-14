@@ -369,7 +369,38 @@ pub(super) fn render_flex_child(
                     _ => content_left,
                 };
                 let mut lx = text_x;
+                let inline_box_line =
+                    InlineBoxLine::new(line, &merged, text_y, metrics, ctx.text.custom_fonts);
                 for (run_index, run) in merged.iter().enumerate() {
+                    if let Some(advance) = run.atomic_inline_advance() {
+                        if let Some(inline) = run.inline_box.as_deref()
+                            && !run.is_inline_edge()
+                        {
+                            render_inline_box(
+                                content,
+                                inline,
+                                lx + inline.margin_left,
+                                text_y,
+                                inline_box_line.top,
+                                inline_box_line.bottom,
+                                inline_box_line.text_top,
+                                inline_box_line.text_bottom,
+                                run.font_size,
+                                run_line_height_for_vertical_align(run),
+                                inline_box_line.x_height_ratio,
+                                ctx.text.custom_fonts,
+                                ctx.text.prepared_custom_fonts,
+                                ctx.page_ext_gstates,
+                                ctx.bg_alpha_counter,
+                                ctx.shadings,
+                                ctx.shading_counter,
+                                ctx.text.pdf_writer,
+                                ctx.text.page_images,
+                            );
+                        }
+                        lx += advance;
+                        continue;
+                    }
                     let run_width = estimate_run_width_with_fonts(run, ctx.text.custom_fonts);
                     let previous = merged[..run_index].iter().rev().find(|previous| {
                         previous.inline_box.is_none() && !previous.text.is_empty()

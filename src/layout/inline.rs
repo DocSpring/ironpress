@@ -3,7 +3,7 @@ use crate::layout::elements::{
     Positioning,
 };
 use crate::layout::flow_metrics::BlockMargins;
-use crate::parser::css::{AncestorInfo, SelectorContext};
+use crate::parser::css::{AncestorInfo, CssRule, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
@@ -28,14 +28,15 @@ use super::images::{
 };
 use super::inline_formatting::{
     AtomicInlineKind, GeneratedContentStyles, IndependentFlowLayout, InlineContentSequence,
-    InlineFormattingChild, InlineFormattingRole, layout_mixed_flow_children,
+    InlineFormattingChild, InlineFormattingContext, InlineFormattingRole,
+    layout_mixed_flow_children,
 };
 use super::paginate::estimate_element_height;
 use super::roundoff::exceeds_with_roundoff;
 use super::table::{TableLayoutContext, flatten_table};
 use super::text::{
-    InlineRunCollector, InlineTextSequence, LineStrut, TextWrapOptions, estimate_word_width,
-    has_non_collapsible_text, parent_line_strut, resolve_style_font_family,
+    InlineRunCollector, InlineRunContext, InlineTextSequence, LineStrut, TextWrapOptions,
+    estimate_word_width, has_non_collapsible_text, parent_line_strut, resolve_style_font_family,
     resolved_line_height_factor, text_run_line_height_factor, used_font_size, wrap_text_runs,
 };
 
@@ -122,12 +123,31 @@ struct InlineBlockChildLayout<'layout, 'dom> {
     context: &'layout LayoutContext,
     parent_style: &'layout ComputedStyle,
     ancestors: &'layout [AncestorInfo<'dom>],
+    rules: &'layout [CssRule],
+    font_metrics: FontMetrics<'layout>,
     available_width: f32,
     output: &'layout mut Vec<LayoutNode>,
 }
 
 impl IndependentFlowLayout for InlineBlockChildLayout<'_, '_> {
+    fn inline_run_context(&self) -> InlineRunContext {
+        InlineRunContext::InlineBlockContent
+    }
+
+    /// An inline-block holding only inline content stays in this inline-block's lines, as an atomic box. Laid out on
+    /// its own, it would follow those lines.
     fn lays_out_independently(&self, element: &ElementNode, child: &InlineFormattingChild) -> bool {
+        if child.role == InlineFormattingRole::Atomic(AtomicInlineKind::InlineBlock)
+            && InlineFormattingContext::new(
+                self.parent_style,
+                self.rules,
+                self.ancestors,
+                self.font_metrics,
+            )
+            .holds_only_inline_content(element, child)
+        {
+            return false;
+        }
         inline_block_child_should_flatten(element, &child.style)
     }
 
@@ -532,6 +552,8 @@ fn inline_atomic_cell(
                     context: ctx,
                     parent_style: child_style,
                     ancestors: &child_ancestors,
+                    rules: env.rules,
+                    font_metrics: FontMetrics::new(env.fonts),
                     available_width: ctx.available_width().max(0.0),
                     output: &mut nested_elements,
                 };
@@ -1152,6 +1174,8 @@ fn layout_inline_block_group_inner(
             context: ctx,
             parent_style: &child_style,
             ancestors: &child_ancestors,
+            rules,
+            font_metrics: FontMetrics::new(fonts),
             available_width: inner_width.max(0.0),
             output: &mut nested_elements,
         };

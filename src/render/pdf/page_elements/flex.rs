@@ -431,8 +431,11 @@ pub(in crate::render::pdf) fn render_flex_row(
                 let text_y = baseline_cursor.next_horizontal(metrics);
                 let line_annotation_top = text_y + metrics.ascender + metrics.half_leading;
                 let line_annotation_bottom = text_y - metrics.descender - metrics.half_leading;
-                let text_content: String = line.runs.iter().map(|r| r.text.as_str()).collect();
-                if text_content.is_empty() {
+                if line
+                    .runs
+                    .iter()
+                    .all(|run| run.text.is_empty() && run.inline_box.is_none())
+                {
                     continue;
                 }
                 let merged = crate::text::coalesce_text_runs(&line.runs);
@@ -457,8 +460,35 @@ pub(in crate::render::pdf) fn render_flex_row(
                     _ => cell_x + cell.border.left.width + cell.padding.left,
                 };
                 let mut x = text_x;
+                let inline_box_line =
+                    InlineBoxLine::new(line, &merged, text_y, metrics, ctx.text.custom_fonts);
                 for (run_index, run) in merged.iter().enumerate() {
                     if let Some(advance) = run.atomic_inline_advance() {
+                        if let Some(inline) = run.inline_box.as_deref()
+                            && !run.is_inline_edge()
+                        {
+                            render_inline_box(
+                                content,
+                                inline,
+                                x + inline.margin_left,
+                                text_y,
+                                inline_box_line.top,
+                                inline_box_line.bottom,
+                                inline_box_line.text_top,
+                                inline_box_line.text_bottom,
+                                run.font_size,
+                                run_line_height_for_vertical_align(run),
+                                inline_box_line.x_height_ratio,
+                                ctx.text.custom_fonts,
+                                ctx.text.prepared_custom_fonts,
+                                ctx.page_ext_gstates,
+                                ctx.bg_alpha_counter,
+                                ctx.shadings,
+                                ctx.shading_counter,
+                                ctx.text.pdf_writer,
+                                ctx.text.page_images,
+                            );
+                        }
                         x += advance;
                         continue;
                     }

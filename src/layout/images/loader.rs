@@ -118,9 +118,67 @@ pub(crate) fn load_image_from_element(
     style: &ComputedStyle,
     _filter_dpi: f32,
 ) -> Option<LayoutNode> {
-    let src = el.attributes.get("src")?;
+    let image = match decode_element_image(resources, el)? {
+        ElementImage::Svg(tree) => {
+            return Some(svg_image_node(
+                *tree,
+                el,
+                available_width,
+                available_height,
+                style,
+            ));
+        }
+        ElementImage::Raster(image) => image,
+    };
 
-    // Load bytes once.
+    // The filter property applies to the complete replaced-element
+    // SourceGraphic, including its background and border. Keep image loading
+    // unfiltered; the shared post-layout filter compositor owns the operation
+    // list for every element kind.
+    let Size { width, height } = raster_image_size(&image, el, available_width, style);
+
+    Some(
+        Image {
+            source: image,
+            geometry: ReplacedGeometry::new(
+                Size::new(width, height),
+                BlockMargins::new(style.margin.top, style.margin.bottom),
+                LayoutBorder::from_computed(&style.border, style.color),
+            ),
+            positioning: Positioning::from_style(style),
+            sampling: ImageSampling {
+                replaced: crate::layout::engine::ReplacedContent {
+                    object_fit: style.object_fit,
+                    object_position: style.object_position,
+                    ..Default::default()
+                },
+                rendering: style.image_rendering,
+            },
+            paint: ImagePaint {
+                background_color: style.background_color,
+                border_image: style.border_image.paint(),
+                border_radii: style.resolve_corner_radii(width, height),
+                filter_effect: None,
+                group: crate::layout::elements::PaintGroup::from_style(style),
+                ..Default::default()
+            },
+        }
+        .boxed(),
+    )
+}
+
+/// What an `<img>` element's source decodes to.
+pub(crate) enum ElementImage {
+    Svg(Box<crate::parser::svg::SvgTree>),
+    Raster(RasterImageAsset),
+}
+
+/// Fetch an `<img>` element's source once and decode it: SVG content as vector graphics, PNG or JPEG as a raster.
+pub(crate) fn decode_element_image(
+    resources: &mut ResourceLoader,
+    el: &ElementNode,
+) -> Option<ElementImage> {
+    let src = el.attributes.get("src")?;
     let loaded = resources.load_document_resource(src)?;
     let (raw, mime) = (loaded.bytes, loaded.media_type);
 
@@ -128,70 +186,81 @@ pub(crate) fn load_image_from_element(
     let skip_svg = mime
         .as_deref()
         .is_some_and(|m| !m.is_empty() && !m.contains("svg") && !m.contains("xml"));
-
-    // Try SVG path first — render as vector graphics instead of raster.
-    if !skip_svg && let Some(mut tree) = try_parse_svg_bytes(&raw) {
-        let intrinsic = resolve_svg_size(&tree, available_width, available_height, false, false);
-        let html_attr_width = style
-            .width
-            .or_else(|| parse_html_image_dimension(el.attributes.get("width")));
-        let html_attr_height = style
-            .height
-            .or_else(|| parse_html_image_dimension(el.attributes.get("height")));
-
-        let (width, height) = match (html_attr_width, html_attr_height) {
-            (Some(w), Some(h)) => (w, h),
-            (Some(w), None) if intrinsic.0 > 0.0 => (w, intrinsic.1 * (w / intrinsic.0)),
-            (Some(w), None) => (w, intrinsic.1),
-            (None, Some(h)) if intrinsic.1 > 0.0 => (intrinsic.0 * (h / intrinsic.1), h),
-            (None, Some(h)) => (intrinsic.0, h),
-            (None, None) => intrinsic,
-        };
-
-        let (width, height) = ReplacedBoxSize::new(
-            width,
-            height,
-            html_attr_width.is_none(),
-            html_attr_height.is_none(),
-        )
-        .constrain(available_width, style.max_width, style.max_height)
-        .dimensions();
-
-        let border = LayoutBorder::from_computed(&style.border, style.color);
-        let content_width = (width - border.horizontal_width()).max(0.0);
-        let content_height = (height - border.vertical_width()).max(0.0);
-        sync_svg_tree_to_layout_box(&mut tree, content_width, content_height);
-        return Some(
-            Svg {
-                tree,
-                geometry: ReplacedGeometry::new(
-                    Size::new(width, height),
-                    BlockMargins::new(style.margin.top, style.margin.bottom),
-                    border,
-                ),
-                positioning: Positioning::from_style(style),
-                paint: SvgPaint {
-                    background_color: style.background_color,
-                    border_image: style.border_image.paint(),
-                    border_radii: style.resolve_corner_radii(width, height),
-                    group: crate::layout::elements::PaintGroup::from_style(style),
-                },
-                replaced: crate::layout::engine::ReplacedContent {
-                    object_fit: style.object_fit,
-                    object_position: style.object_position,
-                    ..Default::default()
-                },
-            }
-            .boxed(),
-        );
+    if !skip_svg && let Some(tree) = try_parse_svg_bytes(&raw) {
+        return Some(ElementImage::Svg(Box::new(tree)));
     }
+    load_image_bytes(raw).map(ElementImage::Raster)
+}
 
-    // The filter property applies to the complete replaced-element
-    // SourceGraphic, including its background and border. Keep image loading
-    // unfiltered; the shared post-layout filter compositor owns the operation
-    // list for every element kind.
-    let image = load_image_bytes(raw)?;
+fn svg_image_node(
+    mut tree: crate::parser::svg::SvgTree,
+    el: &ElementNode,
+    available_width: f32,
+    available_height: f32,
+    style: &ComputedStyle,
+) -> LayoutNode {
+    let intrinsic = resolve_svg_size(&tree, available_width, available_height, false, false);
+    let html_attr_width = style
+        .width
+        .or_else(|| parse_html_image_dimension(el.attributes.get("width")));
+    let html_attr_height = style
+        .height
+        .or_else(|| parse_html_image_dimension(el.attributes.get("height")));
 
+    let (width, height) = match (html_attr_width, html_attr_height) {
+        (Some(w), Some(h)) => (w, h),
+        (Some(w), None) if intrinsic.0 > 0.0 => (w, intrinsic.1 * (w / intrinsic.0)),
+        (Some(w), None) => (w, intrinsic.1),
+        (None, Some(h)) if intrinsic.1 > 0.0 => (intrinsic.0 * (h / intrinsic.1), h),
+        (None, Some(h)) => (intrinsic.0, h),
+        (None, None) => intrinsic,
+    };
+
+    let (width, height) = ReplacedBoxSize::new(
+        width,
+        height,
+        html_attr_width.is_none(),
+        html_attr_height.is_none(),
+    )
+    .constrain(available_width, style.max_width, style.max_height)
+    .dimensions();
+
+    let border = LayoutBorder::from_computed(&style.border, style.color);
+    let content_width = (width - border.horizontal_width()).max(0.0);
+    let content_height = (height - border.vertical_width()).max(0.0);
+    sync_svg_tree_to_layout_box(&mut tree, content_width, content_height);
+    Svg {
+        tree,
+        geometry: ReplacedGeometry::new(
+            Size::new(width, height),
+            BlockMargins::new(style.margin.top, style.margin.bottom),
+            border,
+        ),
+        positioning: Positioning::from_style(style),
+        paint: SvgPaint {
+            background_color: style.background_color,
+            border_image: style.border_image.paint(),
+            border_radii: style.resolve_corner_radii(width, height),
+            group: crate::layout::elements::PaintGroup::from_style(style),
+        },
+        replaced: crate::layout::engine::ReplacedContent {
+            object_fit: style.object_fit,
+            object_position: style.object_position,
+            ..Default::default()
+        },
+    }
+    .boxed()
+}
+
+/// The border-box size of an `<img>` element showing a raster image: its CSS width and height, else its `width` and
+/// `height` attributes, with a missing one taken from the image's aspect ratio, else the image's natural size, then
+/// constrained by the available width and the max sizes.
+pub(crate) fn raster_image_size(
+    image: &RasterImageAsset,
+    el: &ElementNode,
+    available_width: f32,
+    style: &ComputedStyle,
+) -> Size {
     // Determine dimensions: CSS width/height take precedence over the HTML
     // width/height attributes (matching the SVG path and the CSS cascade).
     let attr_width = style
@@ -226,33 +295,5 @@ pub(crate) fn load_image_from_element(
         ReplacedBoxSize::new(width, height, attr_width.is_none(), attr_height.is_none())
             .constrain(available_width, style.max_width, style.max_height)
             .dimensions();
-
-    Some(
-        Image {
-            source: image,
-            geometry: ReplacedGeometry::new(
-                Size::new(width, height),
-                BlockMargins::new(style.margin.top, style.margin.bottom),
-                LayoutBorder::from_computed(&style.border, style.color),
-            ),
-            positioning: Positioning::from_style(style),
-            sampling: ImageSampling {
-                replaced: crate::layout::engine::ReplacedContent {
-                    object_fit: style.object_fit,
-                    object_position: style.object_position,
-                    ..Default::default()
-                },
-                rendering: style.image_rendering,
-            },
-            paint: ImagePaint {
-                background_color: style.background_color,
-                border_image: style.border_image.paint(),
-                border_radii: style.resolve_corner_radii(width, height),
-                filter_effect: None,
-                group: crate::layout::elements::PaintGroup::from_style(style),
-                ..Default::default()
-            },
-        }
-        .boxed(),
-    )
+    Size::new(width, height)
 }

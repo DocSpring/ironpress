@@ -704,7 +704,6 @@ pub(super) fn render_text_child(
                         inline,
                         lx + inline.margin_left,
                         text_y,
-                        ctx.text.page_height,
                         line_top_y,
                         line_bottom_y,
                         line_text_top_y,

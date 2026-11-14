@@ -20,6 +20,7 @@ use super::text::{
 };
 
 mod flow;
+mod inline_content;
 pub(crate) use flow::{AnonymousBlockFlow, IndependentFlowLayout, layout_mixed_flow_children};
 
 /// Source-order selector position for one inline sibling sequence.

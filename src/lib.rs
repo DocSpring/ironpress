@@ -5498,6 +5498,92 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         }
     }
 
+    /// The text runs and image XObjects an uncompressed PDF draws
+    fn drawn_content(pdf: &[u8]) -> (usize, usize) {
+        let text = String::from_utf8_lossy(pdf);
+        (
+            text.matches("] TJ").count(),
+            text.matches("/Subtype /Image").count(),
+        )
+    }
+
+    #[test]
+    fn content_inside_inline_elements_is_drawn() {
+        // The children of an inline element and the contents of an inline-block reach only the run collector, which
+        // left out every element that wasn't text or an inline-block with an inline tag, with all it held
+        let converter = HtmlConverter::new().compress(false);
+        let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+        let image = format!(r#"<img src="{png}" style="width: 20px; height: 20px">"#);
+        for (html, runs, images) in [
+            (format!(r#"<p><a href="https://example.com">{image}</a></p>"#), 0, 1),
+            (format!("<p>Logo <strong>{image}</strong> text</p>"), 2, 1),
+            (r#"<div>Lead <span>in <div style="display: inline-block">X</div></span> tail</div>"#.to_string(), 4, 0),
+            (r#"<div>Lead <span>in <span style="display: inline-flex">F</span></span> tail</div>"#.to_string(), 4, 0),
+            (r#"<div>Lead <span>in <span style="float: right">F</span></span> tail</div>"#.to_string(), 4, 0),
+        ] {
+            let (drawn_runs, drawn_images) = drawn_content(&converter.convert(&html).unwrap());
+            assert!(drawn_runs >= runs && drawn_images >= images, "{html}: {drawn_runs} runs, {drawn_images} images");
+        }
+    }
+
+    #[test]
+    fn blocks_inside_inline_content_take_lines_of_their_own() {
+        // A block in an inline element or an inline-block is laid out as its own lines (CSS 2.1 §9.2.1.1), the same
+        // lines forced breaks make
+        let converter = HtmlConverter::new().compress(false);
+        let layout = |html: &str| {
+            let pdf = converter.convert(html).unwrap();
+            (text_starts(&pdf), text_baselines(&pdf))
+        };
+        for (blocks, breaks) in [
+            (
+                r#"<div>Lead <span style="display: inline-block"><div>Alpha</div><div>Beta</div></span> tail</div>"#,
+                r#"<div>Lead <span style="display: inline-block">Alpha<br>Beta</span> tail</div>"#,
+            ),
+            (
+                r#"<div><span style="display: inline-block"><div>Alpha</div><div>Beta</div></span></div>"#,
+                r#"<div><span style="display: inline-block">Alpha<br>Beta</span></div>"#,
+            ),
+            (
+                r#"<div>Lead <span>in <span style="display: block">B</span> more</span></div>"#,
+                r#"<div>Lead <span>in<br>B<br>more</span></div>"#,
+            ),
+        ] {
+            assert_eq!(layout(blocks), layout(breaks), "{blocks}");
+        }
+    }
+
+    #[test]
+    fn inline_blocks_in_an_inline_block_share_its_line() {
+        // An inline-block inside another was laid out after the outer one's lines, so each level started a new
+        // line, and an inline box in a flex cell's lines kept its space but wasn't painted
+        let converter = HtmlConverter::new().compress(false);
+        for open in [
+            r#"<div style="display: inline-block">"#,
+            r#"<span style="display: inline-block">"#,
+        ] {
+            let close = if open.starts_with("<div") {
+                "</div>"
+            } else {
+                "</span>"
+            };
+            let html = format!("<div>{open}One {open}Two {open}Three{close}{close}{close}</div>");
+            let pdf = converter.convert(&html).unwrap();
+            assert!(drawn_content(&pdf).0 >= 3, "{html}");
+            assert_eq!(text_baselines(&pdf).len(), 1, "{html}");
+        }
+    }
+
+    #[test]
+    fn an_inline_block_before_a_flex_items_text_is_painted() {
+        let converter = HtmlConverter::new().compress(false);
+        let html = r#"<style>.m::before { content: "Step"; display: inline-block; background: rgb(255, 0, 0) }</style>
+            <div style="display: flex"><div class="m">two</div></div>"#;
+        let pdf = converter.convert(html).unwrap();
+        assert!(String::from_utf8_lossy(&pdf).contains("1 0 0 rg"));
+        assert!(drawn_content(&pdf).0 >= 2);
+    }
+
     #[test]
     fn a_grid_container_is_its_items_ancestor_once() {
         // Grid layout added the container to the ancestry its callers had already added it to, so `.g .g .g`
