@@ -3,7 +3,7 @@ use crate::layout::elements::{
     Positioning,
 };
 use crate::layout::flow_metrics::BlockMargins;
-use crate::parser::css::{AncestorInfo, CssRule, SelectorContext};
+use crate::parser::css::{AncestorInfo, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
@@ -18,9 +18,8 @@ use super::box_model::ResolvedBoxDimensions;
 use super::cells::CellPaint;
 use super::context::{LayoutContext, LayoutEnv};
 use super::engine::{
-    CounterState, ElementSiblingContext, FlexCell, FlexItemFragmentation, FlexItemRole,
-    LayoutBorder, LayoutTreeContext, TextLine, apply_direct_flex_item_filters, flatten_element,
-    forward_siblings,
+    ElementSiblingContext, FlexCell, FlexItemFragmentation, FlexItemRole, LayoutBorder,
+    LayoutTreeContext, TextLine, apply_direct_flex_item_filters, flatten_element, forward_siblings,
 };
 use super::flex::layout_flex_container;
 use super::grid::layout_grid_container;
@@ -179,28 +178,6 @@ fn layout_inline_block_contents(
 ///
 /// The bool carried with each element records whether source whitespace appeared
 /// immediately before it inside the current inline formatting context.
-pub(crate) fn layout_inline_block_group_with_spacing(
-    elements: &[(&ElementNode, bool)],
-    parent_style: &ComputedStyle,
-    ctx: &LayoutContext,
-    output: &mut Vec<LayoutNode>,
-    rules: &[CssRule],
-    ancestors: &[AncestorInfo],
-    fonts: &HashMap<String, TtfFont>,
-) {
-    layout_inline_block_group_inner(
-        elements,
-        parent_style,
-        ctx,
-        output,
-        rules,
-        ancestors,
-        fonts,
-        None,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_inline_block_group_with_env_and_spacing(
     elements: &[(&ElementNode, bool)],
     parent_style: &ComputedStyle,
@@ -209,16 +186,7 @@ pub(crate) fn layout_inline_block_group_with_env_and_spacing(
     ancestors: &[AncestorInfo],
     env: &mut LayoutEnv,
 ) {
-    layout_inline_block_group_inner(
-        elements,
-        parent_style,
-        ctx,
-        output,
-        env.rules,
-        ancestors,
-        env.fonts,
-        Some(env),
-    );
+    layout_inline_block_group_inner(elements, parent_style, ctx, output, ancestors, env);
 }
 
 fn inline_text_cell(
@@ -951,17 +919,16 @@ pub(crate) fn layout_inline_mixed_sequence_with_env(
     true
 }
 
-#[allow(clippy::too_many_arguments)]
 fn layout_inline_block_group_inner(
     elements: &[(&ElementNode, bool)],
     parent_style: &ComputedStyle,
     ctx: &LayoutContext,
     output: &mut Vec<LayoutNode>,
-    rules: &[CssRule],
     ancestors: &[AncestorInfo],
-    fonts: &HashMap<String, TtfFont>,
-    mut env: Option<&mut LayoutEnv>,
+    env: &mut LayoutEnv,
 ) {
+    let rules = env.rules;
+    let fonts = env.fonts;
     let available_width = ctx.available_width().max(0.0);
     if elements.is_empty() {
         return;
@@ -1054,9 +1021,7 @@ fn layout_inline_block_group_inner(
             following_siblings: Vec::new(),
             is_empty: false,
         });
-        if child_style.display == Display::InlineGrid
-            && let Some(env) = env.as_deref_mut()
-        {
+        if child_style.display == Display::InlineGrid {
             let mut grid_style = child_style.clone();
             grid_style.display = Display::Grid;
             grid_style.margin = Default::default();
@@ -1128,9 +1093,7 @@ fn layout_inline_block_group_inner(
             });
             continue;
         }
-        if child_style.display == Display::InlineFlex
-            && let Some(env) = env.as_deref_mut()
-        {
+        if child_style.display == Display::InlineFlex {
             let generated_styles = GeneratedContentStyles::resolve(
                 child_el,
                 &child_style,
@@ -1185,34 +1148,21 @@ fn layout_inline_block_group_inner(
         }
         let mut runs = Vec::new();
         let mut nested_elements = Vec::new();
-        if let Some(env) = env.as_deref_mut() {
-            let mut child_layout = InlineBlockChildLayout {
-                context: ctx,
-                parent_style: &child_style,
-                ancestors: &child_ancestors,
-                available_width: inner_width.max(0.0),
-                output: &mut nested_elements,
-            };
-            layout_inline_block_contents(
-                &child_el.children,
-                &child_style,
-                &mut runs,
-                &child_ancestors,
-                env,
-                &mut child_layout,
-            );
-        } else {
-            let mut counter_state = CounterState::default();
-            let mut resources = crate::security::resources::ResourceLoader::default();
-            InlineRunCollector::new(rules, fonts, &mut counter_state, &mut resources)
-                .collect_box_content(
-                    &child_el.children,
-                    &child_style,
-                    &mut runs,
-                    None,
-                    &child_ancestors,
-                );
-        }
+        let mut child_layout = InlineBlockChildLayout {
+            context: ctx,
+            parent_style: &child_style,
+            ancestors: &child_ancestors,
+            available_width: inner_width.max(0.0),
+            output: &mut nested_elements,
+        };
+        layout_inline_block_contents(
+            &child_el.children,
+            &child_style,
+            &mut runs,
+            &child_ancestors,
+            env,
+            &mut child_layout,
+        );
 
         let wrap_inner_width = if !has_explicit_width
             && child_style.width_keyword == Some(IntrinsicWidthKeyword::MinContent)

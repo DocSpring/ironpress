@@ -31,7 +31,7 @@ use super::helpers::{
     selector_context_from_ancestors,
 };
 use super::inline::{
-    layout_inline_block_group_with_spacing, layout_inline_mixed_sequence_with_env,
+    layout_inline_block_group_with_env_and_spacing, layout_inline_mixed_sequence_with_env,
 };
 use super::inline_formatting::{
     AnonymousBlockFlow, AnonymousInlineFormattingContext, AtomicInlineEmission,
@@ -1985,14 +1985,13 @@ pub(crate) fn layout_block_element(
                     if !ib_group_wrapper.is_empty() {
                         #[allow(clippy::drain_collect)]
                         let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
-                        layout_inline_block_group_with_spacing(
+                        layout_inline_block_group_with_env_and_spacing(
                             &taken,
                             style,
                             &ib_ctx,
                             &mut child_elements,
-                            env.rules,
                             child_ancestors,
-                            env.fonts,
+                            env,
                         );
                     }
                     AnonymousBlockFlow::new(style, &child_ctx, child_ancestors).layout(
@@ -2032,14 +2031,13 @@ pub(crate) fn layout_block_element(
                             #[allow(clippy::drain_collect)]
                             let taken: Vec<(&ElementNode, bool)> =
                                 ib_group_wrapper.drain(..).collect();
-                            layout_inline_block_group_with_spacing(
+                            layout_inline_block_group_with_env_and_spacing(
                                 &taken,
                                 style,
                                 &ib_ctx,
                                 &mut child_elements,
-                                env.rules,
                                 child_ancestors,
-                                env.fonts,
+                                env,
                             );
                         }
                         pending_inline_space = false;
@@ -2082,14 +2080,13 @@ pub(crate) fn layout_block_element(
         if !ib_group_wrapper.is_empty() {
             #[allow(clippy::drain_collect)]
             let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
-            layout_inline_block_group_with_spacing(
+            layout_inline_block_group_with_env_and_spacing(
                 &taken,
                 style,
                 &ib_ctx,
                 &mut child_elements,
-                env.rules,
                 child_ancestors,
-                env.fonts,
+                env,
             );
         }
         if !tail_laid_out {
@@ -2469,14 +2466,13 @@ pub(crate) fn layout_block_element(
                         if !ib_group.is_empty() {
                             #[allow(clippy::drain_collect)]
                             let taken: Vec<(&ElementNode, bool)> = ib_group.drain(..).collect();
-                            layout_inline_block_group_with_spacing(
+                            layout_inline_block_group_with_env_and_spacing(
                                 &taken,
                                 style,
                                 &ib_ctx,
                                 output,
-                                env.rules,
                                 child_ancestors,
-                                env.fonts,
+                                env,
                             );
                         }
                         pending_inline_space = false;
@@ -2524,14 +2520,13 @@ pub(crate) fn layout_block_element(
         if !ib_group.is_empty() {
             #[allow(clippy::drain_collect)]
             let taken: Vec<(&ElementNode, bool)> = ib_group.drain(..).collect();
-            layout_inline_block_group_with_spacing(
+            layout_inline_block_group_with_env_and_spacing(
                 &taken,
                 style,
                 &ib_ctx,
                 output,
-                env.rules,
                 child_ancestors,
-                env.fonts,
+                env,
             );
         }
     }

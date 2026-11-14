@@ -5416,4 +5416,27 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
             .join()
             .unwrap();
     }
+
+    /// `levels` elements opened by `open` (and closed by `</div>`) around the text "Deep"
+    fn nested(open: &str, levels: usize) -> String {
+        format!(
+            "<html><body>{}Deep{}</body></html>",
+            open.repeat(levels),
+            "</div>".repeat(levels)
+        )
+    }
+
+    #[test]
+    fn inline_blocks_nested_in_each_other_draw_their_text_at_any_depth() {
+        // The third inline-block in a row of nested ones was laid out without the layout environment, which collected
+        // only its text, so a fourth inside it was left out with everything it held
+        let converter = HtmlConverter::new().compress(false);
+        for levels in 1..=8 {
+            let html = nested(r#"<div style="display: inline-block">"#, levels);
+            assert!(
+                draws_deep(&converter.convert(&html).unwrap()),
+                "{levels} levels"
+            );
+        }
+    }
 }
