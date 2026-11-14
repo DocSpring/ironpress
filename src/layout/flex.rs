@@ -3626,6 +3626,16 @@ pub(crate) fn layout_flex_container(
                             {
                                 let mut fstyle = relayout_child_style.clone();
                                 item_margin_application.apply(&mut fstyle);
+                                // The resolved main size takes the place of its own width
+                                if fstyle.width.is_some() {
+                                    fstyle.width = Some(match fstyle.box_sizing {
+                                        BoxSizing::BorderBox => final_w,
+                                        BoxSizing::ContentBox => (final_w
+                                            - fstyle.padding.horizontal()
+                                            - fstyle.border.horizontal_width())
+                                        .max(0.0),
+                                    });
+                                }
                                 let stretches = matches!(items[i].align_self, AlignSelf::Stretch)
                                     || (matches!(items[i].align_self, AlignSelf::Auto)
                                         && align == AlignItems::Stretch);
@@ -3690,18 +3700,19 @@ pub(crate) fn layout_flex_container(
                                     style.font_size,
                                 )
                                 .with_containing_block(descendant_containing_block);
-                            flatten_element(
-                                child_el,
+                            let mut element_context =
                                 LayoutTreeContext::new(style, &relayout_ctx, ancestors)
                                     .with_positioned_ancestor_depth(positioned_depth)
                                     .for_element(flex_child_positions[child_idx].as_context())
                                     .with_filter_application(
                                         FilterApplication::DeferToFormattingItem,
                                     )
-                                    .with_margin_application(item_margin_application),
-                                &mut relayout_buf,
-                                env,
-                            );
+                                    .with_margin_application(item_margin_application);
+                            // The resolved main size takes the place of its own width
+                            if relayout_child_style.width.is_some() {
+                                element_context = element_context.with_used_width(final_w);
+                            }
+                            flatten_element(child_el, element_context, &mut relayout_buf, env);
                             if !relayout_buf.is_empty() {
                                 items[i].elements = relayout_buf;
                                 items[i].height =

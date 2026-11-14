@@ -5671,6 +5671,29 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         assert_eq!(text_positions("span"), blocks);
     }
 
+    #[test]
+    fn a_flex_item_with_a_width_takes_its_resolved_size() {
+        // An item laid out again at its resolved main size kept its own `width` when it had block children or was
+        // a flex container, so a shrunk item drew at its specified width, under the next item
+        let converter = HtmlConverter::new().compress(false);
+        let rects = |content: &str| {
+            let html = format!(
+                r#"<div style="display: flex"><div style="width: 500px; border-right: 3px solid rgb(0, 128, 0)">{content}</div><div style="width: 300px">Next</div></div>"#
+            );
+            let pdf = String::from_utf8_lossy(&converter.convert(&html).unwrap()).into_owned();
+            pdf.lines()
+                .filter(|line| line.ends_with(" re"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let text = rects("Item");
+        assert!(text.len() > 1);
+        assert_eq!(rects(r#"<p style="margin: 0">Item</p>"#), text);
+        assert_eq!(
+            rects(r#"<div style="display: flex"><span>Item</span></div>"#),
+            text
+        );
+    }
 
     #[test]
     fn a_grid_container_is_its_items_ancestor_once() {

@@ -1,6 +1,6 @@
 use crate::parser::css::{AncestorInfo, SelectorContext};
 use crate::parser::dom::ElementNode;
-use crate::style::computed::ComputedStyle;
+use crate::style::computed::{BoxSizing, ComputedStyle};
 
 use super::context::LayoutContext;
 use super::engine::ListContext;
@@ -73,6 +73,7 @@ impl<'context, 'dom> LayoutTreeContext<'context, 'dom> {
             siblings,
             filter_application: FilterApplication::Materialize,
             margin_application: MarginApplication::Own,
+            used_width: None,
         }
     }
 }
@@ -261,6 +262,7 @@ pub(crate) struct ElementLayoutContext<'context, 'siblings, 'dom> {
     siblings: ElementSiblingContext<'siblings>,
     filter_application: FilterApplication,
     margin_application: MarginApplication,
+    used_width: Option<f32>,
 }
 
 impl<'context, 'siblings, 'dom> ElementLayoutContext<'context, 'siblings, 'dom> {
@@ -276,6 +278,27 @@ impl<'context, 'siblings, 'dom> ElementLayoutContext<'context, 'siblings, 'dom> 
 
     pub(crate) const fn margin_application(self) -> MarginApplication {
         self.margin_application
+    }
+
+    /// The border-box width a formatting item has given the element (a flex item's resolved main size), which
+    /// takes the place of its own `width`
+    pub(crate) const fn with_used_width(mut self, width: f32) -> Self {
+        self.used_width = Some(width);
+        self
+    }
+
+    /// The style the box is laid out with: its `width` is the one its formatting item gave it, if any
+    pub(crate) fn apply_used_width(self, style: &mut ComputedStyle) {
+        let Some(width) = self.used_width else {
+            return;
+        };
+        style.width = Some(match style.box_sizing {
+            BoxSizing::BorderBox => width,
+            BoxSizing::ContentBox => {
+                (width - style.padding.horizontal() - style.border.horizontal_width()).max(0.0)
+            }
+        });
+        style.width_keyword = None;
     }
 
     pub(crate) const fn tree(self) -> LayoutTreeContext<'context, 'dom> {
