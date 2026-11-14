@@ -1830,23 +1830,10 @@ fn build_pseudo_inline_box(
         )
     };
 
+    // The lines' real advances, as an element's inline-block measures them
     let text_w = lines
         .iter()
-        .map(|l| {
-            l.runs
-                .iter()
-                .map(|r| {
-                    estimate_word_width(
-                        &r.text,
-                        r.font_size,
-                        &r.font_family,
-                        r.bold,
-                        r.font_style.is_slanted(),
-                        fonts,
-                    )
-                })
-                .sum::<f32>()
-        })
+        .map(|line| measure_runs_width(&line.runs, fonts))
         .fold(0.0f32, f32::max);
     let text_h: f32 = lines.iter().map(|l| l.height).sum();
 
@@ -1861,6 +1848,19 @@ fn build_pseudo_inline_box(
         Some(h) if pseudo_style.box_sizing == BoxSizing::BorderBox => h.max(0.0),
         Some(h) => (h + pad_v + border.vertical_width()).max(0.0),
         None => text_h + pad_v + border.vertical_width(),
+    };
+    // CSS 2.1 §10.8.1, as for an element's inline-block: the baseline of its last line box, or its bottom margin
+    // edge when it clips its overflow or has no line box.
+    let baseline_ascent = match lines.split_last() {
+        Some((last, prior)) if !pseudo_style.overflow.clips() => {
+            last.baseline_ascent.map(|baseline| {
+                pseudo_style.border.top.used_width()
+                    + pseudo_style.padding.top
+                    + prior.iter().map(|line| line.height).sum::<f32>()
+                    + baseline
+            })
+        }
+        _ => None,
     };
 
     InlineBox {
@@ -1877,7 +1877,7 @@ fn build_pseudo_inline_box(
         },
         padding: pseudo_style.padding,
         vertical_align: pseudo_style.vertical_align,
-        baseline_ascent: None,
+        baseline_ascent,
         lines,
         ..InlineBox::default()
     }

@@ -5585,6 +5585,31 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn a_generated_inline_block_is_laid_out_as_an_elements() {
+        // A `::before` inline-block had no baseline, so its bottom edge sat on the line's baseline: the box rose
+        // and the text after it dropped, where an element's inline-block takes the baseline of its last line. (Its
+        // width came from estimated advances, which match a built-in font's; the parity fixture
+        // generated-content-flex-item-width checks it with a bundled font, where they didn't.)
+        let converter = HtmlConverter::new().compress(false);
+        let drawn = |html: &str| {
+            let pdf = String::from_utf8_lossy(&converter.convert(html).unwrap()).into_owned();
+            pdf.lines()
+                .filter(|line| line.ends_with(" Tm") || line.ends_with(" re"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let element = drawn(
+            r#"<div><span style="display: inline-block; padding: 0 4px; background: rgb(255, 0, 0)">Step</span>two</div>"#,
+        );
+        let generated = drawn(
+            r#"<style>.m::before { content: "Step"; display: inline-block; padding: 0 4px; background: rgb(255, 0, 0) }</style>
+            <div class="m">two</div>"#,
+        );
+        assert!(element.iter().filter(|line| line.ends_with(" Tm")).count() == 2);
+        assert_eq!(generated, element);
+    }
+
+    #[test]
     fn a_grid_container_is_its_items_ancestor_once() {
         // Grid layout added the container to the ancestry its callers had already added it to, so `.g .g .g`
         // matched the second of two nested grids
