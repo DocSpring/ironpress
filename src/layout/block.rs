@@ -475,8 +475,7 @@ pub(crate) fn layout_block_element(
             style,
             keyword,
             available_width,
-            env.rules,
-            env.fonts,
+            env,
         );
     } else if let (Some(ratio), Some(h)) = (style.aspect_ratio, style.height)
         && ratio > 0.0
@@ -502,8 +501,7 @@ pub(crate) fn layout_block_element(
                 style,
                 keyword,
                 available_width,
-                env.rules,
-                env.fonts,
+                env,
             ),
         );
     } else if let Some(mw) = style.max_width {
@@ -518,8 +516,7 @@ pub(crate) fn layout_block_element(
                 style,
                 keyword,
                 available_width,
-                env.rules,
-                env.fonts,
+                env,
             ),
         );
     } else if let Some(mw) = style.min_width {

@@ -1,6 +1,11 @@
 //! Intrinsic inline sizing shared by block and flex formatting contexts.
 
-use super::helpers::{collects_as_inline_text, recurses_as_layout_child};
+use super::context::LayoutEnv;
+use super::engine::CounterState;
+use super::helpers::{
+    collects_as_inline_text, recurses_as_layout_child, resolve_content_with_quotes,
+};
+use super::inline_formatting::GeneratedContentStyles;
 use super::text::{
     collapse_whitespace, estimate_word_width, is_collapsible_space, resolve_style_font_family,
 };
@@ -74,28 +79,96 @@ fn box_horizontal_extra(style: &ComputedStyle) -> f32 {
 struct IntrinsicMeasurement<'context, 'dom> {
     rules: &'context [CssRule],
     fonts: &'context HashMap<String, TtfFont>,
+    /// The counters where the measured element is, for generated content
+    counters: &'context CounterState,
     ancestors: &'context [AncestorInfo<'dom>],
     selector: &'context SelectorContext<'dom>,
+}
+
+impl<'context, 'dom> IntrinsicMeasurement<'context, 'dom> {
+    fn new(
+        env: &'context LayoutEnv,
+        ancestors: &'context [AncestorInfo<'dom>],
+        selector: &'context SelectorContext<'dom>,
+    ) -> Self {
+        Self {
+            rules: env.rules,
+            fonts: env.fonts,
+            counters: env.counter_state,
+            ancestors,
+            selector,
+        }
+    }
+
+    /// The same measurement one level down, for a child with these ancestors and selector context
+    fn child(
+        self,
+        ancestors: &'context [AncestorInfo<'dom>],
+        selector: &'context SelectorContext<'dom>,
+    ) -> Self {
+        Self {
+            ancestors,
+            selector,
+            ..self
+        }
+    }
+
+    /// An element's `::before` and `::after` styles
+    fn generated(self, el: &ElementNode, style: &ComputedStyle) -> GeneratedContentStyles {
+        GeneratedContentStyles::resolve(el, style, self.rules, self.selector, self.fonts)
+    }
+
+    /// Add a generated box's text to the run it's in, or as a block of its own
+    fn add_generated(
+        self,
+        el: &ElementNode,
+        pseudo: Option<&ComputedStyle>,
+        inline: &mut InlineWidths,
+        contributions: Option<&mut Vec<IntrinsicWidths>>,
+    ) {
+        let Some(style) = pseudo.filter(|style| {
+            !style.content.is_empty()
+                && style.display != Display::None
+                && !style.position.is_absolute()
+        }) else {
+            return;
+        };
+        let text = resolve_content_with_quotes(
+            &style.content,
+            &el.attributes,
+            &mut self.counters.clone(),
+            style.quotes.as_deref(),
+        );
+        let measure = TextMeasurement::new(style, self.fonts);
+        let outer = |text: &str| {
+            let mut own = InlineWidths::default();
+            measure.accumulate(text, &mut own);
+            own.widths
+                .with_extra(box_horizontal_extra(style) + style.margin.horizontal())
+        };
+        match (style.display, contributions) {
+            (Display::Block | Display::ListItem, Some(contributions)) => {
+                flush_inline(contributions, inline);
+                contributions.push(outer(&text));
+            }
+            (Display::InlineBlock, _) => inline.append_atomic(outer(&text)),
+            _ => measure.accumulate(&text, inline),
+        }
+    }
 }
 
 /// Compute an element's intrinsic border-box widths without its outer margins.
 pub(crate) fn intrinsic_border_box_widths(
     el: &ElementNode,
     style: &ComputedStyle,
-    rules: &[CssRule],
-    fonts: &HashMap<String, TtfFont>,
+    env: &LayoutEnv,
     ancestors: &[AncestorInfo],
     selector: &SelectorContext,
 ) -> IntrinsicWidths {
     intrinsic_border_box_widths_with(
         el,
         style,
-        IntrinsicMeasurement {
-            rules,
-            fonts,
-            ancestors,
-            selector,
-        },
+        IntrinsicMeasurement::new(env, ancestors, selector),
     )
 }
 
@@ -104,20 +177,14 @@ pub(crate) fn intrinsic_border_box_widths(
 pub(crate) fn content_intrinsic_border_box_widths(
     el: &ElementNode,
     style: &ComputedStyle,
-    rules: &[CssRule],
-    fonts: &HashMap<String, TtfFont>,
+    env: &LayoutEnv,
     ancestors: &[AncestorInfo],
     selector: &SelectorContext,
 ) -> IntrinsicWidths {
     let inner = content_intrinsic_widths(
         el,
         style,
-        IntrinsicMeasurement {
-            rules,
-            fonts,
-            ancestors,
-            selector,
-        },
+        IntrinsicMeasurement::new(env, ancestors, selector),
     );
     let extra = box_horizontal_extra(style);
     IntrinsicWidths {
@@ -183,6 +250,13 @@ fn content_intrinsic_widths(
     let mut positions = element_positions(el);
     let mut child_ancestors = measurement.ancestors.to_vec();
     child_ancestors.push(measurement.selector.as_ancestor(el));
+    let generated = measurement.generated(el, style);
+    measurement.add_generated(
+        el,
+        generated.before(),
+        &mut inline,
+        Some(&mut contributions),
+    );
 
     for child in &el.children {
         match child {
@@ -223,42 +297,28 @@ fn content_intrinsic_widths(
                     let border_box = intrinsic_border_box_widths_with(
                         child_el,
                         &child_style,
-                        IntrinsicMeasurement {
-                            rules: measurement.rules,
-                            fonts: measurement.fonts,
-                            ancestors: &child_ancestors,
-                            selector: &child_selector,
-                        },
+                        measurement.child(&child_ancestors, &child_selector),
                     );
                     contributions.push(border_box.with_extra(child_style.margin.horizontal()));
                 } else if is_atomic_inline {
                     let border_box = intrinsic_border_box_widths_with(
                         child_el,
                         &child_style,
-                        IntrinsicMeasurement {
-                            rules: measurement.rules,
-                            fonts: measurement.fonts,
-                            ancestors: &child_ancestors,
-                            selector: &child_selector,
-                        },
+                        measurement.child(&child_ancestors, &child_selector),
                     );
                     inline.append_atomic(border_box.with_extra(child_style.margin.horizontal()));
                 } else {
                     accumulate_inline_element(
                         child_el,
                         &child_style,
-                        IntrinsicMeasurement {
-                            rules: measurement.rules,
-                            fonts: measurement.fonts,
-                            ancestors: &child_ancestors,
-                            selector: &child_selector,
-                        },
+                        measurement.child(&child_ancestors, &child_selector),
                         &mut inline,
                     );
                 }
             }
         }
     }
+    measurement.add_generated(el, generated.after(), &mut inline, Some(&mut contributions));
     flush_inline(&mut contributions, &mut inline);
     combine_contributions(style, &contributions)
 }
@@ -429,6 +489,8 @@ fn accumulate_inline_element(
     let mut positions = element_positions(el);
     let mut child_ancestors = measurement.ancestors.to_vec();
     child_ancestors.push(measurement.selector.as_ancestor(el));
+    let generated = measurement.generated(el, style);
+    measurement.add_generated(el, generated.before(), inline, None);
 
     for child in &el.children {
         match child {
@@ -447,17 +509,13 @@ fn accumulate_inline_element(
                 accumulate_inline_element(
                     child_el,
                     &child_style,
-                    IntrinsicMeasurement {
-                        rules: measurement.rules,
-                        fonts: measurement.fonts,
-                        ancestors: &child_ancestors,
-                        selector: &child_selector,
-                    },
+                    measurement.child(&child_ancestors, &child_selector),
                     inline,
                 );
             }
         }
     }
+    measurement.add_generated(el, generated.after(), inline, None);
 }
 
 /// Resolve a block box's border-box width for an intrinsic `width` keyword.
@@ -466,21 +524,14 @@ pub(crate) fn resolve_intrinsic_keyword_width(
     style: &ComputedStyle,
     keyword: IntrinsicWidthKeyword,
     available_width: f32,
-    rules: &[CssRule],
-    fonts: &HashMap<String, TtfFont>,
+    env: &LayoutEnv,
 ) -> f32 {
     // A min/max-width keyword constrains the preferred width; it does not
     // measure that preferred width. Using `intrinsic_border_box_widths` here
     // would feed `width` back into its own constraint (for example making
     // `width: 200px; max-width: min-content` resolve to 200px).
-    let widths = content_intrinsic_border_box_widths(
-        el,
-        style,
-        rules,
-        fonts,
-        &[],
-        &SelectorContext::default(),
-    );
+    let widths =
+        content_intrinsic_border_box_widths(el, style, env, &[], &SelectorContext::default());
     let stretch = (available_width - style.margin.horizontal()).max(0.0);
     widths.resolve(keyword, stretch).max(0.0)
 }

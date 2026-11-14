@@ -1312,8 +1312,7 @@ fn flex_intrinsic_container_width(
                             crate::layout::intrinsic_width::content_intrinsic_border_box_widths(
                                 child_el,
                                 &child_style,
-                                env.rules,
-                                env.fonts,
+                                env,
                                 ancestors,
                                 &selector_ctx,
                             )
@@ -1321,8 +1320,7 @@ fn flex_intrinsic_container_width(
                             crate::layout::intrinsic_width::intrinsic_border_box_widths(
                                 child_el,
                                 &child_style,
-                                env.rules,
-                                env.fonts,
+                                env,
                                 ancestors,
                                 &selector_ctx,
                             )
@@ -2212,8 +2210,7 @@ pub(crate) fn layout_flex_container(
                     crate::layout::intrinsic_width::content_intrinsic_border_box_widths(
                         child_el,
                         &child_style,
-                        env.rules,
-                        env.fonts,
+                        env,
                         ancestors,
                         &selector_ctx,
                     )
@@ -2221,8 +2218,7 @@ pub(crate) fn layout_flex_container(
                     crate::layout::intrinsic_width::intrinsic_border_box_widths(
                         child_el,
                         &child_style,
-                        env.rules,
-                        env.fonts,
+                        env,
                         ancestors,
                         &selector_ctx,
                     )

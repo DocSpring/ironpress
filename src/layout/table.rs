@@ -4019,8 +4019,7 @@ fn cell_flow_widths(
             let widths = super::intrinsic_width::intrinsic_border_box_widths(
                 element,
                 &child.style,
-                env.rules,
-                env.fonts,
+                env,
                 ancestors,
                 &selector,
             );

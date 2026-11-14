@@ -5440,6 +5440,41 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         }
     }
 
+    /// Where each line of text starts, from the `Tm` operators of an uncompressed PDF
+    fn text_starts(pdf: &[u8]) -> Vec<f32> {
+        String::from_utf8_lossy(pdf)
+            .lines()
+            .filter_map(|line| line.strip_suffix(" Tm"))
+            .map(|matrix| matrix.split(' ').nth(4).unwrap().parse().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn a_flex_items_width_includes_its_generated_text() {
+        // A flex item's max-content width left out ::before and ::after text, so a page number after "Page" wrapped
+        // onto a second line, and a box holding only generated text was sized as if empty. Generated text lays out
+        // as the same text written in the document does.
+        let converter = HtmlConverter::new().compress(false);
+        let layout = |item: &str| {
+            let html = format!(
+                r#"<style>p {{ margin: 0 }} .n::before {{ content: "12" }}</style><div style="display: flex">{item}<div>Next</div></div>"#
+            );
+            let pdf = converter.convert(&html).unwrap();
+            // Where "Next" starts, and the lines; generated text is a text run of its own
+            (text_starts(&pdf).pop(), text_baselines(&pdf))
+        };
+        for item in [
+            r#"<div><p>Page <span class="n"></span></p></div>"#,
+            r#"<div><p class="n"></p></div>"#,
+            r#"<div><div>Two</div><p>Page <span class="n"></span></p></div>"#,
+        ] {
+            let written = item
+                .replace(r#"<span class="n"></span>"#, "<span>12</span>")
+                .replace(r#"<p class="n">"#, "<p>12");
+            assert_eq!(layout(item), layout(&written), "{item}");
+        }
+    }
+
     #[test]
     fn nested_grids_lay_out_in_polynomial_time() {
         // Row sizing laid out each auto-height item once to measure it and again in its cell, so the work doubled
