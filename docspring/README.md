@@ -44,6 +44,14 @@ includes them, then goes back to the upstream packages.
 | Each auto-height grid item is measured once per layout: row sizing laid it out to measure it and the cell pass again, so the work doubled with every level of nested grids (twenty took about a minute) | Not sent yet (`docspring-1.7.0.8`) |
 | An element's min- and max-content widths include its `::before` and `::after` text, so a flex item holding `Page <span class="page"></span>` with the number in `::after` keeps the number on its line | Not sent yet (`docspring-1.7.0.8`) |
 | A flex item's blocks keep their own `text-align`: they were merged into one cell whose lines were all left-aligned | Not sent yet (`docspring-1.7.0.8`) |
+| Elements inside inline content are drawn: an `<img>` in a link, the blocks in an inline-block (on lines of their own), an inline-block or inline-flex in a `<span>`, and inline-blocks in an inline-block share its line. The run collector dropped every element there that wasn't text, with its contents | Not sent yet (`docspring-1.7.0.8`) |
+| A `::before` or `::after` inline-block sits on the line's baseline by its last line, as an element's does, and is as wide as its measured text: its bottom edge sat on the baseline and its width came from estimated advances | Not sent yet (`docspring-1.7.0.8`) |
+| A flex item with `flex: 1` (or any zero basis) holding its own text is as tall as that text at its resolved width: it was wrapped a word to a line at the basis, and the flex line kept that height | Not sent yet (`docspring-1.7.0.8`) |
+| A flex or grid container that is itself a flex item lays out its inline children as its items, instead of as one line of text | Not sent yet (`docspring-1.7.0.8`) |
+| An auto-width grid fills its containing block with its margin box (CSS 2.1 §10.3.3): without horizontal margins its borders were added outside that width, so it overflowed by their width | Not sent yet (`docspring-1.7.0.8`) |
+| Flex shrinking scales each item by its inner base size (css-flexbox §9.7), not its outer size, so items with padding or borders shrink by the amounts browsers use | Not sent yet (`docspring-1.7.0.8`) |
+| A flex item with a `width` is laid out at its flexed size: its contents were laid out at the authored width after the item grew or shrank | Not sent yet (`docspring-1.7.0.8`) |
+| Pair kerning continues across inline boundaries that change only paint (a `<span>` with a colour, `::before` content), as Chromium shapes text: `“<span>Q</span>` was wider than `“Q`. A margin, border or padding between the glyphs still separates them. Right-to-left text doesn't kern across a boundary yet | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the
