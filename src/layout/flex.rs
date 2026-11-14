@@ -3598,7 +3598,13 @@ pub(crate) fn layout_flex_container(
                             // Only auto-width children fill the available width (and
                             // thus need the border-deduction); an explicit width
                             // resolves the child's box itself, so leave `final_w`.
-                            let relayout_avail = if relayout_child_style.width.is_some() {
+                            // A grid container takes the available width as its border box, as a flex container does,
+                            // so it gets the whole of `final_w` too
+                            let relayout_avail = if relayout_child_style.width.is_some()
+                                || matches!(
+                                    relayout_child_style.display,
+                                    Display::Grid | Display::InlineGrid
+                                ) {
                                 final_w
                             } else {
                                 (final_w - relayout_child_style.border.horizontal_width()).max(0.0)

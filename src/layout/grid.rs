@@ -2675,17 +2675,8 @@ fn layout_grid_container_inner(
                 w
             }
         }
-        None => {
-            let auto_border_adjust = if style.margin.left != 0.0 || style.margin.right != 0.0 {
-                style.border.horizontal_width()
-            } else {
-                0.0
-            };
-            available_width
-                - style.margin.horizontal()
-                - style.padding.horizontal()
-                - auto_border_adjust
-        }
+        // An auto width fills the containing block with the margin box (CSS 2.1 §10.3.3)
+        None => available_width - style.margin.horizontal() - border_pad_w,
     };
     // The container's border-box width (used for the wrapping Container's
     // block width and to resolve horizontal margin / auto-centering).

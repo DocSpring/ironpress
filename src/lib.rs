@@ -5632,6 +5632,26 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn an_auto_width_grid_fills_its_containing_block_with_its_border_box() {
+        // A grid without horizontal margins left its borders out of the auto width, so its border box overflowed
+        // the containing block by their width
+        let converter = HtmlConverter::new().compress(false);
+        let border_rects = |display: &str| {
+            let html = format!(
+                r#"<div style="display: {display}; border: 2px solid rgb(0, 0, 255)"><div>A</div></div>"#
+            );
+            let pdf = String::from_utf8_lossy(&converter.convert(&html).unwrap()).into_owned();
+            pdf.lines()
+                .filter(|line| line.ends_with(" re"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let block = border_rects("block");
+        assert!(!block.is_empty());
+        assert_eq!(border_rects("grid"), block);
+    }
+
+    #[test]
     fn a_nested_flex_containers_inline_children_are_its_items() {
         // A flex item that is itself a flex container took the text-only path when its children were inline, which
         // merged them into one run, so `justify-content` had nothing to separate
@@ -5650,6 +5670,7 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         assert_eq!(blocks.len(), 2);
         assert_eq!(text_positions("span"), blocks);
     }
+
 
     #[test]
     fn a_grid_container_is_its_items_ancestor_once() {
