@@ -5450,6 +5450,29 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn blocks_in_a_flex_item_keep_their_own_text_alignment() {
+        // A flex item's blocks were merged into one cell whose lines were all left-aligned, whatever each block's
+        // text-align said
+        let converter = HtmlConverter::new().compress(false);
+        let item = |blocks: &str| {
+            let html = format!(
+                r#"<div style="display: flex; width: 300px"><div style="flex: 1">{blocks}</div></div>"#
+            );
+            text_starts(&converter.convert(&html).unwrap())
+        };
+        let left = item("<div>Same</div><div>Same</div>");
+        assert_eq!(left[0], left[1]);
+        let mixed = item(
+            r#"<div>Same</div><div style="text-align: center">Same</div><div style="text-align: right">Same</div>"#,
+        );
+        assert_eq!(mixed[0], left[0]);
+        assert!(mixed[1] > mixed[0] && mixed[2] > mixed[1], "{mixed:?}");
+        let inherited =
+            item(r#"<div style="text-align: right"><div>Same</div><div>Same</div></div>"#);
+        assert_eq!(inherited, vec![mixed[2], mixed[2]]);
+    }
+
+    #[test]
     fn a_flex_items_width_includes_its_generated_text() {
         // A flex item's max-content width left out ::before and ::after text, so a page number after "Page" wrapped
         // onto a second line, and a box holding only generated text was sized as if empty. Generated text lays out

@@ -9,7 +9,7 @@ use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::style::computed::{
     AlignContent, AlignItems, AlignSelf, BoxSizing, ComputedStyle, Display, FlexDirection,
     FlexWrap, FontWeight, IntrinsicWidthKeyword, JustifyContent, Overflow, OverflowWrap, Position,
-    WhiteSpace, ZIndex, compute_style_with_context_with_font_metrics,
+    TextAlign, WhiteSpace, ZIndex, compute_style_with_context_with_font_metrics,
 };
 use crate::types::{CornerRadii, EdgeSizes, Rect, Size};
 
@@ -527,10 +527,35 @@ fn flex_item_lends_cell_lines(elements: &[LayoutNode], item_width: f32) -> bool 
                     .margin_holder()
                     .is_none_or(|holder| *holder.margins() == BlockMargins::ZERO)
         }
-        _ => elements
-            .iter()
-            .all(|element| is_mergeable_flex_text_block(element.as_ref(), item_width)),
+        _ => {
+            elements
+                .iter()
+                .all(|element| is_mergeable_flex_text_block(element.as_ref(), item_width))
+                && merged_text_alignment(elements).is_some()
+        }
     }
+}
+
+/// The alignment that text blocks merged into one cell share. The cell aligns all its lines one way, so blocks
+/// aligned differently keep their own boxes as nested block flow.
+fn merged_text_alignment(elements: &[LayoutNode]) -> Option<TextAlign> {
+    struct Alignment(Option<TextAlign>);
+
+    impl LayoutVisitor for Alignment {
+        fn visit_text_block(&mut self, element: &TextBlock) {
+            self.0 = Some(element.text.alignment);
+        }
+    }
+
+    let mut alignments = elements.iter().map(|element| {
+        let mut alignment = Alignment(None);
+        element.accept(&mut alignment);
+        alignment.0
+    });
+    let first = alignments.next()??;
+    alignments
+        .all(|alignment| alignment == Some(first))
+        .then_some(first)
 }
 
 /// Whether a flex item's cell can take its lines from the item's one text
@@ -3960,6 +3985,7 @@ pub(crate) fn layout_flex_container(
                             lines: merged_lines,
                             x_offset: x,
                             width: item.width,
+                            text_align: merged_text_alignment(&item.elements).unwrap_or_default(),
                             natural_height: natural_h,
                             fragmentation: item.fragmentation,
                             cross_min: item.cross_min,
