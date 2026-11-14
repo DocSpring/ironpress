@@ -38,6 +38,10 @@ use super::text::{
 };
 
 mod fragmentation;
+mod item_heights;
+
+pub(crate) use item_heights::GridItemHeightMemo;
+use item_heights::GridItemMeasurement;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum TrackBreadth {
@@ -1692,14 +1696,25 @@ fn grid_item_outer_height(
     let content_h = if cs.height.is_some() {
         0.0
     } else if let (Some(ctx), Some(width)) = (ctx, content_width) {
-        let content =
-            measure_grid_item_content(child_el, cs, ctx, ancestors, width, None, env, None);
-        content.lines.iter().map(|line| line.height).sum::<f32>()
-            + content
-                .children
-                .iter()
-                .map(|element| super::paginate::estimate_element_height(element.as_ref()))
-                .sum::<f32>()
+        let measurement = GridItemMeasurement::new(child_el, width, ctx);
+        let measured = |env: &mut LayoutEnv| {
+            let content =
+                measure_grid_item_content(child_el, cs, ctx, ancestors, width, None, env, None);
+            content.lines.iter().map(|line| line.height).sum::<f32>()
+                + content
+                    .children
+                    .iter()
+                    .map(|element| super::paginate::estimate_element_height(element.as_ref()))
+                    .sum::<f32>()
+        };
+        match env.grid_item_heights.remembered(&measurement) {
+            Some(height) => height,
+            None => {
+                let height = measured(env);
+                env.grid_item_heights.remember(measurement, height);
+                height
+            }
+        }
     } else {
         let counter_checkpoint = env.counter_state.clone();
         let counter_scope = env.counter_state.enter_element(&cs.principal);

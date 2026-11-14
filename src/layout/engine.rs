@@ -2248,6 +2248,7 @@ fn layout_document_pass(
     // Owned by this layout and dropped with it; nested table scopes borrow it
     // explicitly through the layout environment.
     let mut table_cell_sizing = super::table::TableCellSizingMemo::default();
+    let mut grid_item_heights = super::grid::GridItemHeightMemo::default();
     let mut env = LayoutEnv {
         rules,
         fonts: custom_fonts,
@@ -2257,6 +2258,7 @@ fn layout_document_pass(
         filter_dpi: raster_quality.filter_dpi,
         table_cell_sizing: super::table::TableCellSizingContext::root(&mut table_cell_sizing),
         depth,
+        grid_item_heights: &mut grid_item_heights,
     };
     if let Some(root) =
         RootFormattingContext::from_projected_body(nodes, &body_style, available_width)

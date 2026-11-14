@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use super::elements::TableSourcePath;
 use super::engine::CounterState;
+use super::grid::GridItemHeightMemo;
 use super::table::TableCellSizingContext;
 
 /// Shared mutable environment for the layout traversal.
@@ -33,6 +34,8 @@ pub(crate) struct LayoutEnv<'a> {
     pub table_cell_sizing: TableCellSizingContext<'a>,
     /// How deeply elements may nest, and whether a deeper one was met.
     pub depth: &'a DepthLimit,
+    /// Auto-height grid items' natural heights, measured once per layout.
+    pub grid_item_heights: &'a mut GridItemHeightMemo,
 }
 
 /// How many elements nested in each other the layout traverses (each level takes stack), counting the element
@@ -103,6 +106,7 @@ impl<'a> LayoutEnv<'a> {
             filter_dpi: self.filter_dpi,
             table_cell_sizing: self.table_cell_sizing.source_descendants(source_path),
             depth: self.depth,
+            grid_item_heights: &mut *self.grid_item_heights,
         }
     }
 }

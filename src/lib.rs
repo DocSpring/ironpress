@@ -5439,4 +5439,20 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
             );
         }
     }
+
+    #[test]
+    fn nested_grids_lay_out_in_polynomial_time() {
+        // Row sizing laid out each auto-height item once to measure it and again in its cell, so the work doubled
+        // with each nested grid: 24 levels would take hours. They need more than a test thread's 2 MiB of stack.
+        std::thread::Builder::new()
+            .stack_size(64 * 1024 * 1024)
+            .spawn(|| {
+                let converter = HtmlConverter::new().compress(false);
+                let html = nested(r#"<div style="display: grid">"#, 24);
+                assert!(draws_deep(&converter.convert(&html).unwrap()));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
 }
