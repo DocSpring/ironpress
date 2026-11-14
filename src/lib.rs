@@ -5499,6 +5499,21 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn a_grid_container_is_its_items_ancestor_once() {
+        // Grid layout added the container to the ancestry its callers had already added it to, so `.g .g .g`
+        // matched the second of two nested grids
+        let converter = HtmlConverter::new().compress(false);
+        let nested = r#"<html><head><style>
+            .g { display: grid; border: 4px solid rgb(0, 0, 255) }
+            .g .g { border-color: rgb(0, 255, 0) }
+            .g .g .g { border-color: rgb(255, 0, 0) }
+        </style></head><body><div class="g"><div class="g"><div style="height: 10px"></div></div></div></body></html>"#;
+        let pdf = String::from_utf8_lossy(&converter.convert(nested).unwrap()).into_owned();
+        assert!(pdf.contains("0 1 0 RG"), "the inner grid matches .g .g");
+        assert!(!pdf.contains("1 0 0 RG"), "nothing matches .g .g .g");
+    }
+
+    #[test]
     fn nested_grids_lay_out_in_polynomial_time() {
         // Row sizing laid out each auto-height item once to measure it and again in its cell, so the work doubled
         // with each nested grid: 24 levels would take hours. They need more than a test thread's 2 MiB of stack.

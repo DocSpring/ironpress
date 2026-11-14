@@ -2622,7 +2622,8 @@ fn place_grid_items(
     }
 }
 
-/// Lay out a CSS Grid container into GridRow layout elements.
+/// Lay out a CSS Grid container into GridRow layout elements. `ancestors` is the ancestry the container's children
+/// see: it ends with the container.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_grid_container(
     el: &ElementNode,
@@ -2656,6 +2657,10 @@ fn layout_grid_container_inner(
     env: &mut LayoutEnv,
     subgrid: Option<SubgridContext>,
 ) {
+    // Callers pass the ancestry the grid's children see, which ends with the grid itself. The grid's own rules
+    // and pseudo-elements match against the rest.
+    let child_ancestors: Vec<AncestorInfo> = ancestors.to_vec();
+    let ancestors = ancestors.split_last().map_or(ancestors, |(_, own)| own);
     let available_width = ctx.available_width();
     // The track-sizing basis is the container's content-box width. When an
     // explicit `width` is set it wins (resolving box-sizing: a border-box
@@ -2715,16 +2720,6 @@ fn layout_grid_container_inner(
         .collect();
 
     // Compute each child's style once and remember it alongside the element.
-    let child_ancestors_base: Vec<AncestorInfo> = ancestors.to_vec();
-    let mut child_ancestors: Vec<AncestorInfo> = child_ancestors_base.clone();
-    child_ancestors.push(AncestorInfo {
-        element: el,
-        child_index: 0,
-        sibling_count: 0,
-        preceding_siblings: Vec::new(),
-        following_siblings: Vec::new(),
-        is_empty: false,
-    });
 
     let total_child_count = all_element_children.len();
     let child_siblings: Vec<(String, Vec<String>)> = all_element_children
@@ -2816,7 +2811,12 @@ fn layout_grid_container_inner(
                     continue;
                 }
 
-                if matched_display_contents(child_el, child_el.style_attr(), env.rules, ancestors) {
+                if matched_display_contents(
+                    child_el,
+                    child_el.style_attr(),
+                    env.rules,
+                    &child_ancestors,
+                ) {
                     let mut wrapper_ancestors = child_ancestors.clone();
                     wrapper_ancestors.push(AncestorInfo {
                         element: child_el,
