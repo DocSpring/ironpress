@@ -1808,7 +1808,7 @@ pub(crate) fn layout_flex_container(
             env.counter_state.leave_element(measurement_scope);
             *env.counter_state = counter_replay.clone();
             runs.as_mut_slice().resolve_unclaimed_boundaries(
-                crate::layout::elements::TextSpacing::from_style(generated_style),
+                crate::layout::text::BoundaryScope::of(generated_style, env.fonts),
             );
 
             let intrinsic = measure_text_intrinsic_widths(

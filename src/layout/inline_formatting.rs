@@ -521,8 +521,9 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
             return None;
         }
         runs.as_mut_slice()
-            .resolve_unclaimed_boundaries(super::elements::TextSpacing::from_style(
+            .resolve_unclaimed_boundaries(super::text::BoundaryScope::of(
                 self.parent_style,
+                self.fonts,
             ));
         let lines = wrap_text_runs(
             runs,

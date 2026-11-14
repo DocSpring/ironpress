@@ -2563,7 +2563,7 @@ pub(crate) fn flatten_table(
                                 &mut *resources,
                             );
                             runs.as_mut_slice().resolve_unclaimed_boundaries(
-                                crate::layout::elements::TextSpacing::from_style(&cell_style),
+                                crate::layout::text::BoundaryScope::of(&cell_style, fonts),
                             );
                             measurement_counter_state.leave_element(cell_counter_scope);
                             // Measure the same prepared styled tokens and the same
@@ -3279,7 +3279,7 @@ pub(crate) fn flatten_table(
                 },
             );
             runs.as_mut_slice().resolve_unclaimed_boundaries(
-                crate::layout::elements::TextSpacing::from_style(&cell_content_style),
+                crate::layout::text::BoundaryScope::of(&cell_content_style, fonts),
             );
             counter_state.leave_element(cell_counter_scope);
             let lines = wrap_text_runs(

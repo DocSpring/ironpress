@@ -217,9 +217,8 @@ fn inline_text_cell(
     if runs.is_empty() {
         return None;
     }
-    runs.as_mut_slice().resolve_unclaimed_boundaries(
-        crate::layout::elements::TextSpacing::from_style(parent_style),
-    );
+    runs.as_mut_slice()
+        .resolve_unclaimed_boundaries(crate::layout::text::BoundaryScope::of(parent_style, fonts));
     let lines = wrap_text_runs(
         runs,
         TextWrapOptions::new(

@@ -5609,6 +5609,52 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         assert_eq!(generated, element);
     }
 
+    #[test]
+    fn glyphs_either_side_of_an_inline_boundary_keep_their_kerning() {
+        // A colour change splits text into two paint runs, but shaping continues across it (CSS Text 3 §7.3), as
+        // Chromium shapes them: “Q kerned as one run but not across a `<span>` or a `::before`. An inline element's
+        // margin, border or padding does separate the glyphs.
+        let converter = HtmlConverter::new().compress(false).add_font(
+            "ParitySans",
+            include_bytes!("../tests/parity/fonts/ParitySans.ttf").to_vec(),
+        );
+        // The marker after a space (which kerns with nothing) starts where the content ends
+        let width = |content: &str| {
+            let html = format!(
+                r#"<style>p {{ font: 32px ParitySans }} .q::before {{ content: "“" }}</style>
+                <p>{content} <span style="color: rgb(0, 0, 200)">|</span></p>"#
+            );
+            let pdf = String::from_utf8_lossy(&converter.convert(&html).unwrap()).into_owned();
+            let starts = pdf
+                .lines()
+                .filter(|line| line.ends_with(" Tm"))
+                .map(|line| {
+                    line.split_whitespace()
+                        .nth(4)
+                        .expect("a text matrix's x")
+                        .parse::<f32>()
+                        .expect("a number")
+                })
+                .collect::<Vec<_>>();
+            let (Some(first), Some(marker)) = (starts.first(), starts.last()) else {
+                panic!("no text drawn for {content}");
+            };
+            marker - first
+        };
+        // A margin between them leaves the pair unkerned, and adds its width
+        let unkerned = width(r#"“<span style="margin-left: 3px">Q</span>"#) - 3.0;
+        let wider = width(r#"“<span style="margin-left: 6px">Q</span>"#) - 6.0;
+        assert!((wider - unkerned).abs() < 0.01);
+        let kerning = width("“Q") - unkerned;
+        assert!(kerning < -0.5, "ParitySans kerns “Q, got {kerning}");
+        for split in [
+            r#"“<span style="color: rgb(200, 0, 0)">Q</span>"#,
+            r#"<span style="color: rgb(200, 0, 0)">“</span>Q"#,
+            r#"<span class="q">Q</span>"#,
+        ] {
+            assert!((width(split) - width("“Q")).abs() < 0.01, "{split}");
+        }
+    }
 
     #[test]
     fn a_flex_item_growing_from_zero_is_as_tall_as_its_text_at_its_resolved_width() {

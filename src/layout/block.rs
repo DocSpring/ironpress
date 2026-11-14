@@ -882,7 +882,7 @@ pub(crate) fn layout_block_element(
             return;
         }
         runs.as_mut_slice()
-            .resolve_unclaimed_boundaries(crate::layout::elements::TextSpacing::from_style(style));
+            .resolve_unclaimed_boundaries(crate::layout::text::BoundaryScope::of(style, fonts));
         let shrink_to_fit = style.width.is_none()
             && style.percentage_sizing.width.is_none()
             && (style.display == Display::InlineBlock

@@ -32,7 +32,9 @@ use super::list_markers::format_counter_value;
 use super::text_emphasis::TextEmphasisMetrics;
 
 mod nested_inline;
+mod run_boundaries;
 use nested_inline::{CollectedAs, CollectorState, NestedBlock};
+pub(crate) use run_boundaries::{BoundaryScope, InlineTextSequence};
 
 fn footnote_pseudo_content(style: Option<&ComputedStyle>, marker: &str) -> Option<String> {
     let items = &style?.content;
@@ -439,46 +441,6 @@ pub(crate) fn text_run_shaping(style: &ComputedStyle) -> TextShaping {
         kerning: style.font_kerning_enabled,
     }
     .tracked(style.letter_spacing)
-}
-
-/// Resolve flattened paint-run boundaries while their nearest common inline
-/// ancestor is still known.
-///
-/// A boundary already claimed by a nested inline remains untouched when an
-/// outer scope is resolved. This preserves the CSS Text rule that tracking
-/// belongs to the innermost element containing both typographic units.
-pub(crate) trait InlineTextSequence {
-    fn resolve_unclaimed_boundaries(&mut self, spacing: crate::layout::elements::TextSpacing);
-}
-
-impl InlineTextSequence for [TextRun] {
-    fn resolve_unclaimed_boundaries(&mut self, spacing: crate::layout::elements::TextSpacing) {
-        let mut previous: Option<usize> = None;
-        for current in 0..self.len() {
-            if self[current].forces_line_break() {
-                previous = None;
-                continue;
-            }
-            if !self[current].has_typographic_unit() {
-                continue;
-            }
-            if let Some(previous_index) = previous {
-                let (before, after) = self.split_at_mut(current);
-                let previous_run = &mut before[previous_index];
-                let current_run = &after[0];
-                let advance = if previous_run.joins_typographically(current_run) {
-                    spacing.letter
-                } else {
-                    Default::default()
-                };
-                previous_run
-                    .metadata
-                    .boundary
-                    .resolve_letter_spacing(advance);
-            }
-            previous = Some(current);
-        }
-    }
 }
 
 fn is_drop_cap_marker_run(run: &TextRun) -> bool {
@@ -3453,9 +3415,8 @@ impl<'a> InlineRunCollector<'a> {
             &mut self.next_inline_decoration,
         );
         let boundary_start = first_new_run.saturating_sub(1);
-        runs[boundary_start..].resolve_unclaimed_boundaries(
-            crate::layout::elements::TextSpacing::from_style(parent_style),
-        );
+        runs[boundary_start..]
+            .resolve_unclaimed_boundaries(BoundaryScope::of(parent_style, self.fonts));
     }
 
     pub(crate) fn collect_box_content(
@@ -3922,9 +3883,8 @@ fn collect_text_runs_inner(
                         );
                         apply_inline_parent_background(runs, element_start, &style, decoration_id);
                         resolve_target_attrs(&mut runs[element_start..], el);
-                        runs[element_start..].resolve_unclaimed_boundaries(
-                            crate::layout::elements::TextSpacing::from_style(&style),
-                        );
+                        runs[element_start..]
+                            .resolve_unclaimed_boundaries(BoundaryScope::of(&style, fonts));
                         counter_state.leave_element(counter_scope);
                     }
                 }
@@ -3932,9 +3892,7 @@ fn collect_text_runs_inner(
         }
     }
     sequence.append_after(runs, fonts, counter_state, resources);
-    runs[first_run..].resolve_unclaimed_boundaries(
-        crate::layout::elements::TextSpacing::from_style(parent_style),
-    );
+    runs[first_run..].resolve_unclaimed_boundaries(BoundaryScope::of(parent_style, fonts));
 }
 
 #[cfg(test)]
@@ -5049,7 +5007,9 @@ mod indent_tests {
         let mut runs = vec![parity_run("A"), parity_run("B")];
 
         runs.as_mut_slice()
-            .resolve_unclaimed_boundaries(crate::layout::elements::TextSpacing::new(0.7, 0.0));
+            .resolve_unclaimed_boundaries(BoundaryScope::tracking(
+                crate::layout::elements::TextSpacing::new(0.7, 0.0),
+            ));
 
         assert_eq!(runs[0].metadata.boundary.total(), 0.7);
         assert_eq!(runs[1].metadata.boundary.total(), 0.0);
@@ -5064,10 +5024,13 @@ mod indent_tests {
             parity_run("D"),
         ];
 
-        runs[1..3]
-            .resolve_unclaimed_boundaries(crate::layout::elements::TextSpacing::new(2.0, 0.0));
+        runs[1..3].resolve_unclaimed_boundaries(BoundaryScope::tracking(
+            crate::layout::elements::TextSpacing::new(2.0, 0.0),
+        ));
         runs.as_mut_slice()
-            .resolve_unclaimed_boundaries(crate::layout::elements::TextSpacing::new(1.0, 0.0));
+            .resolve_unclaimed_boundaries(BoundaryScope::tracking(
+                crate::layout::elements::TextSpacing::new(1.0, 0.0),
+            ));
 
         assert_eq!(runs[0].metadata.boundary.total(), 1.0);
         assert_eq!(runs[1].metadata.boundary.total(), 2.0);
