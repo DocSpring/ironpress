@@ -1,3 +1,5 @@
+mod direct_text;
+
 use crate::layout::elements::{
     BlockSize, BoxPaint, Container, FlexContent, FlexRow, InlineSize, IntoLayoutNode,
     LayoutElement, LayoutNode, LayoutVisitor, LayoutVisitorMut, PageBreak, Positioning,
@@ -2963,6 +2965,57 @@ pub(crate) fn layout_flex_container(
         }
     }
 
+    // css-flexbox-1 §9.7 comes before §9.4: an item whose own text was wrapped at its flex base width takes the
+    // height of its lines at its resolved width before each line takes its cross size from its items' heights.
+    if direction.is_row() {
+        for line in &mut lines {
+            let total_gap = line.item_indices.len().saturating_sub(1) as f32 * gap;
+            let mut lengths = line
+                .item_indices
+                .iter()
+                .map(|&index| {
+                    let item = &items[index];
+                    FlexibleLength::new(
+                        item.base_width,
+                        item.main_decorations,
+                        item.main_constraints,
+                        item.flex_grow,
+                        item.flex_shrink,
+                        item.margin_main_start + item.margin_main_end,
+                    )
+                })
+                .collect::<Vec<_>>();
+            resolve_flexible_lengths(&mut lengths, (inner_width - total_gap).max(0.0));
+            for (&index, resolved) in line.item_indices.iter().zip(lengths) {
+                let item = &mut items[index];
+                if item.uses_general_layout || equal_with_roundoff(resolved.target, item.base_width)
+                {
+                    continue;
+                }
+                let Some(ElementFlexItemIndex(child_idx)) = item.source.element else {
+                    continue;
+                };
+                let live_counters = env.counter_state.clone();
+                *env.counter_state = item.source.counter_replay.clone();
+                direct_text::relayout_direct_text_item(
+                    item,
+                    child_elements[child_idx],
+                    &flex_child_positions[child_idx],
+                    ancestors,
+                    &parent_for_children,
+                    resolved.target,
+                    env,
+                );
+                *env.counter_state = live_counters;
+            }
+            line.cross_size = line
+                .item_indices
+                .iter()
+                .map(|&index| items[index].height)
+                .fold(0.0, f32::max);
+        }
+    }
+
     // Compute container dimensions
     let total_cross: f32 = if direction.is_row() {
         lines.iter().map(|l| l.cross_size).sum::<f32>()
@@ -3654,118 +3707,15 @@ pub(crate) fn layout_flex_container(
                                 }
                             }
                         } else {
-                            let relayout_classes = child_el.class_list();
-                            let relayout_selector_ctx = flex_child_positions[child_idx]
-                                .as_context()
-                                .selector_context(ancestors, child_el.children.is_empty());
-                            let relayout_child_style = compute_style_with_context_with_font_metrics(
-                                child_el.tag,
-                                child_el.style_attr(),
-                                &parent_for_children,
-                                env.rules,
-                                child_el.tag_name(),
-                                &relayout_classes,
-                                child_el.id(),
-                                &child_el.attributes,
-                                &relayout_selector_ctx,
-                                env.font_metrics(),
-                            );
-                            let relayout_generated_styles = GeneratedContentStyles::resolve(
+                            direct_text::relayout_direct_text_item(
+                                &mut items[i],
                                 child_el,
-                                &relayout_child_style,
-                                env.rules,
-                                &relayout_selector_ctx,
-                                env.fonts,
+                                &flex_child_positions[child_idx],
+                                ancestors,
+                                &parent_for_children,
+                                final_w,
+                                env,
                             );
-                            let mut runs = Vec::new();
-                            let mut relayout_ancestors = ancestors.to_vec();
-                            relayout_ancestors.push(
-                                flex_child_positions[child_idx]
-                                    .ancestor(child_el, child_el.children.is_empty()),
-                            );
-                            let counter_scope =
-                                env.counter_state.enter_element(&relayout_child_style);
-                            InlineRunCollector::new(
-                                env.rules,
-                                env.fonts,
-                                env.counter_state,
-                                &mut *env.resources,
-                            )
-                            .collect(
-                                InlineContentSequence::with_generated(
-                                    &child_el.children,
-                                    relayout_generated_styles.boxes(child_el),
-                                ),
-                                &relayout_child_style,
-                                &mut runs,
-                                None,
-                                &relayout_ancestors,
-                            );
-                            env.counter_state.leave_element(counter_scope);
-                            let content_w = (final_w
-                                - relayout_child_style.padding.horizontal()
-                                - relayout_child_style.border.horizontal_width())
-                            .max(0.0);
-                            let lines = if runs.is_empty() {
-                                Vec::new()
-                            } else {
-                                wrap_text_runs(
-                                    runs,
-                                    TextWrapOptions::new(
-                                        content_w,
-                                        used_font_size(&relayout_child_style, env.fonts),
-                                        text_run_line_height_factor(
-                                            &relayout_child_style,
-                                            env.fonts,
-                                        ),
-                                        relayout_child_style.overflow_wrap,
-                                    )
-                                    .with_white_space(relayout_child_style.white_space)
-                                    .with_parent_strut(parent_line_strut(
-                                        &relayout_child_style,
-                                        env.fonts,
-                                    ))
-                                    .with_rtl(relayout_child_style.direction_rtl)
-                                    .with_bidi_override(relayout_child_style.bidi_override),
-                                    env.fonts,
-                                )
-                            };
-                            let text_h: f32 = lines.iter().map(|l| l.height).sum();
-                            let mut border_box_h = resolve_padding_box_height(
-                                text_h,
-                                relayout_child_style.height,
-                                relayout_child_style.padding,
-                                relayout_child_style.border.widths(),
-                                relayout_child_style.box_sizing,
-                            ) + relayout_child_style.border.vertical_width();
-                            if relayout_child_style.height.is_none() {
-                                if let Some(ratio) = relayout_child_style.aspect_ratio {
-                                    if ratio > 0.0 {
-                                        border_box_h = border_box_h.max(final_w / ratio);
-                                    }
-                                }
-                            }
-                            if let Some(element) = items[i].elements.first_mut() {
-                                let height = (relayout_child_style.height.is_some()
-                                    || relayout_child_style.aspect_ratio.is_some())
-                                .then(|| {
-                                    (border_box_h - relayout_child_style.border.vertical_width())
-                                        .max(0.0)
-                                });
-                                let clip_height = relayout_child_style
-                                    .overflow
-                                    .clips()
-                                    .then_some(border_box_h);
-                                update_text_block_layout(
-                                    element.as_mut(),
-                                    Some(lines),
-                                    final_w,
-                                    height,
-                                    clip_height,
-                                );
-                            }
-                            items[i].height = border_box_h + relayout_child_style.margin.vertical();
-                            items[i].natural_height = items[i].height;
                         }
                         *env.counter_state = live_counters;
                     }

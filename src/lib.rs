@@ -5610,6 +5610,27 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn a_flex_item_growing_from_zero_is_as_tall_as_its_text_at_its_resolved_width() {
+        // `flex: 1` (a zero basis) wrapped the item's own text at the basis width, a word to a line, and the flex
+        // line kept that height after the text was wrapped again at the item's resolved width
+        let converter = HtmlConverter::new().compress(false);
+        let text_positions = |flex: &str| {
+            let html = format!(
+                r#"<div style="display: flex"><div style="flex: {flex}">one two three</div></div><p>After</p>"#
+            );
+            let pdf = String::from_utf8_lossy(&converter.convert(&html).unwrap()).into_owned();
+            pdf.lines()
+                .filter(|line| line.ends_with(" Tm"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let content_basis = text_positions("1 1 auto");
+        assert_eq!(content_basis.len(), 2);
+        assert_eq!(text_positions("1"), content_basis);
+        assert_eq!(text_positions("1 1 0"), content_basis);
+    }
+
+    #[test]
     fn a_grid_container_is_its_items_ancestor_once() {
         // Grid layout added the container to the ancestry its callers had already added it to, so `.g .g .g`
         // matched the second of two nested grids
