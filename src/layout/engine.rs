@@ -32,8 +32,8 @@ pub(crate) use super::elements::{
     FlexRow, GridRow, HorizontalRule, Image, ImagePaint, ImageSampling, IntoLayoutNode,
     LayoutElement, LayoutNode, LayoutSize, LayoutVisitor, LayoutVisitorMut, LineFragmentation,
     MathBlock, NamedString, PageBreak, Positioning, ProgressBar, ReplacedContent, ReplacedFragment,
-    ReplacedGeometry, RunningElement, Svg, SvgPaint, TableRow, TextBlock, TextBlockStyle,
-    TextFragmentation, TextSpacing, visit_layout_tree, visit_layout_tree_mut,
+    ReplacedGeometry, RunningElement, TableRow, TextBlock, TextBlockStyle, TextFragmentation,
+    TextSpacing, visit_layout_tree, visit_layout_tree_mut,
 };
 use super::flex::layout_flex_container;
 pub(crate) use super::flow_metrics::BlockMargins;
@@ -3793,65 +3793,15 @@ fn flatten_element_with_running_mode(
         }
 
         if el.tag == HtmlTag::Svg {
-            let (mut svg_width, mut svg_height) =
-                resolve_svg_element_size(el, available_width, available_height, true, true);
-            if let Some(width) = style.width {
-                svg_width = width;
-            }
-            if let Some(height) = style.height {
-                svg_height = height;
-            }
-            // Resolve the SVG's children against its *user-unit* viewport (the native
-            // width/height in CSS px) rather than the pt display box. The render path
-            // scales the whole drawing from this native extent into the pt box (see
-            // `SvgSourceBox::from_tree`), so absolute and percentage child coordinates
-            // must share that native coordinate system; otherwise `%` children would
-            // resolve against the pt box and then be scaled again. Falls back to the
-            // resolved pt size when the root dimensions are `%`/auto (no native px).
-            let child_viewport = {
-                let native_w = el
-                    .attributes
-                    .get("width")
-                    .and_then(|w| crate::parser::svg::parse_absolute_length(w))
-                    .filter(|v| *v > 0.0);
-                let native_h = el
-                    .attributes
-                    .get("height")
-                    .and_then(|h| crate::parser::svg::parse_absolute_length(h))
-                    .filter(|v| *v > 0.0);
-                match (native_w, native_h) {
-                    (Some(w), Some(h)) => (w, h),
-                    _ => (svg_width, svg_height),
-                }
-            };
-            if let Some(mut tree) =
-                crate::parser::svg::parse_svg_from_element_with_viewport(el, Some(child_viewport))
+            if let Some(svg) =
+                super::images::svg_element_node(el, &style, available_width, available_height)
             {
-                sync_svg_tree_to_layout_box(&mut tree, svg_width, svg_height);
-                inject_inherited_svg_color(&mut tree, style.color);
-                output.push(
-                    Svg {
-                        tree,
-                        geometry: ReplacedGeometry::new(
-                            Size::new(svg_width, svg_height),
-                            BlockMargins::new(style.margin.top, style.margin.bottom),
-                            LayoutBorder::from_computed(&style.border, style.color),
-                        ),
-                        positioning: Positioning::from_style(&style),
-                        paint: SvgPaint {
-                            background_color: style.background_color,
-                            border_image: style.border_image.paint(),
-                            border_radii: style.resolve_corner_radii(svg_width, svg_height),
-                            group: super::elements::PaintGroup::from_style(&style),
-                        },
-                        replaced: ReplacedContent {
-                            object_fit: style.object_fit,
-                            object_position: style.object_position,
-                            ..Default::default()
-                        },
-                    }
-                    .boxed(),
-                );
+                output.push(add_inline_replaced_baseline_gap(
+                    svg,
+                    &style,
+                    env.fonts,
+                    InlineBaselineGapRounding::Fractional,
+                ));
             }
             return;
         }
@@ -5387,7 +5337,7 @@ pub(crate) use super::paginate::estimate_element_height;
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
-    use crate::layout::elements::{BoxPaint, LayoutElementTestExt};
+    use crate::layout::elements::{BoxPaint, LayoutElementTestExt, Svg};
     use crate::parser::css::{parse_page_rules, parse_stylesheet};
     use crate::parser::html::{parse_html, parse_html_with_styles};
     use crate::style::computed::{FootnoteDisplay, FootnotePolicy};
@@ -5964,19 +5914,23 @@ mod tests {
         let html = r#"<svg width="200" height="100" viewBox="0 0 20 10"><rect width="10" height="10"/></svg>"#;
         let nodes = parse_html(html).unwrap();
         let pages = layout(&nodes, PageSize::A4, Margin::default());
-        let svg = pages[0]
-            .elements
-            .iter()
-            .find_map(|(_, element)| {
-                element.inspect_svg(|svg| {
+        struct FirstSvg(Option<(crate::parser::svg::SvgTree, f32, f32)>);
+        impl LayoutVisitor for FirstSvg {
+            fn visit_svg(&mut self, svg: &Svg) {
+                self.0.get_or_insert_with(|| {
                     (
                         svg.tree.clone(),
                         svg.geometry.size.width,
                         svg.geometry.size.height,
                     )
-                })
-            })
-            .expect("expected svg layout element");
+                });
+            }
+        }
+        let mut first = FirstSvg(None);
+        for (_, element) in &pages[0].elements {
+            visit_layout_tree(element.as_ref(), &mut first);
+        }
+        let svg = first.0.expect("expected svg layout element");
         assert_eq!(svg.1, 150.0); // 200px = 150pt
         assert_eq!(svg.2, 75.0); // 100px = 75pt
         assert!(
@@ -5987,14 +5941,21 @@ mod tests {
 
     #[test]
     fn inline_svg_inherits_document_color_for_current_color() {
+        struct FirstSvgTree(Option<crate::parser::svg::SvgTree>);
+        impl LayoutVisitor for FirstSvgTree {
+            fn visit_svg(&mut self, svg: &Svg) {
+                self.0.get_or_insert_with(|| svg.tree.clone());
+            }
+        }
+
         let html = r#"<div style="color: #336699"><svg width="20" height="10"><rect width="10" height="10" fill="currentColor"/></svg></div>"#;
         let nodes = parse_html(html).unwrap();
         let pages = layout(&nodes, PageSize::A4, Margin::default());
-        let tree = pages[0]
-            .elements
-            .iter()
-            .find_map(|(_, element)| element.inspect_svg(|svg| svg.tree.clone()))
-            .expect("expected svg layout element");
+        let mut first = FirstSvgTree(None);
+        for (_, element) in &pages[0].elements {
+            visit_layout_tree(element.as_ref(), &mut first);
+        }
+        let tree = first.0.expect("expected svg layout element");
 
         match &tree.children[0] {
             crate::parser::svg::SvgNode::Group {

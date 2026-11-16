@@ -120,13 +120,9 @@ pub(crate) fn load_image_from_element(
 ) -> Option<LayoutNode> {
     let image = match decode_element_image(resources, el)? {
         ElementImage::Svg(tree) => {
-            return Some(svg_image_node(
-                *tree,
-                el,
-                available_width,
-                available_height,
-                style,
-            ));
+            return Some(
+                svg_image_box(*tree, el, available_width, available_height, style).boxed(),
+            );
         }
         ElementImage::Raster(image) => image,
     };
@@ -192,13 +188,14 @@ pub(crate) fn decode_element_image(
     load_image_bytes(raw).map(ElementImage::Raster)
 }
 
-fn svg_image_node(
+/// The replaced box of an `<img>` element whose source is an SVG document.
+pub(crate) fn svg_image_box(
     mut tree: crate::parser::svg::SvgTree,
     el: &ElementNode,
     available_width: f32,
     available_height: f32,
     style: &ComputedStyle,
-) -> LayoutNode {
+) -> Svg {
     let intrinsic = resolve_svg_size(&tree, available_width, available_height, false, false);
     let html_attr_width = style
         .width
@@ -249,7 +246,6 @@ fn svg_image_node(
             ..Default::default()
         },
     }
-    .boxed()
 }
 
 /// The border-box size of an `<img>` element showing a raster image: its CSS width and height, else its `width` and

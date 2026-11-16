@@ -3315,6 +3315,7 @@ fn build_inline_box(
         baseline_ascent,
         lines,
         image: None,
+        svg: None,
         // CSS `position: relative` shifts the painted box without changing its
         // in-flow inline slot. `left`/`top` win over `right`/`bottom`.
         rel_offset_x: if style.position.is_relative() {
@@ -3597,9 +3598,20 @@ fn collect_text_runs_inner(
                     CollectedAs::Skipped => continue,
                     CollectedAs::Image => {
                         if let Some(boxed) = nested_inline::image_box(el, &style, resources) {
+                            // The inline element's background covers its content
+                            // area behind a replaced box too, as behind its text.
+                            let (background_color, padding) =
+                                if inline_parent && parent_style.white_space != WhiteSpace::Pre {
+                                    let background = parent_style.background_color;
+                                    (background, decoration_padding(parent_style, background))
+                                } else {
+                                    (None, EdgeSizes::ZERO)
+                                };
                             runs.push(TextRun {
                                 font_size: used_font_size(parent_style, fonts),
                                 color: parent_style.color,
+                                background_color,
+                                padding,
                                 link_url: link_url.map(String::from),
                                 font_family: resolve_style_font_family(parent_style, fonts),
                                 line_height_factor: text_run_line_height_factor(

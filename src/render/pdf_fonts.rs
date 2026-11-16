@@ -482,6 +482,9 @@ fn collect_font_usage_from_run(
     // the box renders with missing glyphs. The run's own `text` is empty.
     if let Some(inline) = run.inline_box.as_deref() {
         collect_font_usage_from_lines(&inline.lines, custom_fonts, usage);
+        if let Some(svg) = &inline.svg {
+            collect_font_usage_from_svg(&svg.tree, custom_fonts, usage);
+        }
         return;
     }
 

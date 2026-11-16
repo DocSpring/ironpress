@@ -2600,7 +2600,11 @@ impl LayoutVisitor for ElementFlowGeometry {
 
     fn visit_flex_row(&mut self, element: &FlexRow) {
         let content_height = element.box_model.padding.vertical()
-            + element.content.row_height
+            + element
+                .box_model
+                .size
+                .height
+                .resolve(element.content.row_height)
             + element.box_model.border.vertical_width();
         self.set(content_height, element.box_model.margins);
     }

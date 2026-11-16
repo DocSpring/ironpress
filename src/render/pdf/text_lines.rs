@@ -248,6 +248,24 @@ pub(super) fn render_inline_box(
         });
     }
 
+    if let Some(svg) = &inline.svg {
+        super::svg_drawing::draw_svg_in_box(
+            content,
+            &svg.tree,
+            svg.replaced,
+            paint_geometry.content_box(),
+            super::svg_drawing::SvgDrawResources {
+                shadings: page_shadings,
+                shading_counter,
+                ext_gstates: page_ext_gstates,
+                pdf_writer,
+                page_images,
+                custom_fonts,
+                prepared_custom_fonts,
+            },
+        );
+    }
+
     // Border (drawn inside the border box, matching border-box sizing).
     paint_box_decoration(
         content,

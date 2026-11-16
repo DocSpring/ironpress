@@ -84,6 +84,7 @@ mod raster_placement;
 mod resources;
 mod shadows;
 mod stacking;
+mod svg_drawing;
 mod table_borders;
 mod text_baselines;
 mod text_lines;

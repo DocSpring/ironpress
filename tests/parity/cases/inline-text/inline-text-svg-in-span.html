@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>inline SVG in a span and between words sits in its line</title>
+<style>
+  @page { size: 320px 144px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  span { background: #e8eefb; }
+  p + p { margin-top: 8px; }
+</style>
+</head>
+<body>
+  <p>Icon <span>in <svg width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#1f4fa8"/><circle cx="12" cy="12" r="6" fill="#ffffff"/></svg> a span</span> after</p>
+  <p>Between <svg width="40" height="16"><rect width="40" height="16" fill="#ad1457"/></svg> words</p>
+  <div><svg width="32" height="32"><circle cx="16" cy="16" r="16" fill="#2e7d32"/></svg></div>
+</body>
+</html>

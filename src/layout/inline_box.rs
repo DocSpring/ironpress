@@ -52,6 +52,13 @@ pub struct GaugeFill {
     pub color: Color,
 }
 
+/// An inline `<svg>`'s drawing and how it fits its box.
+#[derive(Debug, Clone)]
+pub(crate) struct InlineSvg {
+    pub(crate) tree: crate::parser::svg::SvgTree,
+    pub(crate) replaced: crate::layout::elements::ReplacedContent,
+}
+
 /// An atomic inline-level box laid out inside a line of text.
 #[derive(Debug, Clone, Default)]
 pub struct InlineBox {
@@ -72,6 +79,8 @@ pub struct InlineBox {
     pub lines: Vec<TextLine>,
     /// Replaced content painted into the content box.
     pub image: Option<RasterImageAsset>,
+    /// An inline `<svg>` drawn into the content box.
+    pub(crate) svg: Option<Box<InlineSvg>>,
     /// CSS relative-position paint offset (right, down) in points.
     pub rel_offset_x: f32,
     pub rel_offset_y: f32,

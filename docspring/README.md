@@ -54,6 +54,7 @@ includes them, then goes back to the upstream packages.
 | Pair kerning continues across inline boundaries that change only paint (a `<span>` with a colour, `::before` content), as Chromium shapes text: `“<span>Q</span>` was wider than `“Q`. A margin, border or padding between the glyphs still separates them. Right-to-left text doesn't kern across a boundary yet | Not sent yet (`docspring-1.7.0.8`) |
 | A document wider than the page shrinks to fit as Chromium prints it: lines of text that overflow their box and flex items wider than their row count towards its width (a box that clips its overflow keeps it inside), and the document is laid out again at the wider page, up to one and a half times as wide, before it is scaled down, so text wraps where Chromium wraps it | Not sent yet (`docspring-1.7.0.8`) |
 | The first child's top margin collapses through `<body>` only when the body has no top padding or border: with body padding, the margin was dropped and the child sat at the top of the padding | Not sent yet (`docspring-1.7.0.8`) |
+| An inline `<svg>`, or an `<img>` with an SVG source, inside a `<span>` is drawn in its line, and the span's background is painted behind it. A line of inline boxes in a block with a definite `height` keeps that height | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the

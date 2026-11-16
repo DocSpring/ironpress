@@ -347,6 +347,20 @@ pub(super) fn render_text_block_lines(
                 let ibx = bg_x + inline.margin_left;
                 let run_line_height = run_line_height_for_vertical_align(run);
                 if !run.is_inline_edge() {
+                    // The inline element around a replaced box paints its
+                    // background behind the box, across the box's advance.
+                    paint_inline_background(
+                        content,
+                        run,
+                        InlineBackgroundSpan {
+                            left: bg_x,
+                            width: run.atomic_inline_advance().unwrap_or_default(),
+                            text_y,
+                            element_opacity: *opacity,
+                            restore_gstate: needs_opacity.then(|| format!("GS{elem_idx}")),
+                        },
+                        ctx,
+                    );
                     if inline.rel_offset_x != 0.0 || inline.rel_offset_y != 0.0 {
                         deferred_inline.push((inline, ibx, run.font_size, run_line_height));
                     } else {
@@ -386,37 +400,18 @@ pub(super) fn render_text_block_lines(
                 estimate_run_width_with_fonts(run, ctx.text.custom_fonts)
             };
             // Draw background rectangle for inline spans
-            if let Some(background) = run.background_color {
-                let (br, bg, bb, ba) = background.to_f32_rgba();
-                let needs_inline_bg_alpha = ba < 1.0;
-                if needs_inline_bg_alpha {
-                    let effective_alpha = ba * *opacity;
-                    let gs_name = format!("GSba{}", ctx.bg_alpha_counter);
-                    *ctx.bg_alpha_counter += 1;
-                    ctx.page_ext_gstates
-                        .push((gs_name.clone(), effective_alpha));
-                    content.push_str(&format!("/{gs_name} gs\n"));
-                }
-                let rect_x = bg_x - run.padding.left;
-                let rect_w = run_width + run.padding.horizontal();
-                let (rect_y, rect_h) =
-                    inline_background_y_and_height(run, text_y, run.padding, ctx.text.custom_fonts);
-                content.push_str(&format!("{br} {bg} {bb} rg\n"));
-                content.push_str(
-                    &PdfRect::new(rect_x, rect_y, rect_w, rect_h)
-                        .rounded(run.border_radii)
-                        .path_or_rect(),
-                );
-                content.push_str("f\n");
-                if needs_inline_bg_alpha {
-                    if needs_opacity {
-                        let gs_name = format!("GS{elem_idx}");
-                        content.push_str(&format!("/{gs_name} gs\n"));
-                    } else {
-                        content.push_str("/GSDefault gs\n");
-                    }
-                }
-            }
+            paint_inline_background(
+                content,
+                run,
+                InlineBackgroundSpan {
+                    left: bg_x - run.padding.left,
+                    width: run_width + run.padding.horizontal(),
+                    text_y,
+                    element_opacity: *opacity,
+                    restore_gstate: needs_opacity.then(|| format!("GS{elem_idx}")),
+                },
+                ctx,
+            );
 
             if vertical {
                 let previous = merged[..run_idx]
@@ -587,5 +582,51 @@ pub(super) fn render_text_block_lines(
     // line loop (scoped to glyph drawing only).
     if vertical {
         content.push_str("Q\n");
+    }
+}
+
+/// Where an inline element's background goes for one run of a line.
+struct InlineBackgroundSpan {
+    left: f32,
+    width: f32,
+    text_y: f32,
+    /// The text block's opacity, which a translucent background multiplies.
+    element_opacity: f32,
+    /// The graphics state to restore after a translucent background: the text
+    /// block's opacity state, or the default one.
+    restore_gstate: Option<String>,
+}
+
+/// Paint `run`'s inline background, if it has one, over `span`.
+fn paint_inline_background(
+    content: &mut String,
+    run: &crate::layout::engine::TextRun,
+    span: InlineBackgroundSpan,
+    ctx: &mut PageRenderContext<'_>,
+) {
+    let Some(background) = run.background_color else {
+        return;
+    };
+    let (br, bg, bb, ba) = background.to_f32_rgba();
+    let needs_inline_bg_alpha = ba < 1.0;
+    if needs_inline_bg_alpha {
+        let gs_name = format!("GSba{}", ctx.bg_alpha_counter);
+        *ctx.bg_alpha_counter += 1;
+        ctx.page_ext_gstates
+            .push((gs_name.clone(), ba * span.element_opacity));
+        content.push_str(&format!("/{gs_name} gs\n"));
+    }
+    let (rect_y, rect_h) =
+        inline_background_y_and_height(run, span.text_y, run.padding, ctx.text.custom_fonts);
+    content.push_str(&format!("{br} {bg} {bb} rg\n"));
+    content.push_str(
+        &PdfRect::new(span.left, rect_y, span.width, rect_h)
+            .rounded(run.border_radii)
+            .path_or_rect(),
+    );
+    content.push_str("f\n");
+    if needs_inline_bg_alpha {
+        let restore = span.restore_gstate.as_deref().unwrap_or("GSDefault");
+        content.push_str(&format!("/{restore} gs\n"));
     }
 }

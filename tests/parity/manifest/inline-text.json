@@ -739,5 +739,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "inline-text-svg-in-span",
+    "category": "inline-text",
+    "feature": "inline-replaced",
+    "subfeature": "inline-svg",
+    "description": "An inline svg inside a span, one between words and one alone in a block are replaced boxes in their lines: they sit on the baseline beside the text, and the lone one leaves room for descenders below it.",
+    "file": "cases/inline-text/inline-text-svg-in-span.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-text-baseline", "probe-fill-box"]
   }
 ]

@@ -679,6 +679,8 @@ impl InlineFormattingChildren {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AtomicInlineKind {
     ReplacedImage,
+    /// An inline `<svg>`, a replaced element like an image (HTML §15.4.1).
+    ReplacedSvg,
     InlineBlock,
     InlineFlex,
     InlineGrid,
@@ -715,10 +717,6 @@ impl InlineFormattingRole {
         if style.position.is_absolute() {
             return Self::OutOfFlow;
         }
-        if element.tag == HtmlTag::Svg {
-            return Self::Outside;
-        }
-
         let inline_level = matches!(
             style.display,
             Display::Inline
@@ -729,6 +727,13 @@ impl InlineFormattingRole {
         );
         if element.tag == HtmlTag::Img && inline_level {
             return Self::Atomic(AtomicInlineKind::ReplacedImage);
+        }
+        if element.tag == HtmlTag::Svg {
+            return if inline_level {
+                Self::Atomic(AtomicInlineKind::ReplacedSvg)
+            } else {
+                Self::Outside
+            };
         }
 
         match style.display {

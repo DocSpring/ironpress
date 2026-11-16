@@ -36,7 +36,9 @@ impl InlineFormattingContext<'_> {
             .zip(children.iter())
             .all(|(element, child)| match child.role {
                 InlineFormattingRole::Hidden
-                | InlineFormattingRole::Atomic(AtomicInlineKind::ReplacedImage) => true,
+                | InlineFormattingRole::Atomic(
+                    AtomicInlineKind::ReplacedImage | AtomicInlineKind::ReplacedSvg,
+                ) => true,
                 InlineFormattingRole::Text
                 | InlineFormattingRole::Atomic(AtomicInlineKind::InlineBlock) => {
                     inner.holds_only_inline_content(element, child)

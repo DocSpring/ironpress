@@ -328,54 +328,21 @@ pub(in crate::render::pdf) fn paint_svg_box(
         );
     }
 
-    let svg_content = paint_geometry.padding_box();
-    let content_w = svg_content.width;
-    let content_h = svg_content.height;
-    content.push_str("q\n");
-    // Position on page and flip y-axis for SVG coordinates
-    content.push_str(&format!(
-        "1 0 0 -1 {} {} cm\n",
-        svg_content.left,
-        svg_content.top()
-    ));
-    if let Some(placement) = crate::render::svg_geometry::compute_replaced_svg_placement(
+    crate::render::pdf::svg_drawing::draw_svg_in_box(
+        content,
         &element.tree,
-        crate::types::Size::new(content_w, content_h),
         element.replaced,
-    ) {
-        content.push_str("q\n");
-        content.push_str(&format!("0 0 {content_w} {content_h} re\nW n\n"));
-        content.push_str(&format!(
-            "{sx} 0 0 {sy} {tx} {ty} cm\n",
-            sx = placement.scale_x,
-            sy = placement.scale_y,
-            tx = placement.translate_x,
-            ty = placement.translate_y,
-        ));
-        {
-            let mut image_sink = SvgPageImageSink {
-                pdf_writer: ctx.text.pdf_writer,
-                page_images: ctx.text.page_images,
-            };
-            let mut resources = crate::render::svg_to_pdf::SvgPdfResources {
-                shadings: ctx.shadings,
-                shading_counter: ctx.shading_counter,
-                ext_gstates: Some(ctx.page_ext_gstates),
-                image_sink: Some(&mut image_sink),
-                raster_scale_x: placement.scale_x.abs(),
-                raster_scale_y: placement.scale_y.abs(),
-                custom_fonts: Some(ctx.text.custom_fonts),
-                prepared_custom_fonts: Some(ctx.text.prepared_custom_fonts),
-            };
-            crate::render::svg_to_pdf::render_svg_tree_with_resources(
-                &element.tree,
-                content,
-                &mut resources,
-            );
-        }
-        content.push_str("Q\n");
-    }
-    content.push_str("Q\n");
+        paint_geometry.padding_box(),
+        crate::render::pdf::svg_drawing::SvgDrawResources {
+            shadings: ctx.shadings,
+            shading_counter: ctx.shading_counter,
+            ext_gstates: ctx.page_ext_gstates,
+            pdf_writer: ctx.text.pdf_writer,
+            page_images: ctx.text.page_images,
+            custom_fonts: ctx.text.custom_fonts,
+            prepared_custom_fonts: ctx.text.prepared_custom_fonts,
+        },
+    );
     paint_box_decoration(
         content,
         fragment_geometry,

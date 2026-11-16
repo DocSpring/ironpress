@@ -354,8 +354,18 @@ fn inline_atomic_cell(
     // Replacedness is independent of whether the outer display was authored as
     // `inline` or `inline-block`. Keep the regular image path as the single
     // source of sizing, filtering, object fitting, and baseline behavior.
-    if kind == AtomicInlineKind::ReplacedImage {
-        let mut replaced = add_inline_replaced_baseline_gap(
+    if matches!(
+        kind,
+        AtomicInlineKind::ReplacedImage | AtomicInlineKind::ReplacedSvg
+    ) {
+        let element = if kind == AtomicInlineKind::ReplacedSvg {
+            super::images::svg_element_node(
+                child_el,
+                child_style,
+                ctx.available_width(),
+                ctx.available_height(),
+            )?
+        } else {
             load_image_from_element(
                 &mut *env.resources,
                 child_el,
@@ -363,7 +373,10 @@ fn inline_atomic_cell(
                 ctx.available_height(),
                 child_style,
                 env.filter_dpi,
-            )?,
+            )?
+        };
+        let mut replaced = add_inline_replaced_baseline_gap(
+            element,
             child_style,
             env.fonts,
             InlineBaselineGapRounding::CssPixel,
@@ -929,7 +942,17 @@ pub(crate) fn layout_inline_mixed_sequence_with_env(
             ..Default::default()
         },
         crate::layout::elements::BoxModel {
-            size: crate::layout::elements::LayoutSize::fixed(container_width, parent_style.height),
+            size: crate::layout::elements::LayoutSize::fixed(
+                container_width,
+                parent_style.height.map(|height| {
+                    crate::layout::helpers::resolve_content_box_height(
+                        height,
+                        padding,
+                        parent_style.border.widths(),
+                        parent_style.box_sizing,
+                    )
+                }),
+            ),
             margins: BlockMargins::new(parent_style.margin.top, parent_style.margin.bottom),
             padding,
             border: parent_border,

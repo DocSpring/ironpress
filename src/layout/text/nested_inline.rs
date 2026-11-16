@@ -51,7 +51,9 @@ impl CollectedAs {
             return Self::Skipped;
         }
         match role {
-            InlineFormattingRole::Atomic(AtomicInlineKind::ReplacedImage) => Self::Image,
+            InlineFormattingRole::Atomic(
+                AtomicInlineKind::ReplacedImage | AtomicInlineKind::ReplacedSvg,
+            ) => Self::Image,
             InlineFormattingRole::Atomic(_) => Self::Runs,
             InlineFormattingRole::Outside if element.tag == HtmlTag::Svg => Self::Skipped,
             InlineFormattingRole::Outside if matches!(style.float, Float::Left | Float::Right) => {
@@ -142,15 +144,29 @@ pub(super) fn collect_block_lines(
     }
 }
 
-/// An `<img>` in inline content as an atomic image box, sized as the block path sizes it. An SVG source has no
-/// inline box yet and is left out.
+/// An `<img>` or an inline `<svg>` in inline content as an atomic box, sized as the block path sizes it.
 pub(super) fn image_box(
     element: &ElementNode,
     style: &ComputedStyle,
     resources: &mut crate::security::resources::ResourceLoader,
 ) -> Option<InlineBox> {
-    let ElementImage::Raster(image) = decode_element_image(resources, element)? else {
-        return None;
+    if element.tag == HtmlTag::Svg {
+        let svg =
+            crate::layout::images::svg_element_box(element, style, f32::INFINITY, f32::INFINITY)?;
+        return Some(svg_box(svg, style));
+    }
+    let image = match decode_element_image(resources, element)? {
+        ElementImage::Raster(image) => image,
+        ElementImage::Svg(tree) => {
+            let svg = crate::layout::images::svg_image_box(
+                *tree,
+                element,
+                f32::INFINITY,
+                f32::INFINITY,
+                style,
+            );
+            return Some(svg_box(svg, style));
+        }
     };
     let size = raster_image_size(&image, element, f32::INFINITY, style);
     Some(InlineBox {
@@ -170,4 +186,30 @@ pub(super) fn image_box(
         image: Some(image),
         ..InlineBox::default()
     })
+}
+
+/// An SVG replaced box (an inline `<svg>`, or an `<img>` showing an SVG document) as an atomic box whose content box
+/// draws it.
+fn svg_box(svg: crate::layout::elements::Svg, style: &ComputedStyle) -> InlineBox {
+    let size = svg.geometry.size;
+    InlineBox {
+        width: size.width,
+        height: size.height,
+        margin_left: style.margin.left.max(0.0),
+        margin_right: style.margin.right.max(0.0),
+        paint: InlineBoxPaint {
+            background_color: style.background_color,
+            border: svg.geometry.border,
+            border_image: svg.paint.border_image,
+            border_radii: svg.paint.border_radii,
+            ..InlineBoxPaint::default()
+        },
+        padding: EdgeSizes::ZERO,
+        vertical_align: style.vertical_align,
+        svg: Some(Box::new(crate::layout::inline_box::InlineSvg {
+            tree: svg.tree,
+            replaced: svg.replaced,
+        })),
+        ..InlineBox::default()
+    }
 }

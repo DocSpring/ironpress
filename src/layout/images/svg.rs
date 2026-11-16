@@ -288,3 +288,79 @@ pub(crate) fn inject_inherited_svg_color(
         }
     }
 }
+
+/// An `<svg>` element as a replaced box: its size from the width and height
+/// attributes or CSS, and its drawing scaled from its native extent into that
+/// box. Inline and block layout both place the box this returns.
+pub(crate) fn svg_element_node(
+    el: &crate::parser::dom::ElementNode,
+    style: &crate::style::computed::ComputedStyle,
+    available_width: f32,
+    available_height: f32,
+) -> Option<crate::layout::elements::LayoutNode> {
+    use crate::layout::elements::IntoLayoutNode;
+    svg_element_box(el, style, available_width, available_height).map(IntoLayoutNode::boxed)
+}
+
+/// The replaced box `svg_element_node` places.
+pub(crate) fn svg_element_box(
+    el: &crate::parser::dom::ElementNode,
+    style: &crate::style::computed::ComputedStyle,
+    available_width: f32,
+    available_height: f32,
+) -> Option<crate::layout::elements::Svg> {
+    use crate::layout::elements::{
+        PaintGroup, Positioning, ReplacedContent, ReplacedGeometry, Svg, SvgPaint,
+    };
+    use crate::layout::flow_metrics::BlockMargins;
+
+    let (mut svg_width, mut svg_height) =
+        resolve_svg_element_size(el, available_width, available_height, true, true);
+    if let Some(width) = style.width {
+        svg_width = width;
+    }
+    if let Some(height) = style.height {
+        svg_height = height;
+    }
+    // Resolve the SVG's children against its *user-unit* viewport (the native
+    // width/height in CSS px) rather than the pt display box. The render path
+    // scales the whole drawing from this native extent into the pt box (see
+    // `SvgSourceBox::from_tree`), so absolute and percentage child coordinates
+    // must share that native coordinate system; otherwise `%` children would
+    // resolve against the pt box and then be scaled again. Falls back to the
+    // resolved pt size when the root dimensions are `%`/auto (no native px).
+    let native = |name: &str| {
+        el.attributes
+            .get(name)
+            .and_then(|value| crate::parser::svg::parse_absolute_length(value))
+            .filter(|value| *value > 0.0)
+    };
+    let child_viewport = match (native("width"), native("height")) {
+        (Some(w), Some(h)) => (w, h),
+        _ => (svg_width, svg_height),
+    };
+    let mut tree =
+        crate::parser::svg::parse_svg_from_element_with_viewport(el, Some(child_viewport))?;
+    sync_svg_tree_to_layout_box(&mut tree, svg_width, svg_height);
+    inject_inherited_svg_color(&mut tree, style.color);
+    Some(Svg {
+        tree,
+        geometry: ReplacedGeometry::new(
+            crate::types::Size::new(svg_width, svg_height),
+            BlockMargins::new(style.margin.top, style.margin.bottom),
+            crate::layout::engine::LayoutBorder::from_computed(&style.border, style.color),
+        ),
+        positioning: Positioning::from_style(style),
+        paint: SvgPaint {
+            background_color: style.background_color,
+            border_image: style.border_image.paint(),
+            border_radii: style.resolve_corner_radii(svg_width, svg_height),
+            group: PaintGroup::from_style(style),
+        },
+        replaced: ReplacedContent {
+            object_fit: style.object_fit,
+            object_position: style.object_position,
+            ..Default::default()
+        },
+    })
+}
