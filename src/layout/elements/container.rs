@@ -65,6 +65,14 @@ impl InlineFlowExtent for Container {
             .filter(|right| right.is_finite())
     }
 
+    fn print_fit_content(&self) -> crate::layout::print_scale::PrintFitContent {
+        if self.overflow.x == crate::style::computed::Overflow::Visible {
+            crate::layout::print_scale::PrintFitContent::Descendants
+        } else {
+            crate::layout::print_scale::PrintFitContent::Clipped
+        }
+    }
+
     fn max_content_outer_extent(&self) -> Option<f32> {
         let children = self
             .children

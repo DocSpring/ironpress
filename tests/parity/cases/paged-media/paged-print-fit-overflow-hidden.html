@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>content clipped by overflow: hidden does not shrink the printed document</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  .clip { width: 160px; overflow: hidden; border: 2px solid #1f4fa8; background: #e8eefb; }
+  .row { display: flex; margin-top: 8px; }
+  .item { flex: none; width: 480px; height: 32px; background: #f6d7a7; }
+</style>
+</head>
+<body>
+  <div class="clip">Unbreakablewordwiderthanthepage</div>
+  <div class="clip row"><div class="item">A clipped flex item</div></div>
+</body>
+</html>

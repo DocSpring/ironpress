@@ -45,6 +45,28 @@ impl InlineFlowExtent for FlexRow {
         let right = self.inline_offset.value() + self.box_model.size.width.fixed_value()?;
         right.is_finite().then_some(right.max(0.0))
     }
+
+    fn print_fit_content(&self) -> crate::layout::print_scale::PrintFitContent {
+        if self.overflow.x == crate::style::computed::Overflow::Visible {
+            crate::layout::print_scale::PrintFitContent::Measured
+        } else {
+            crate::layout::print_scale::PrintFitContent::Clipped
+        }
+    }
+
+    fn content_overflow_right_edge(
+        &self,
+        fonts: &std::collections::HashMap<String, crate::parser::ttf::TtfFont>,
+    ) -> Option<f32> {
+        let content_left = self.inline_offset.value()
+            + self.box_model.border.left.width
+            + self.box_model.padding.left;
+        crate::layout::print_scale::flex_row_content_right_edge(
+            &self.content.cells,
+            content_left,
+            fonts,
+        )
+    }
 }
 
 impl BlockFlowParticipant for FlexRow {

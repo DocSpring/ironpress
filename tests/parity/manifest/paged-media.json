@@ -1340,5 +1340,41 @@
     "depends_on": [
       "probe-text-baseline"
     ]
+  },
+  {
+    "id": "paged-print-fit-flex-item-overflow",
+    "category": "paged-media",
+    "feature": "print-fit",
+    "subfeature": "flex-item-overflow",
+    "description": "Flex items wider than their row overflow the page, and Chrome shrinks the whole printed document so they fit.",
+    "file": "cases/paged-media/paged-print-fit-flex-item-overflow.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "paged-print-fit-line-overflow",
+    "category": "paged-media",
+    "feature": "print-fit",
+    "subfeature": "line-overflow",
+    "description": "Lines too long for their box (deeply nested list items, an unbreakable word in a narrow box) overflow the page, and Chrome shrinks the printed document so they fit.",
+    "file": "cases/paged-media/paged-print-fit-line-overflow.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "paged-print-fit-overflow-hidden",
+    "category": "paged-media",
+    "feature": "print-fit",
+    "subfeature": "overflow-hidden",
+    "description": "Text and flex items clipped by overflow: hidden stay inside their box, so the printed document keeps its scale.",
+    "file": "cases/paged-media/paged-print-fit-overflow-hidden.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

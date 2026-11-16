@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a flex item wider than the page shrinks the printed document</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  .row { display: flex; gap: 8px; }
+  .item { flex: none; width: 240px; height: 48px; border: 2px solid #1f4fa8; background: #e8eefb; }
+  p { margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="item">First</div><div class="item">Second</div></div>
+  <p>Text after the row</p>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a line wider than its box shrinks the printed document</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  ul { padding-left: 40px; }
+  .box { width: 96px; border: 2px solid #1f4fa8; background: #e8eefb; }
+</style>
+</head>
+<body>
+  <ul><li>Level one<ul><li>Level two<ul><li>Level three<ul><li>Level four<ul><li>Levelfivewithalongword</li></ul></li></ul></li></ul></li></ul></li></ul>
+  <div class="box">Unbreakablewordinabox</div>
+</body>
+</html>

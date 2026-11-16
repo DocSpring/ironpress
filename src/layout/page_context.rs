@@ -67,6 +67,24 @@ impl PageGeometry {
         )
     }
 
+    /// The same page with its page area `factor` times as wide and tall, and
+    /// the same margins. Print fitting lays an overflowing document out on
+    /// such a page, then scales it back onto the physical one.
+    pub(crate) fn with_page_area_scaled(self, factor: f32) -> Self {
+        let area = self.page_area_size();
+        Self {
+            size: PageSize::new(
+                self.margin.horizontal() + area.width * factor,
+                self.margin.vertical() + area.height * factor,
+            ),
+            ..self
+        }
+    }
+
+    pub(crate) const fn margin(self) -> Margin {
+        self.margin
+    }
+
     /// Convert a right edge measured from the root flow origin into the
     /// physical page area's coordinate space. Print fitting is anchored at
     /// that page-area origin, so a root-start gutter belongs in both the
@@ -85,6 +103,9 @@ impl PageGeometry {
 pub(crate) struct PageGeometryContext {
     default: PageGeometry,
     rules: Vec<PageGeometryRule>,
+    /// How many times wider and taller than its `@page` size each page area
+    /// is laid out (print fitting); 1 for the physical pages.
+    page_area_scale: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +125,7 @@ impl PageGeometryContext {
         Self {
             default: PageGeometry::new(size, margin),
             rules: Vec::new(),
+            page_area_scale: 1.0,
         }
     }
 
@@ -138,11 +160,23 @@ impl PageGeometryContext {
         Self {
             default: PageGeometry::new(default_size, default_margin),
             rules,
+            page_area_scale: 1.0,
         }
     }
 
     pub(crate) fn with_root_flow_insets(mut self, insets: Margin) -> Self {
         self.default = self.default.with_root_flow_insets(insets);
+        self
+    }
+
+    /// The physical default page, before any page-area scale.
+    pub(crate) const fn default_geometry(&self) -> PageGeometry {
+        self.default
+    }
+
+    /// The same cascade with every selected page area scaled by `factor`.
+    pub(crate) fn with_page_area_scale(mut self, factor: f32) -> Self {
+        self.page_area_scale = factor;
         self
     }
 
@@ -158,7 +192,11 @@ impl PageGeometryContext {
         for (_, rule) in matching {
             rule.declarations.apply(&mut geometry);
         }
-        geometry
+        if self.page_area_scale == 1.0 {
+            geometry
+        } else {
+            geometry.with_page_area_scaled(self.page_area_scale)
+        }
     }
 }
 

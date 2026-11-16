@@ -76,7 +76,7 @@ fn fitted_print_content_uses_the_physical_page_edge_not_body_end_padding() {
     let flow_edges = pages[0]
         .elements
         .iter()
-        .filter_map(|(_, element)| element.print_fit_right_edge())
+        .filter_map(|(_, element)| element.print_fit_right_edge(&HashMap::new()))
         .collect::<Vec<_>>();
 
     assert!(
@@ -151,7 +151,7 @@ fn projected_body_padding_is_not_subtracted_from_root_percentages_twice() {
     let flow_edges = pages[0]
         .elements
         .iter()
-        .filter_map(|(_, element)| element.print_fit_right_edge())
+        .filter_map(|(_, element)| element.print_fit_right_edge(&HashMap::new()))
         .collect::<Vec<_>>();
 
     assert_eq!(width.0, Some(120.0));

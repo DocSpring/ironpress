@@ -44,6 +44,7 @@ fn selected_page_area_width_drives_print_fit() {
         &mut pages,
         PageSize::new(184.0, 120.0),
         Margin::uniform(0.0),
+        &std::collections::HashMap::new(),
     );
 
     assert_eq!(pages[0].print_content_scale.factor(), 144.0 / 184.0);
@@ -79,6 +80,7 @@ fn root_flow_start_is_measured_inside_the_physical_page_area() {
         &mut pages,
         PageSize::new(192.0, 200.0),
         Margin::uniform(0.0),
+        &std::collections::HashMap::new(),
     );
 
     assert_eq!(pages[0].print_content_scale.factor(), 152.0 / 158.0);
@@ -111,6 +113,7 @@ fn collapsed_table_spacing_does_not_trigger_print_fit_scaling() {
         &mut pages,
         PageSize::new(240.0, 180.0),
         Margin::uniform(0.0),
+        &std::collections::HashMap::new(),
     );
 
     assert!(pages[0].print_content_scale.is_identity());

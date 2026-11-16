@@ -1710,6 +1710,24 @@ impl DocumentGeometry {
             ..self
         }
     }
+
+    /// The same document on pages whose page area (inside `page_margin`) is
+    /// `factor` times as wide and tall, with the viewport scaled alike.
+    fn with_page_area_scaled(self, page_margin: Margin, factor: f32) -> Self {
+        let area_width = self.page_size.width - page_margin.horizontal();
+        let area_height = self.page_size.height - page_margin.vertical();
+        Self {
+            page_size: PageSize::new(
+                page_margin.horizontal() + area_width * factor,
+                page_margin.vertical() + area_height * factor,
+            ),
+            content_margin: self.content_margin,
+            initial_containing_block: Size::new(
+                self.initial_containing_block.width * factor,
+                self.initial_containing_block.height * factor,
+            ),
+        }
+    }
 }
 
 /// Lay out the DOM nodes into pages.
@@ -2090,6 +2108,56 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     resources: &mut crate::security::resources::ResourceLoader,
     depth: &super::context::DepthLimit,
 ) -> Vec<Page> {
+    let pages = layout_document_passes(
+        nodes,
+        geometry,
+        rules,
+        custom_fonts,
+        font_locale,
+        page_background,
+        pagination_context.clone(),
+        raster_quality,
+        resources,
+        depth,
+        None,
+    );
+    // Chromium prints a document wider than its pages by laying it out again
+    // on pages whose area is as wide as the document, up to a limit, then
+    // scaling that layout down onto the physical pages.
+    let Some(widening) = super::print_scale::PrintFitWidening::for_pages(&pages) else {
+        return pages;
+    };
+    let page_margin = pagination_context.geometry.default_geometry().margin();
+    layout_document_passes(
+        nodes,
+        geometry.with_page_area_scaled(page_margin, widening.factor()),
+        rules,
+        custom_fonts,
+        font_locale,
+        page_background,
+        pagination_context.with_page_area_scale(widening.factor()),
+        raster_quality,
+        resources,
+        depth,
+        Some(widening),
+    )
+}
+
+/// Lay the document out, and again when its pages count themselves.
+#[allow(clippy::too_many_arguments)]
+fn layout_document_passes(
+    nodes: &[DomNode],
+    geometry: DocumentGeometry,
+    rules: &[CssRule],
+    custom_fonts: &HashMap<String, TtfFont>,
+    font_locale: crate::font_pack::FontLocale,
+    page_background: &super::page_context::PageBackgroundContext,
+    pagination_context: super::paginate::PaginationContext,
+    raster_quality: crate::style::raster_quality::RasterQuality,
+    resources: &mut crate::security::resources::ResourceLoader,
+    depth: &super::context::DepthLimit,
+    widening: Option<super::print_scale::PrintFitWidening>,
+) -> Vec<Page> {
     let pages = layout_document_pass(
         nodes,
         geometry,
@@ -2102,6 +2170,7 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
         resources,
         depth,
         None,
+        widening,
     );
     match super::page_counters::page_count_to_measure(&pages) {
         Some(page_count) => layout_document_pass(
@@ -2116,6 +2185,7 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
             resources,
             depth,
             Some(page_count),
+            widening,
         ),
         None => pages,
     }
@@ -2134,6 +2204,7 @@ fn layout_document_pass(
     resources: &mut crate::security::resources::ResourceLoader,
     depth: &super::context::DepthLimit,
     page_count: Option<usize>,
+    widening: Option<super::print_scale::PrintFitWidening>,
 ) -> Vec<Page> {
     let DocumentGeometry {
         page_size,
@@ -2313,8 +2384,18 @@ fn layout_document_pass(
     let pagination_context = pagination_context
         .with_footnote_content_width(available_width)
         .with_root_margin_top(body_style.margin.top + body_style.padding.top);
+    let page_margin = pagination_context.geometry.default_geometry().margin();
     let mut pages =
         super::paginate::paginate_with_context(elements, pagination_context, custom_fonts);
+    // A widened layout goes back onto the physical pages here, so everything
+    // after pagination sees physical pages and content scaled onto them.
+    let page_size = match widening {
+        Some(widening) => {
+            widening.restore_physical_page_geometry(&mut pages);
+            widening.physical_page_size(page_size, page_margin)
+        }
+        None => page_size,
+    };
     page_background.apply(&mut pages, page_size, margin, custom_fonts);
     super::filter::materialize_page_filters(
         &mut pages,
@@ -2322,7 +2403,10 @@ fn layout_document_pass(
         custom_fonts,
         raster_quality.filter_dpi,
     );
-    assign_page_print_scales(&mut pages, page_size, margin);
+    match widening {
+        Some(widening) => widening.assign_page_print_scales(&mut pages),
+        None => assign_page_print_scales(&mut pages, page_size, margin, custom_fonts),
+    }
     super::fragmentation::transfer_page_spanning_graphical_effects(&mut pages, page_size, margin);
     if let Some(first_page) = pages.first_mut() {
         first_page.document_svg_defs = document_svg_defs;

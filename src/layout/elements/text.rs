@@ -103,6 +103,32 @@ impl InlineFlowExtent for TextBlock {
             .then_some((self.positioning.insets.left + width).max(0.0))
             .filter(|right| right.is_finite())
     }
+
+    fn print_fit_content(&self) -> crate::layout::print_scale::PrintFitContent {
+        if self.clipping.rect.is_some() {
+            crate::layout::print_scale::PrintFitContent::Clipped
+        } else {
+            crate::layout::print_scale::PrintFitContent::Descendants
+        }
+    }
+
+    fn content_overflow_right_edge(
+        &self,
+        fonts: &std::collections::HashMap<String, crate::parser::ttf::TtfFont>,
+    ) -> Option<f32> {
+        if self.text.writing_mode.is_vertical() {
+            return None;
+        }
+        let content_left = self.positioning.insets.left
+            + self.box_model.border.left.width
+            + self.box_model.padding.left;
+        crate::layout::print_scale::text_lines_right_edge(
+            &self.lines,
+            content_left,
+            self.text.indent,
+            fonts,
+        )
+    }
 }
 
 impl BlockFlowParticipant for TextBlock {

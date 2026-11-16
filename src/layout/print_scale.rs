@@ -4,9 +4,24 @@
 //! printable width before emitting its PDF content stream. This is distinct
 //! from CSS overflow: positioned visual overflow remains clipped by the page
 //! and must not change the scale of unrelated flow content.
+//!
+//! The width is the flow's scrollable overflow, which includes lines of text
+//! wider than their block and flex items wider than their row ([`content`]).
+//! Chromium then lays the document out again on a page area widened by the
+//! inverse of that scale, up to one and a half times as wide, and scales the
+//! result to fit ([`widening`]), so text wraps at the wider width.
+
+use std::collections::HashMap;
 
 use super::engine::{LayoutElement, Page};
+use crate::parser::ttf::TtfFont;
 use crate::types::{Margin, PageSize, Point, Size};
+
+mod content;
+mod widening;
+
+pub(crate) use content::{PrintFitContent, flex_row_content_right_edge, text_lines_right_edge};
+pub(crate) use widening::PrintFitWidening;
 
 /// A uniform scale applied to page content around the physical page's top-left
 /// corner by the PDF renderer. It owns the print-fit decision so render paths
@@ -65,6 +80,7 @@ pub(crate) fn assign_page_print_scales(
     pages: &mut [Page],
     default_page_size: PageSize,
     default_margin: Margin,
+    fonts: &HashMap<String, TtfFont>,
 ) {
     let document_scale = pages
         .iter()
@@ -78,7 +94,7 @@ pub(crate) fn assign_page_print_scales(
             let flow_right_edge = page
                 .elements
                 .iter()
-                .filter_map(|(_, element)| element.print_fit_right_edge())
+                .filter_map(|(_, element)| element.print_fit_right_edge(fonts))
                 .fold(0.0_f32, f32::max);
             PrintContentScale::from_flow_width(
                 geometry.page_area_size().width,

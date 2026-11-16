@@ -88,11 +88,18 @@ pub(crate) trait LayoutElement: Debug {
 
     /// Inline-end edge used by the document print-fit calculation.
     ///
-    /// Descendant normal-flow geometry participates recursively. Transforms
+    /// Descendant normal-flow geometry participates recursively, and so do
+    /// lines of text wider than their box, unless the box clips its overflow. Transforms
     /// extend the scrollable overflow of in-flow boxes, while positioned
     /// graphical overflow remains clipped instead of shrinking the document.
-    fn print_fit_right_edge(&self) -> Option<f32> {
-        let normal_right = self.inline_flow_extent()?.normal_flow_right_edge()?;
+    fn print_fit_right_edge(
+        &self,
+        fonts: &std::collections::HashMap<String, crate::parser::ttf::TtfFont>,
+    ) -> Option<f32> {
+        use crate::layout::print_scale::PrintFitContent;
+
+        let extent = self.inline_flow_extent()?;
+        let normal_right = extent.normal_flow_right_edge()?;
         let positioning = self.positioning_owner().map(PositioningOwner::positioning);
         if positioning.is_some_and(|positioning| !positioning.is_in_normal_flow()) {
             return None;
@@ -104,11 +111,19 @@ pub(crate) trait LayoutElement: Debug {
                 .box_reference_geometry()
                 .map_or(0.0, |geometry| geometry.content_insets().left);
         let mut overflow_right = normal_right;
-        self.visit_children(&mut |child| {
-            if let Some(child_right) = child.print_fit_right_edge() {
-                overflow_right = overflow_right.max(content_left + child_right);
+        let content = extent.print_fit_content();
+        if content != PrintFitContent::Clipped {
+            if let Some(content_right) = extent.content_overflow_right_edge(fonts) {
+                overflow_right = overflow_right.max(content_right);
             }
-        });
+        }
+        if content == PrintFitContent::Descendants {
+            self.visit_children(&mut |child| {
+                if let Some(child_right) = child.print_fit_right_edge(fonts) {
+                    overflow_right = overflow_right.max(content_left + child_right);
+                }
+            });
+        }
 
         let Some(fragmentation) = self.box_fragmentation_owner() else {
             return Some(overflow_right);
@@ -595,6 +610,22 @@ pub(crate) trait InlineFlowExtent {
     /// hide a narrower intrinsic descendant contribution.
     fn max_content_outer_extent(&self) -> Option<f32> {
         self.normal_flow_right_edge()
+    }
+
+    /// How this box's content takes part in print fitting: the scrollable
+    /// overflow that lines of text and flex items add past its border box
+    /// (css-overflow-3 §2.2).
+    fn print_fit_content(&self) -> crate::layout::print_scale::PrintFitContent {
+        crate::layout::print_scale::PrintFitContent::Descendants
+    }
+
+    /// Inline-end edge of this box's own content (lines of text, a flex row's
+    /// items and their descendants), in the frame of `normal_flow_right_edge`.
+    fn content_overflow_right_edge(
+        &self,
+        _fonts: &std::collections::HashMap<String, crate::parser::ttf::TtfFont>,
+    ) -> Option<f32> {
+        None
     }
 }
 

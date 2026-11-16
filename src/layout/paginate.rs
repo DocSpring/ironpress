@@ -2143,6 +2143,14 @@ impl PaginationContext {
         }
     }
 
+    /// The same pagination with every page area `factor` times as wide and
+    /// tall, as print fitting lays an overflowing document out.
+    pub(crate) fn with_page_area_scale(mut self, factor: f32) -> Self {
+        self.geometry = self.geometry.with_page_area_scale(factor);
+        self.footnote_area.content_width *= factor;
+        self
+    }
+
     pub(crate) fn with_root_margin_top(mut self, root_margin_top: f32) -> Self {
         self.root_margin_top = root_margin_top;
         self

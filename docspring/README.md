@@ -52,6 +52,7 @@ includes them, then goes back to the upstream packages.
 | Flex shrinking scales each item by its inner base size (css-flexbox §9.7), not its outer size, so items with padding or borders shrink by the amounts browsers use | Not sent yet (`docspring-1.7.0.8`) |
 | A flex item with a `width` is laid out at its flexed size: its contents were laid out at the authored width after the item grew or shrank | Not sent yet (`docspring-1.7.0.8`) |
 | Pair kerning continues across inline boundaries that change only paint (a `<span>` with a colour, `::before` content), as Chromium shapes text: `“<span>Q</span>` was wider than `“Q`. A margin, border or padding between the glyphs still separates them. Right-to-left text doesn't kern across a boundary yet | Not sent yet (`docspring-1.7.0.8`) |
+| A document wider than the page shrinks to fit as Chromium prints it: lines of text that overflow their box and flex items wider than their row count towards its width (a box that clips its overflow keeps it inside), and the document is laid out again at the wider page, up to one and a half times as wide, before it is scaled down, so text wraps where Chromium wraps it | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the

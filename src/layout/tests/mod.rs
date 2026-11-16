@@ -12,6 +12,7 @@ mod list_markers;
 mod lists;
 mod paged_breaks;
 mod positioning;
+mod print_fit_content;
 mod root_formatting_context;
 mod stacking;
 mod support;
