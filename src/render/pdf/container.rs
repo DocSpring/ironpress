@@ -8,6 +8,7 @@ mod flex;
 mod media;
 mod nested;
 mod text;
+mod text_box_paint;
 
 use flex::render_flex_child;
 use media::{render_image_child, render_svg_child};

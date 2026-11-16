@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>an absolute box draws its text inside its border and padding</title>
+<style>
+  @page { size: 320px 224px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; background: #ffffff; }
+  body { margin: 16px; }
+  .rel { position: relative; height: 40px; margin-bottom: 8px; background: #e8eefb; }
+  .abs { position: absolute; top: 4px; background: #1f4fa8; color: #ffffff; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="rel"><div class="abs" style="left:0; padding-left:16px; border-left:4px solid #ad1457">Left padding</div></div>
+  <div class="rel"><div class="abs" style="right:0; padding:0 16px">Right anchored</div></div>
+  <div class="rel"><div class="abs" style="left:0; width:200px; padding-right:16px; box-sizing:border-box; text-align:right">Aligned right</div></div>
+  <div class="rel"><span class="abs" style="left:8px; padding-left:24px">Span with padding</span></div>
+</body>
+</html>

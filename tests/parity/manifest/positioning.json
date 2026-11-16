@@ -325,5 +325,20 @@
       "probe-fill-box",
       "probe-block-flow"
     ]
+  },
+  {
+    "id": "positioning-absolute-text-content-box",
+    "category": "positioning",
+    "feature": "position:absolute",
+    "subfeature": "content-box",
+    "description": "An absolutely positioned box draws its text in its content box, inside its left border and padding, and aligns it there, whether it is anchored left or right and whether it was a block or a span (CSS 2.1 section 8.1).",
+    "file": "cases/positioning/positioning-absolute-text-content-box.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
   }
 ]

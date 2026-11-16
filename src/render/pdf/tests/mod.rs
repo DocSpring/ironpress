@@ -1,6 +1,7 @@
 use crate::render::pdf::border_images::BorderImageShadings;
 
 include!("foundation.rs");
+mod absolute_text;
 mod flex_cells;
 mod rich_page_margins;
 mod stacking;
