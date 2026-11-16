@@ -1227,5 +1227,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-border-box", "probe-color-swatch"]
+  },
+  {
+    "id": "border-style-dashed-thin",
+    "category": "backgrounds-borders",
+    "feature": "border-style",
+    "subfeature": "dashed-thin",
+    "description": "Dashed borders 1px, 2px and 3px wide, and a dashed span across a change of font: below 3px Chromium's dashes are three times the width with gaps twice the width, and a span keeps one pattern across its runs. Catches: one dash ratio for every width.",
+    "file": "cases/backgrounds-borders/border-style-dashed-thin.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-border-box"]
   }
 ]

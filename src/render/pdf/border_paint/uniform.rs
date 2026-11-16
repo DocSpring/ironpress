@@ -199,46 +199,92 @@ fn paint_square_pattern(
     }
 }
 
+/// The dashes along one side of a dashed border, as Blink lays them out
+/// (`StrokeData::SetupPaintDashPathEffect`, `SelectBestDashGap`): each side is
+/// an open line that starts and ends with a dash, with however many dashes
+/// leave a gap closest to the nominal one. A side no longer than two dashes is
+/// drawn solid.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SideDashes {
+    count: usize,
+    dash: f32,
+    gap: f32,
+}
+
+impl SideDashes {
+    fn fit(length: f32, dash: f32, nominal_gap: f32) -> Self {
+        if length <= dash * 2.0 {
+            return Self {
+                count: 1,
+                dash: length.max(0.0),
+                gap: 0.0,
+            };
+        }
+        let fewer = ((length + nominal_gap) / (dash + nominal_gap))
+            .floor()
+            .max(1.0);
+        let more = fewer + 1.0;
+        // A side has one gap fewer than dashes. With a single dash there's no
+        // gap, so `more` wins: the side is longer than two dashes.
+        let fewer_gap = if fewer > 1.0 {
+            (length - fewer * dash) / (fewer - 1.0)
+        } else {
+            f32::INFINITY
+        };
+        let more_gap = (length - more * dash) / (more - 1.0);
+        let (count, gap) = if more_gap <= 0.0
+            || (fewer_gap - nominal_gap).abs() < (more_gap - nominal_gap).abs()
+        {
+            (fewer, fewer_gap)
+        } else {
+            (more, more_gap)
+        };
+        Self {
+            count: count as usize,
+            dash,
+            gap: if gap.is_finite() { gap.max(0.0) } else { 0.0 },
+        }
+    }
+}
+
 fn paint_square_dashes(content: &mut String, rect: PdfRect, width: f32) {
-    let dash = (width * 2.0).max(1.0);
-    let nominal_gap = width.max(1.0);
+    // Blink's dash and gap: twice and once the width from 3 CSS px, three and
+    // two times below it (`closed_border_pattern_for_style`).
+    let thin = (width / crate::fonts::PT_PER_CSS_PX).round() < 3.0;
+    let (dash_ratio, gap_ratio) = if thin { (3.0, 2.0) } else { (2.0, 1.0) };
+    let dash = (width * dash_ratio).max(1.0);
+    let nominal_gap = (width * gap_ratio).max(1.0);
     let add_rect = |content: &mut String, rect: PdfRect| {
         if !rect.is_empty() {
             content.push_str(&rect.rect_path());
         }
     };
     let horizontal = |content: &mut String, y: f32| {
-        let count = (((rect.width + nominal_gap) / (dash + nominal_gap)).round()).max(1.0) as usize;
-        let gap = if count > 1 {
-            ((rect.width - count as f32 * dash) / (count - 1) as f32).max(0.0)
-        } else {
-            0.0
-        };
-        for index in 0..count {
-            let offset = index as f32 * (dash + gap);
+        let side = SideDashes::fit(rect.width, dash, nominal_gap);
+        for index in 0..side.count {
+            let offset = index as f32 * (side.dash + side.gap);
             add_rect(
                 content,
-                PdfRect::new(rect.left + offset, y, dash.min(rect.width - offset), width),
+                PdfRect::new(
+                    rect.left + offset,
+                    y,
+                    side.dash.min(rect.width - offset),
+                    width,
+                ),
             );
         }
     };
     let vertical = |content: &mut String, x: f32| {
-        let count =
-            (((rect.height + nominal_gap) / (dash + nominal_gap)).round()).max(1.0) as usize;
-        let gap = if count > 1 {
-            ((rect.height - count as f32 * dash) / (count - 1) as f32).max(0.0)
-        } else {
-            0.0
-        };
-        for index in 0..count {
-            let offset = index as f32 * (dash + gap);
+        let side = SideDashes::fit(rect.height, dash, nominal_gap);
+        for index in 0..side.count {
+            let offset = index as f32 * (side.dash + side.gap);
             add_rect(
                 content,
                 PdfRect::new(
                     x,
-                    rect.top() - offset - dash,
+                    rect.top() - offset - side.dash,
                     width,
-                    dash.min(rect.height - offset),
+                    side.dash.min(rect.height - offset),
                 ),
             );
         }

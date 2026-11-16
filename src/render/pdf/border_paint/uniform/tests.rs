@@ -200,3 +200,69 @@ fn opaque_open_fragment_border_matches_full_span_browser_decomposition() {
     assert!(content.contains("11.25 0 1.5 124.5 re\n"));
     assert!(states.is_empty());
 }
+
+/// The widths of the dashes `paint_square_dashes` draws along the bottom side.
+fn bottom_dash_widths(width: f32) -> Vec<f32> {
+    let mut content = String::new();
+    paint_square_dashes(&mut content, PdfRect::new(0.0, 0.0, 120.0, 60.0), width);
+    content
+        .lines()
+        .filter_map(|line| line.strip_suffix(" re"))
+        .map(|rect| {
+            rect.split(' ')
+                .map(|value| value.parse::<f32>().expect("a number"))
+                .collect::<Vec<_>>()
+        })
+        .filter(|rect| rect[1] == 0.0 && rect[3] == width)
+        .map(|rect| rect[2])
+        .collect()
+}
+
+#[test]
+fn a_thin_dashed_border_has_dashes_three_times_its_width() {
+    // 2 CSS px: Blink draws 6px dashes with 4px gaps.
+    let width = 2.0 * crate::fonts::PT_PER_CSS_PX;
+    let dashes = bottom_dash_widths(width);
+    assert!(!dashes.is_empty());
+    assert!(
+        dashes.iter().all(|dash| (dash - 3.0 * width).abs() < 0.01),
+        "{dashes:?}"
+    );
+}
+
+#[test]
+fn a_dashed_border_from_three_pixels_has_dashes_twice_its_width() {
+    let width = 4.0 * crate::fonts::PT_PER_CSS_PX;
+    let dashes = bottom_dash_widths(width);
+    assert!(
+        dashes.iter().all(|dash| (dash - 2.0 * width).abs() < 0.01),
+        "{dashes:?}"
+    );
+}
+
+#[test]
+fn a_short_side_takes_the_dash_count_whose_gap_is_nearest_the_nominal_one() {
+    // Blink fits a 20px side of a 2px dashed border with three 6px dashes
+    // and 1px gaps (a gap 3px from the nominal 4px), not two dashes and an
+    // 8px gap (4px from it), as Chrome draws a bordered span's sides.
+    assert_eq!(
+        SideDashes::fit(20.0, 6.0, 4.0),
+        SideDashes {
+            count: 3,
+            dash: 6.0,
+            gap: 1.0
+        }
+    );
+}
+
+#[test]
+fn a_side_no_longer_than_two_dashes_is_solid() {
+    assert_eq!(
+        SideDashes::fit(12.0, 6.0, 4.0),
+        SideDashes {
+            count: 1,
+            dash: 12.0,
+            gap: 0.0
+        }
+    );
+}

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>thin dashed borders</title>
+<style>
+  @page { size: 320px 160px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 28px; background: #ffffff; }
+  body { margin: 0; }
+  .box { display: inline-block; width: 80px; height: 40px; margin: 0 12px 12px 0; vertical-align: top; }
+  .one { border: 1px dashed #283593; }
+  .two { border: 2px dashed #283593; }
+  .three { border: 3px dashed #283593; }
+  .span { border: 2px dashed #c62828; padding: 0 3px; }
+</style>
+</head>
+<body>
+  <div class="box one"></div><div class="box two"></div><div class="box three"></div>
+  <p style="margin: 0">Inline <span class="span">dashed <b>span</b> text</span> here</p>
+</body>
+</html>
