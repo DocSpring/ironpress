@@ -14,6 +14,7 @@ mod paged_breaks;
 mod positioning;
 mod print_fit_content;
 mod root_formatting_context;
+mod root_margin_collapse;
 mod stacking;
 mod support;
 mod table_cell_blocks;

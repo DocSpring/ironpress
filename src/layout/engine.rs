@@ -2383,7 +2383,14 @@ fn layout_document_pass(
     // cascade rather than precomputing independent special-case buckets.
     let pagination_context = pagination_context
         .with_footnote_content_width(available_width)
-        .with_root_margin_top(body_style.margin.top + body_style.padding.top);
+        .with_root_margin_top(
+            body_style.margin.top + body_style.border.top.used_width() + body_style.padding.top,
+            if body_style.padding.top == 0.0 && body_style.border.top.used_width() == 0.0 {
+                body_style.margin.top
+            } else {
+                0.0
+            },
+        );
     let page_margin = pagination_context.geometry.default_geometry().margin();
     let mut pages =
         super::paginate::paginate_with_context(elements, pagination_context, custom_fonts);

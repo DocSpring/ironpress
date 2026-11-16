@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>body padding keeps the first block's top margin whole</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; background: #ffffff; }
+  body { margin: 0; padding: 16px; }
+  h1 { margin: 20px 0 8px; font-size: 20px; line-height: 28px; background: #e8eefb; }
+  p { margin: 12px 0 0; }
+</style>
+</head>
+<body>
+  <h1>Heading</h1>
+  <p>The heading's 20px top margin sits inside the body's padding.</p>
+</body>
+</html>

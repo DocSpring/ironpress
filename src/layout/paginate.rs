@@ -2127,7 +2127,12 @@ fn split_table_node(
 pub(crate) struct PaginationContext {
     pub(crate) geometry: super::page_context::PageGeometryContext,
     pub(crate) footnote_area: FootnoteAreaLayout,
+    /// Where page 1's flow starts: the root's top margin and padding.
     pub(crate) root_margin_top: f32,
+    /// The part of `root_margin_top` that the first block's top margin
+    /// collapses with: the root's margin, unless top padding or a top border
+    /// separates them (CSS 2.1 §8.3.1).
+    root_collapsible_margin_top: f32,
 }
 
 impl PaginationContext {
@@ -2140,6 +2145,7 @@ impl PaginationContext {
             geometry,
             footnote_area,
             root_margin_top,
+            root_collapsible_margin_top: root_margin_top,
         }
     }
 
@@ -2151,8 +2157,13 @@ impl PaginationContext {
         self
     }
 
-    pub(crate) fn with_root_margin_top(mut self, root_margin_top: f32) -> Self {
+    pub(crate) fn with_root_margin_top(
+        mut self,
+        root_margin_top: f32,
+        collapsible_margin_top: f32,
+    ) -> Self {
         self.root_margin_top = root_margin_top;
+        self.root_collapsible_margin_top = collapsible_margin_top;
         self
     }
 
@@ -2694,6 +2705,7 @@ pub(crate) fn paginate_with_context(
 ) -> Vec<Page> {
     let footnote_area = context.footnote_area;
     let root_margin_top = context.root_margin_top;
+    let root_collapsible_margin_top = context.root_collapsible_margin_top;
     let mut active_page_type = ActivePageType::default();
     let mut current_page_geometry = active_page_type.geometry(&context.geometry, 1, false);
     let mut content_height = current_page_geometry.content_height();
@@ -3058,12 +3070,13 @@ pub(crate) fn paginate_with_context(
         let collapsed_margin = collapse_vertical_margins(prev_margin_bottom, margin_top_val);
         // CSS margin collapse through the root applies ONLY on page 1 (where
         // body opens). On page 1, the first block's margin-top collapses with
-        // body.margin.top: since paginate pre-seeded `y = root_margin_top`,
-        // the *extra* to add is `(block_mt - root_mt).max(0)`. On continuation
-        // pages (page 2+), body is already mid-flow — no collapse with root,
-        // and no body margin-top at all.
+        // body.margin.top unless body's top padding or border separates them:
+        // since paginate pre-seeded `y = root_margin_top`, the *extra* to add
+        // is `(block_mt - collapsible_root_mt).max(0)`. On continuation pages
+        // (page 2+), body is already mid-flow — no collapse with root, and no
+        // body margin-top at all.
         let collapsed_margin = if first_on_page && on_first_page {
-            (collapsed_margin - root_margin_top).max(0.0)
+            (collapsed_margin - root_collapsible_margin_top).max(0.0)
         } else {
             collapsed_margin
         };

@@ -834,5 +834,17 @@
       "probe-block-flow",
       "probe-text-baseline"
     ]
+  },
+  {
+    "id": "block-box-model-body-padding-first-margin",
+    "category": "block-box-model",
+    "feature": "margin-collapsing",
+    "subfeature": "root-padding-separates",
+    "description": "The body's top padding separates its margin from the first block's top margin, so the heading's whole 20px margin sits inside the padding (CSS 2.1 section 8.3.1).",
+    "file": "cases/block-box-model/block-box-model-body-padding-first-margin.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]
