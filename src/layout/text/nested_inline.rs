@@ -97,7 +97,7 @@ pub(super) struct CollectorState<'a, 'r> {
     pub(super) fonts: &'a HashMap<String, TtfFont>,
     pub(super) counter_state: &'r mut CounterState,
     pub(super) resources: &'r mut crate::security::resources::ResourceLoader,
-    pub(super) next_inline_decoration: &'r mut usize,
+    pub(super) collection: &'r mut super::CollectionState,
 }
 
 /// Collect a block's contents as lines of their own: a forced break before them unless a line has just ended (or
@@ -137,7 +137,7 @@ pub(super) fn collect_block_lines(
         &ancestors,
         state.counter_state,
         state.resources,
-        state.next_inline_decoration,
+        state.collection,
     );
     if runs.len() > block_start && !ends_line(runs, block_start) {
         runs.push(line_break(block.style, state.fonts));

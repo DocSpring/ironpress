@@ -61,8 +61,6 @@ pub(super) fn render_nested_container(
     let nk_overflow_x = &child.overflow.x;
     let nk_overflow_y = &child.overflow.y;
     let nk_position = &child.positioning.scheme;
-    let nk_offset_top = &child.positioning.insets.top;
-    let nk_offset_left = &child.positioning.insets.left;
     let nk_box_transform = &child.paint.group.transform;
     let nk_transform = &nk_box_transform.value;
     let nk_box_shadow = &child.paint.shadows;
@@ -135,7 +133,13 @@ pub(super) fn render_nested_container(
         flow.frame.size,
     );
     let (nk_x, nk_top_y) = if nk_is_abs {
-        (nk_anchor.x + nk_offset_left, nk_anchor.y - nk_offset_top)
+        let origin = abs_child_origin(
+            &child.positioning,
+            nk_anchor,
+            PdfPoint::new(x, container_top_y),
+            PdfPoint::new(x, cursor_y),
+        );
+        (origin.x, origin.y)
     } else {
         (x + flow_origin.x, container_top_y - flow_origin.y)
     };

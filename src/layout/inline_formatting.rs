@@ -21,7 +21,9 @@ use super::text::{
 
 mod flow;
 mod inline_content;
+mod out_of_flow;
 pub(crate) use flow::{AnonymousBlockFlow, IndependentFlowLayout, layout_mixed_flow_children};
+pub(crate) use out_of_flow::{LineGeometry, nested_out_of_flow, out_of_flow_static_positions};
 
 /// Source-order selector position for one inline sibling sequence.
 ///

@@ -3342,8 +3342,39 @@ pub(crate) struct InlineRunCollector<'a> {
     fonts: &'a HashMap<String, TtfFont>,
     counter_state: &'a mut CounterState,
     resources: &'a mut crate::security::resources::ResourceLoader,
-    next_inline_decoration: usize,
+    collection: CollectionState,
     context: InlineRunContext,
+}
+
+/// What the run collector carries through nested inline elements.
+#[derive(Debug, Default)]
+pub(crate) struct CollectionState {
+    next_inline_decoration: usize,
+    /// While recording: the number of runs collected before each absolutely
+    /// positioned element, in source order. The block that lays those
+    /// elements out wraps that many runs to find each one's static position.
+    out_of_flow_boundaries: Option<Vec<OutOfFlowBoundary>>,
+}
+
+/// Where an absolutely positioned element sits among a block's runs.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OutOfFlowBoundary {
+    /// The number of runs collected before it.
+    pub(crate) runs_before: usize,
+    /// Whether it was block-level before it was positioned: such a box
+    /// starts below a line that has content before it.
+    pub(crate) block_level: bool,
+}
+
+impl CollectionState {
+    fn record_out_of_flow(&mut self, runs_before: usize, style: &ComputedStyle) {
+        if let Some(boundaries) = &mut self.out_of_flow_boundaries {
+            boundaries.push(OutOfFlowBoundary {
+                runs_before,
+                block_level: !style.inline_level_before_blockification,
+            });
+        }
+    }
 }
 
 /// Formatting-context policy for atomic boxes collected as text runs.
@@ -3382,9 +3413,25 @@ impl<'a> InlineRunCollector<'a> {
             fonts,
             counter_state,
             resources,
-            next_inline_decoration: 0,
+            collection: CollectionState::default(),
             context: InlineRunContext::Standard,
         }
+    }
+
+    /// Record where each absolutely positioned element sits among the runs,
+    /// for [`Self::out_of_flow_boundaries`].
+    pub(crate) fn recording_out_of_flow(mut self) -> Self {
+        self.collection.out_of_flow_boundaries = Some(Vec::new());
+        self
+    }
+
+    /// Where each absolutely positioned element sits among the runs, in
+    /// source order, when recording.
+    pub(crate) fn out_of_flow_boundaries(&mut self) -> Vec<OutOfFlowBoundary> {
+        self.collection
+            .out_of_flow_boundaries
+            .take()
+            .unwrap_or_default()
     }
 
     pub(crate) fn in_context(mut self, context: InlineRunContext) -> Self {
@@ -3413,7 +3460,7 @@ impl<'a> InlineRunCollector<'a> {
             ancestors,
             self.counter_state,
             self.resources,
-            &mut self.next_inline_decoration,
+            &mut self.collection,
         );
         let boundary_start = first_new_run.saturating_sub(1);
         runs[boundary_start..]
@@ -3451,7 +3498,7 @@ fn collect_text_runs_inner(
     ancestors: &[AncestorInfo],
     counter_state: &mut CounterState,
     resources: &mut crate::security::resources::ResourceLoader,
-    next_inline_decoration: &mut usize,
+    collection: &mut CollectionState,
 ) {
     let first_run = runs.len();
     sequence.append_before(runs, fonts, counter_state, resources);
@@ -3595,7 +3642,12 @@ fn collect_text_runs_inner(
                 let collected_as_float_box = matches!(collected_as, CollectedAs::FloatBox);
                 match collected_as {
                     CollectedAs::Runs | CollectedAs::FloatBox => {}
-                    CollectedAs::Skipped => continue,
+                    CollectedAs::Skipped => {
+                        if role == InlineFormattingRole::OutOfFlow {
+                            collection.record_out_of_flow(runs.len(), &style);
+                        }
+                        continue;
+                    }
                     CollectedAs::Image => {
                         if let Some(boxed) = nested_inline::image_box(el, &style, resources) {
                             // The inline element's background covers its content
@@ -3642,7 +3694,7 @@ fn collect_text_runs_inner(
                                 fonts,
                                 counter_state,
                                 resources,
-                                next_inline_decoration,
+                                collection,
                             },
                         );
                         counter_state.leave_element(counter_scope);
@@ -3866,9 +3918,9 @@ fn collect_text_runs_inner(
                         );
                         let element_start = runs.len();
                         let decoration_id = crate::layout::engine::InlineDecorationId::from_index(
-                            *next_inline_decoration,
+                            collection.next_inline_decoration,
                         );
-                        *next_inline_decoration += 1;
+                        collection.next_inline_decoration += 1;
                         collect_text_runs_inner(
                             InlineContentSequence::with_generated(
                                 &el.children,
@@ -3884,7 +3936,7 @@ fn collect_text_runs_inner(
                             &child_ancestors,
                             counter_state,
                             resources,
-                            next_inline_decoration,
+                            collection,
                         );
                         apply_inline_horizontal_edges(
                             runs,

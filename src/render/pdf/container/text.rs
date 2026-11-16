@@ -51,8 +51,6 @@ pub(super) fn render_text_child(
     let tb_float = &child.flow.float;
     let tb_clear = &child.flow.clear;
     let position = &child.positioning.scheme;
-    let offset_top = &child.positioning.insets.top;
-    let offset_left = &child.positioning.insets.left;
     let offset_bottom = &child.positioning.insets.bottom;
     let tb_opacity = &child.paint.group.effects.opacity;
     let tb_mix_blend = &child.paint.group.effects.mix_blend_mode;
@@ -80,10 +78,14 @@ pub(super) fn render_text_child(
         // (resolved by containing-block depth), skipping any static
         // intermediate container this box is nested inside.
         let anchor = abs_child_anchor(tb_containing_block, abs_origins, self_pad_origin);
-        let abs_x = anchor.x + offset_left;
-        let abs_y = anchor.y - offset_top;
+        let origin = abs_child_origin(
+            &child.positioning,
+            anchor,
+            PdfPoint::new(x, container_top_y),
+            PdfPoint::new(x, cursor_y),
+        );
         let tb_geometry = LayoutBoxGeometry::from_layout(
-            PdfRect::from_top(abs_x, abs_y, abs_w, abs_h),
+            PdfRect::from_top(origin.x, origin.y, abs_w, abs_h),
             border,
             *padding,
             child.paint.border_image.as_ref(),

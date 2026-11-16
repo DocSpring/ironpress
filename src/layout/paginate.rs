@@ -2478,6 +2478,8 @@ struct PaginationPosition {
     insets: EdgeSizes,
     containing_block: Option<super::engine::ContainingBlock>,
     containing_block_depth: usize,
+    /// An absolute box whose `top` and `bottom` are both auto.
+    static_block_position: bool,
     flex_padding_box_border_top: Option<f32>,
 }
 
@@ -2490,6 +2492,7 @@ impl Default for PaginationPosition {
             insets: EdgeSizes::ZERO,
             containing_block: None,
             containing_block_depth: 0,
+            static_block_position: false,
             flex_padding_box_border_top: None,
         }
     }
@@ -2506,6 +2509,7 @@ fn pagination_position(element: &dyn LayoutElement) -> PaginationPosition {
         result.insets = positioning.insets;
         result.containing_block = positioning.containing_block;
         result.containing_block_depth = positioning.containing_block_depth;
+        result.static_block_position = positioning.has_static_block_position();
     }
 
     struct FlexPaddingBoxTop<'a>(&'a mut Option<f32>);
@@ -2924,6 +2928,7 @@ pub(crate) fn paginate_with_context(
         let elem_clear = position.clear;
         let elem_position = position.scheme;
         let elem_offset_top = position.insets.top;
+        let elem_static_block_position = position.static_block_position;
         let elem_containing_block = position.containing_block;
         let elem_positioned_depth = position.containing_block_depth;
 
@@ -3127,7 +3132,12 @@ pub(crate) fn paginate_with_context(
 
         // Handle position: absolute -- place at fixed position, don't affect flow
         if elem_position.is_absolute() {
-            let abs_y = if let Some(cb) = elem_containing_block {
+            let abs_y = if elem_static_block_position {
+                // `top` and `bottom` are both auto: the box stays where it
+                // would have been in the flow, below the previous box's
+                // margin (CSS 2.1 §10.6.4).
+                y + collapse_vertical_margins(prev_margin_bottom, 0.0) + elem_offset_top
+            } else if let Some(cb) = elem_containing_block {
                 // Position relative to the containing block (nearest positioned ancestor).
                 // bottom/right offsets are pre-resolved into top/left in build_pseudo_block.
                 positioned_y_by_depth.get(&cb.depth).copied().unwrap_or(0.0) + elem_offset_top

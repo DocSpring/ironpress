@@ -652,6 +652,11 @@ pub(crate) struct Positioning {
     constraints: PositionConstraints,
     pub(crate) containing_block: Option<ContainingBlock>,
     pub(crate) containing_block_depth: usize,
+    /// An absolute box's static position, from its parent's content-box
+    /// top-left, when the parent's flow can't give it: a box in a line of
+    /// text sits where it falls in that line. `None` takes the parent's flow
+    /// cursor.
+    pub(crate) static_position: Option<Point>,
 }
 
 impl Positioning {
@@ -698,6 +703,38 @@ impl Positioning {
             },
             containing_block: None,
             containing_block_depth: 0,
+            static_position: None,
+        }
+    }
+
+    /// Whether an absolutely positioned box keeps its static position on the
+    /// horizontal axis: `left` and `right` are both `auto` (CSS 2.1 §10.3.7).
+    pub(crate) const fn has_static_inline_position(&self) -> bool {
+        self.scheme.is_absolute()
+            && matches!(self.constraints.edges.left, PositionInset::Auto)
+            && matches!(self.constraints.edges.right, PositionInset::Auto)
+    }
+
+    /// Whether an absolutely positioned box keeps its static position on the
+    /// vertical axis: `top` and `bottom` are both `auto` (CSS 2.1 §10.6.4).
+    pub(crate) const fn has_static_block_position(&self) -> bool {
+        self.scheme.is_absolute()
+            && matches!(self.constraints.edges.top, PositionInset::Auto)
+            && matches!(self.constraints.edges.bottom, PositionInset::Auto)
+    }
+
+    /// Place the box at a static position its layout has found, `offset`
+    /// from its containing block's padding box, on each axis that keeps one.
+    /// Those axes then hold ordinary insets, so later passes don't place the
+    /// box at a static position again.
+    pub(crate) fn settle_static_position(&mut self, offset: Point) {
+        if self.has_static_inline_position() {
+            self.insets.left += offset.x;
+            self.constraints.edges.left = PositionInset::Length(self.insets.left);
+        }
+        if self.has_static_block_position() {
+            self.insets.top += offset.y;
+            self.constraints.edges.top = PositionInset::Length(self.insets.top);
         }
     }
 

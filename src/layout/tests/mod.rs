@@ -1,3 +1,4 @@
+mod absolute_static_position;
 mod anonymous_blocks;
 mod atomic_inline;
 mod container_flow;

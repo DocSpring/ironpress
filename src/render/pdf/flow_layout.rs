@@ -206,6 +206,37 @@ pub(super) fn abs_child_anchor(
         .unwrap_or(self_pad_origin)
 }
 
+/// Border-box top-left of an absolutely positioned child, in PDF space.
+///
+/// Each axis takes the child's insets from its containing block's padding box
+/// (`anchor`), except an axis whose insets are both `auto`, where the child
+/// sits at its static position: where it would have been in this container's
+/// flow (CSS 2.1 §10.3.7, §10.6.4). That's the child's recorded static
+/// position from the container's content-box top-left (`content_origin`), or
+/// else `flow_origin`, the flow's content-box start edge and its cursor.
+pub(super) fn abs_child_origin(
+    positioning: &crate::layout::elements::Positioning,
+    anchor: PdfPoint,
+    content_origin: PdfPoint,
+    flow_origin: PdfPoint,
+) -> PdfPoint {
+    let static_origin = positioning.static_position.map_or(flow_origin, |offset| {
+        PdfPoint::new(content_origin.x + offset.x, content_origin.y - offset.y)
+    });
+    PdfPoint::new(
+        if positioning.has_static_inline_position() {
+            static_origin.x + positioning.insets.left
+        } else {
+            anchor.x + positioning.insets.left
+        },
+        if positioning.has_static_block_position() {
+            static_origin.y - positioning.insets.top
+        } else {
+            anchor.y - positioning.insets.top
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

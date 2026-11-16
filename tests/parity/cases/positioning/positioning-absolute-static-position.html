@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>absolute boxes with auto insets keep their static position</title>
+<style>
+  @page { size: 320px 320px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; background: #ffffff; }
+  body { margin: 16px; }
+  p { margin: 8px 0; }
+  .abs { position: absolute; width: 40px; height: 16px; }
+  .rel { position: relative; padding: 16px; background: #e8eefb; }
+</style>
+</head>
+<body>
+  <p>First paragraph</p>
+  <div class="abs" style="background:#2e7d32"></div>
+  <p>Second paragraph</p>
+  <div class="rel">
+    <p>Padded box</p>
+    <div class="abs" style="top:0; background:#ad1457"></div>
+  </div>
+  <div class="rel">
+    <p>Before the box</p>
+    <div class="abs" style="right:0; background:#1f4fa8"></div>
+    <p>After the box</p>
+  </div>
+</body>
+</html>

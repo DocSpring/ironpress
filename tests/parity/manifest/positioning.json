@@ -327,6 +327,36 @@
     ]
   },
   {
+    "id": "positioning-absolute-static-position",
+    "category": "positioning",
+    "feature": "position:absolute",
+    "subfeature": "static-position",
+    "description": "An absolute box whose top and bottom are auto sits where it would have been in the flow, below the box before it, and one whose left and right are auto sits at its parent's content edge, inside the padding (CSS 2.1 sections 10.3.7 and 10.6.4).",
+    "file": "cases/positioning/positioning-absolute-static-position.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-absolute-static-position-in-line",
+    "category": "positioning",
+    "feature": "position:absolute",
+    "subfeature": "static-position",
+    "description": "An absolute box with auto insets inside a line of text sits where it falls among the words, after the words and space before it, whether it is a child of the paragraph or inside a span in it, on a later line when the line wraps, and offset by the line's text-align. A box that was block-level before it was positioned starts below its line at the start edge (CSS 2.1 sections 10.3.7 and 10.6.4).",
+    "file": "cases/positioning/positioning-absolute-static-position-in-line.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
     "id": "positioning-absolute-text-content-box",
     "category": "positioning",
     "feature": "position:absolute",

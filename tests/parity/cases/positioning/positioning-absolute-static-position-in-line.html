@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>absolute boxes in a line of text keep their place in the line</title>
+<style>
+  @page { size: 320px 256px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; background: #ffffff; }
+  body { margin: 16px; }
+  p { margin: 0 0 16px; width: 240px; }
+  .abs { position: absolute; width: 24px; height: 12px; }
+</style>
+</head>
+<body>
+  <p>Alpha beta <i class="abs" style="background:#2e7d32"></i> gamma delta.</p>
+  <p>Alpha <span>beta <i class="abs" style="background:#ad1457"></i> gamma</span> delta.</p>
+  <p>One two three four five six seven <i class="abs" style="background:#1f4fa8"></i> eight nine ten.</p>
+  <p>Alpha beta <i class="abs" style="display:block; background:#e65100"></i> gamma.</p>
+  <p style="text-align:center">Centred <i class="abs" style="background:#6a1b9a"></i> words.</p>
+</body>
+</html>

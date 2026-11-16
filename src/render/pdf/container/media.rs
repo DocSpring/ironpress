@@ -20,10 +20,16 @@ fn place_replaced_child(
             abs_origins,
             flow.frame.padding_origin,
         );
+        let origin = abs_child_origin(
+            positioning,
+            anchor,
+            PdfPoint::new(flow.frame.content_origin.x, flow.container_top_y),
+            PdfPoint::new(flow.frame.content_origin.x, position.cursor_y),
+        );
         return ReplacedChildPlacement {
             paint_box: PdfRect::from_top(
-                anchor.x + positioning.insets.left,
-                anchor.y - positioning.insets.top,
+                origin.x,
+                origin.y,
                 geometry.size.width,
                 geometry.size.height,
             ),

@@ -786,7 +786,17 @@ pub(crate) fn layout_block_element(
     let inline_children =
         InlineFormattingContext::new(style, env.rules, child_ancestors, env.font_metrics())
             .children(inline_sequence);
-    let has_out_of_flow_children = inline_children.has_out_of_flow();
+    // Absolute boxes inside this box's inline elements are laid out beside
+    // its lines, like its own absolute children.
+    let nested_out_of_flow = super::inline_formatting::nested_out_of_flow(
+        &el.children,
+        &inline_children,
+        child_ancestors,
+        env.rules,
+        env.font_metrics(),
+    );
+    let has_out_of_flow_children =
+        inline_children.has_out_of_flow() || !nested_out_of_flow.is_empty();
     let child_sibling_list = element_sibling_list(&el.children);
     let child_el_count = child_sibling_list.len();
     let has_blended_block_child = inline_children.iter().any(|child| {
@@ -866,6 +876,10 @@ pub(crate) fn layout_block_element(
     // TextBlock, emit a MathBlock, then continue collecting.
     let mut runs = Vec::new();
     let mut mixed_inline_row_emitted = false;
+    // The runs collected before each absolute box in this box's lines, then
+    // each one's static position in them.
+    let mut out_of_flow_boundaries: Vec<super::text::OutOfFlowBoundary> = Vec::new();
+    let mut out_of_flow_static_positions: Vec<crate::types::Point> = Vec::new();
 
     // Helper closure: flush accumulated runs as a TextBlock
     let flush_runs = |runs: &mut Vec<TextRun>,
@@ -1478,8 +1492,17 @@ pub(crate) fn layout_block_element(
                 env.counter_state,
                 &mut *env.resources,
             );
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect_box_content(&el.children, style, &mut runs, None, child_ancestors);
+            let mut collector = InlineRunCollector::new(
+                env.rules,
+                env.fonts,
+                env.counter_state,
+                &mut *env.resources,
+            );
+            if has_out_of_flow_children {
+                collector = collector.recording_out_of_flow();
+            }
+            collector.collect_box_content(&el.children, style, &mut runs, None, child_ancestors);
+            out_of_flow_boundaries = collector.out_of_flow_boundaries();
         }
     }
     if !skip_inline_collection && !mixed_inline_row_emitted && !has_block_kids_for_wrapper {
@@ -1636,11 +1659,34 @@ pub(crate) fn layout_block_element(
         // A dropped initial letter reserves its kerned margin-box exclusion on
         // every line it overlaps (css-inline-3 §7.5–7.8).
         .with_drop_cap(drop_cap);
+        // A `::first-letter` or `::first-line` restyles the runs after they
+        // were counted, and right-to-left or vertical lines start elsewhere:
+        // their absolute boxes keep the flow's static position.
+        let static_position_runs = (!out_of_flow_boundaries.is_empty()
+            && first_letter_style.is_none()
+            && first_line_style.is_none()
+            && !style.direction_rtl
+            && !style.writing_mode.is_vertical())
+        .then(|| runs.clone());
         let mut lines = if let Some(fl) = first_line_style {
             wrap_text_runs_with_first_line_style(runs, wrap_options, fl, env.fonts)
         } else {
             wrap_text_runs(runs, wrap_options, env.fonts)
         };
+        if let Some(static_position_runs) = static_position_runs {
+            out_of_flow_static_positions = super::inline_formatting::out_of_flow_static_positions(
+                &static_position_runs,
+                &out_of_flow_boundaries,
+                &lines,
+                super::inline_formatting::LineGeometry {
+                    wrap: wrap_options,
+                    text_indent,
+                    text_align: style.text_align,
+                    content_width: inner_width,
+                },
+                env.fonts,
+            );
+        }
 
         // `::first-line` (css-pseudo-4 §2.1): restyle the runs that landed on
         // the dynamically-determined first formatted line.
@@ -1891,9 +1937,28 @@ pub(crate) fn layout_block_element(
             }
         }
         // If there's saved inline content, include it as the next child.
+        let lines_top: f32 = child_elements
+            .iter()
+            .map(|child| crate::layout::engine::estimate_element_height(child.as_ref()))
+            .sum();
         if let Some(inline_el) = saved_inline_element.take() {
             child_elements.push(inline_el);
         }
+        // Each absolute box in the lines, direct or in an inline element, is
+        // laid out below in source order and takes the next static position.
+        let out_of_flow_count = inline_children
+            .iter()
+            .filter(|child| child.role == InlineFormattingRole::OutOfFlow)
+            .count()
+            + nested_out_of_flow.len();
+        let mut static_positions = LineStaticPositions::new(
+            if out_of_flow_static_positions.len() == out_of_flow_count {
+                std::mem::take(&mut out_of_flow_static_positions)
+            } else {
+                Vec::new()
+            },
+            lines_top,
+        );
         let mut child_el_idx = 0;
         // Accumulate preceding element siblings so sibling combinators (`+`, `~`)
         // resolve during the cascade (these call sites previously passed `&[]`).
@@ -2041,6 +2106,7 @@ pub(crate) fn layout_block_element(
                         if recurses_as_layout_child(child_el.tag)
                             || inline_children.requires_independent_layout(child_el_idx)
                         {
+                            let first_new = child_elements.len();
                             flatten_element(
                                 child_el,
                                 LayoutTreeContext::new(
@@ -2059,6 +2125,41 @@ pub(crate) fn layout_block_element(
                                 &mut child_elements,
                                 env,
                             );
+                            if inline_children
+                                .get(child_el_idx)
+                                .is_some_and(|child| child.role == InlineFormattingRole::OutOfFlow)
+                            {
+                                static_positions.assign(&mut child_elements[first_new..]);
+                            }
+                        }
+                        for nested in nested_out_of_flow
+                            .iter()
+                            .filter(|nested| nested.holder == child_el_idx)
+                        {
+                            let first_new = child_elements.len();
+                            let context = &nested.selector_context;
+                            flatten_element(
+                                nested.element,
+                                LayoutTreeContext::new(
+                                    &nested.parent_style,
+                                    &child_ctx,
+                                    &context.ancestors,
+                                )
+                                .with_positioned_ancestor_depth(positioned_depth)
+                                .for_element(
+                                    ElementSiblingContext::new(
+                                        context.child_index,
+                                        context.sibling_count,
+                                    )
+                                    .with_neighbors(
+                                        &context.preceding_siblings,
+                                        &context.following_siblings,
+                                    ),
+                                ),
+                                &mut child_elements,
+                                env,
+                            );
+                            static_positions.assign(&mut child_elements[first_new..]);
                         }
                     }
                     preceding_siblings.push((
@@ -2757,4 +2858,42 @@ fn child_x_and_width(child: &dyn LayoutElement) -> (f32, f32) {
     let mut geometry = InlineGeometry::default();
     child.accept(&mut geometry);
     (geometry.x, geometry.width)
+}
+
+/// Static positions of the absolute boxes in a box's lines, handed out in
+/// source order as those boxes are laid out beside the lines.
+struct LineStaticPositions {
+    positions: std::vec::IntoIter<crate::types::Point>,
+    /// Where the lines start in the box's content box.
+    lines_top: f32,
+}
+
+impl LineStaticPositions {
+    fn new(positions: Vec<crate::types::Point>, lines_top: f32) -> Self {
+        Self {
+            positions: positions.into_iter(),
+            lines_top,
+        }
+    }
+
+    /// Give the next static position to the absolute box just laid out.
+    fn assign(&mut self, laid_out: &mut [LayoutNode]) {
+        let Some(position) = self.positions.next() else {
+            return;
+        };
+        for node in laid_out {
+            let Some(positioning) = node
+                .positioning_owner_mut()
+                .map(|owner| owner.positioning_mut())
+            else {
+                continue;
+            };
+            if positioning.scheme.is_absolute() {
+                positioning.static_position = Some(crate::types::Point::new(
+                    position.x,
+                    self.lines_top + position.y,
+                ));
+            }
+        }
+    }
 }

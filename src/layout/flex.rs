@@ -187,12 +187,7 @@ impl AbsoluteFlexContext<'_, '_> {
             else {
                 continue;
             };
-            if style.left.is_none() && style.right.is_none() {
-                positioning.insets.left += static_x;
-            }
-            if style.top.is_none() && style.bottom.is_none() {
-                positioning.insets.top += static_y;
-            }
+            positioning.settle_static_position(crate::types::Point::new(static_x, static_y));
         }
         output.extend(children);
     }

@@ -3382,6 +3382,10 @@ pub struct ComputedStyle {
     /// integer, initial 2, inherited.
     pub widows: u8,
     pub position: Position,
+    /// Whether the box's outer display was inline-level before an absolute
+    /// position or a float made it block-level (css-display-3 §2.7). An
+    /// absolute box's static position in a line depends on it.
+    pub inline_level_before_blockification: bool,
     /// CSS GCPM `position: running(name)`: removes this element from normal flow
     /// and stores it under `name` for `content: element(name)` page-margin boxes.
     /// Kept separate from [`Position`] so the widely-used copy enum can remain
@@ -3765,6 +3769,7 @@ impl Default for ComputedStyle {
             orphans: 2,
             widows: 2,
             position: Position::Static,
+            inline_level_before_blockification: false,
             running_name: None,
             top: None,
             right: None,
@@ -4416,6 +4421,14 @@ fn compute_style_with_context_and_percentage_basis_impl(
     }
     sync_line_height_from_absolute(&mut style);
 
+    style.inline_level_before_blockification = matches!(
+        style.display,
+        Display::Inline
+            | Display::InlineBlock
+            | Display::InlineFlex
+            | Display::InlineGrid
+            | Display::InlineTable
+    );
     if style.position.is_absolute() || matches!(style.float, Float::Left | Float::Right) {
         // Text decorations do not propagate into out-of-flow descendants.
         // Decorations originated by this element remain active.
