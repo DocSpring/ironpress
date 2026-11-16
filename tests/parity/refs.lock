@@ -602,6 +602,34 @@
       "reference_file": "cases/block-box-model/block-border-width-thick.html",
       "reference_html_sha256": "e72d7e7e30435818fec544fe6d55cba89116e11c6f619833d4f162f6896c3b16"
     },
+    "block-box-model-body-border-pages": {
+      "category": "block-box-model",
+      "file": "cases/block-box-model/block-box-model-body-border-pages.html",
+      "html_sha256": "8a82391b8d7fdec52737de8fd898831412f9ffe0fe0f5243fbe4dee12b7584b1",
+      "manifest_sha256": "583f610a2e75fb2e824d130b6d52b8106754349b74ef3ccde58e3c50a70fab4e",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/block-box-model/block-box-model-body-border-pages.pdf",
+        "sha256": "f334df9cb63277a55ed7739602a579d012b52a27c9ba86783604e9ff323133b0"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/block-box-model/block-box-model-body-border-pages.html",
+      "reference_html_sha256": "8a82391b8d7fdec52737de8fd898831412f9ffe0fe0f5243fbe4dee12b7584b1"
+    },
+    "block-box-model-body-padding-first-margin": {
+      "category": "block-box-model",
+      "file": "cases/block-box-model/block-box-model-body-padding-first-margin.html",
+      "html_sha256": "e560aabb5ebe263c1f7bc5839b2e928857b663ddee6014225e20ed39a3bdf79b",
+      "manifest_sha256": "dc774db9fa269551567e168146453c11321fa5a8c1fe4c2dec917829f0cc2ed6",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/block-box-model/block-box-model-body-padding-first-margin.pdf",
+        "sha256": "7370e344e498ba1585b6553fd10979ea784deb1c486831cf542afe6efc74f9c4"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/block-box-model/block-box-model-body-padding-first-margin.html",
+      "reference_html_sha256": "e560aabb5ebe263c1f7bc5839b2e928857b663ddee6014225e20ed39a3bdf79b"
+    },
     "block-box-sizing-border-box": {
       "category": "block-box-model",
       "file": "cases/block-box-model/block-box-sizing-border-box.html",
@@ -1847,6 +1875,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/backgrounds-borders/border-style-dashed.html",
       "reference_html_sha256": "3d8d395c4aa584d21ee4035633a3a2d7b40c17aab0eec237d44de3458be119c6"
+    },
+    "border-style-dashed-thin": {
+      "category": "backgrounds-borders",
+      "file": "cases/backgrounds-borders/border-style-dashed-thin.html",
+      "html_sha256": "2cf3619f7ab3cf9517a741ed92d9e244b7f35e35ab18a5bb66e377e8425210b0",
+      "manifest_sha256": "5ca45167e590a3be481286f51f875a3eb3a2235dff79274e0eaa4ba5a4049690",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/backgrounds-borders/border-style-dashed-thin.pdf",
+        "sha256": "82598246208263b1a8eb81869cf45797d7ab6c911d379fe2c84fa635fbc212e0"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/backgrounds-borders/border-style-dashed-thin.html",
+      "reference_html_sha256": "2cf3619f7ab3cf9517a741ed92d9e244b7f35e35ab18a5bb66e377e8425210b0"
     },
     "border-style-dotted": {
       "category": "backgrounds-borders",
@@ -7910,6 +7952,20 @@
       "reference_file": "cases/inline-text/inline-text-break-spaces-trailing-wrap.html",
       "reference_html_sha256": "3ce32b13dedf789fa54c392ea690bb784005ca623d9689349f4238a3e3a15b38"
     },
+    "inline-text-collapsed-space-owner": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-collapsed-space-owner.html",
+      "html_sha256": "d4e59238a9404e64d419258bc3407d166f15f12d4b59be9eb0b2fe55f6f2b2c2",
+      "manifest_sha256": "dc32712eaf4b86b94d8474766148eee80b238e93e522def2ba35bbf0f0f3914d",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-collapsed-space-owner.pdf",
+        "sha256": "7550b98e4d517e44947796549409b0debf7c4fb0ea8b6bc7e94ea46b11c8fa2f"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-collapsed-space-owner.html",
+      "reference_html_sha256": "d4e59238a9404e64d419258bc3407d166f15f12d4b59be9eb0b2fe55f6f2b2c2"
+    },
     "inline-text-decoration-subpoint-geometry": {
       "category": "inline-text",
       "file": "cases/inline-text/inline-text-decoration-subpoint-geometry.html",
@@ -7993,6 +8049,34 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/inline-text/inline-text-inline-block-shrink-to-fit.html",
       "reference_html_sha256": "151641c3591e296e9f37c64fa361b7cc6b3cceb020ecdea7ab601e96f2cccd90"
+    },
+    "inline-text-inline-block-vertical-margins": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-inline-block-vertical-margins.html",
+      "html_sha256": "75ee889b0f5cb098751cfc8a87a2e6e3b05d7d1916d0d45190f55d106f428eee",
+      "manifest_sha256": "18d59d650869f5aad1d5eacc06523bc09c74ca8819cc22f97275562fb0e4cb82",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-inline-block-vertical-margins.pdf",
+        "sha256": "da6cf5399f196d929fe5bc5bbd72c7c3e6c96843fbde4628abd095eb8a919847"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-inline-block-vertical-margins.html",
+      "reference_html_sha256": "75ee889b0f5cb098751cfc8a87a2e6e3b05d7d1916d0d45190f55d106f428eee"
+    },
+    "inline-text-inline-border": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-inline-border.html",
+      "html_sha256": "159c719a39da349a96fd1520e69355d72ebfbf2f1c27f61f7421a72e0f315959",
+      "manifest_sha256": "e7b3461ad6c098e3f1badac3f010774cba3474c810142cffa43b95eeb0cb64fc",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-inline-border.pdf",
+        "sha256": "163b55bf6faf4b37d2f862923ad4f2c13ce2990332279ead6804ae4b136e8fec"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-inline-border.html",
+      "reference_html_sha256": "159c719a39da349a96fd1520e69355d72ebfbf2f1c27f61f7421a72e0f315959"
     },
     "inline-text-letter-spacing": {
       "category": "inline-text",
@@ -8091,6 +8175,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/inline-text/inline-text-overflow-wrap-break-word.html",
       "reference_html_sha256": "6b491bbbffc73a78ad38f3211c1f5a5ee1bb14cb751af9321060435069790b02"
+    },
+    "inline-text-svg-in-span": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-svg-in-span.html",
+      "html_sha256": "6dae686a647088bbd6289d8b092c78c8ce5faa83fd5ec0dabd8b50d6c5d3be79",
+      "manifest_sha256": "c3c4ccda296eb6f0adbf2cab63c178b96eda3911238386d9cd53bc0f9b24c1cd",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-svg-in-span.pdf",
+        "sha256": "afd5a9132d67e5157deaa2f37e54fea48e2fec05c0b3a28673272d42f12db8f4"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-svg-in-span.html",
+      "reference_html_sha256": "6dae686a647088bbd6289d8b092c78c8ce5faa83fd5ec0dabd8b50d6c5d3be79"
     },
     "inline-text-text-align-center": {
       "category": "inline-text",
@@ -13902,6 +14000,20 @@
       "reference_file": "cases/lists-counters/list-style-type-upper-roman.html",
       "reference_html_sha256": "472ba95b36b85c5420d8d4449f5e95f98b03f8f16bfa19503a6d271090276ae8"
     },
+    "lists-counters-bullet-marker-sizes": {
+      "category": "lists-counters",
+      "file": "cases/lists-counters/lists-counters-bullet-marker-sizes.html",
+      "html_sha256": "98c234804c20f95c099e7b701e9953440695686660988ed264390a87f8fd93e1",
+      "manifest_sha256": "dd147458a8a66de7b4a303571219a639f33962bd8176b3e2be49fda4914cf56a",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/lists-counters/lists-counters-bullet-marker-sizes.pdf",
+        "sha256": "ecfb2b98d6d3c9d710a597d3885bdaa2990311022ef0153ecc70829d536f7661"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/lists-counters/lists-counters-bullet-marker-sizes.html",
+      "reference_html_sha256": "98c234804c20f95c099e7b701e9953440695686660988ed264390a87f8fd93e1"
+    },
     "lists-counters-counter-list-item-after": {
       "category": "lists-counters",
       "file": "cases/lists-counters/lists-counters-counter-list-item-after.html",
@@ -14083,6 +14195,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/lists-counters/lists-counters-marker-side-match-parent.html",
       "reference_html_sha256": "9fe17637576ab1564e109560accce7ac81839f4d2928c32c1c78932b31a0b007"
+    },
+    "lists-counters-marker-small-font-size": {
+      "category": "lists-counters",
+      "file": "cases/lists-counters/lists-counters-marker-small-font-size.html",
+      "html_sha256": "60aca1171cf62404e05d8383ff770bf8dddcd0c67f69937052278bf26d967fd9",
+      "manifest_sha256": "4cda1101fd87ce4931e778cd3f2e8130232eb4ac105e96bbae0a9e7e0ac7eb1e",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/lists-counters/lists-counters-marker-small-font-size.pdf",
+        "sha256": "138ab1828b8c38250414518c99e6b8591c2a764ab2fa1fc77dda4c1b2c3eab01"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/lists-counters/lists-counters-marker-small-font-size.html",
+      "reference_html_sha256": "60aca1171cf62404e05d8383ff770bf8dddcd0c67f69937052278bf26d967fd9"
     },
     "lists-counters-ol-reversed": {
       "category": "lists-counters",
@@ -15470,6 +15596,20 @@
       "reference_file": "cases/paged-media/paged-bordered-tall-image-fragment.html",
       "reference_html_sha256": "c47f28f1aceb836dadf8c943e5129f6e0325e5b4f808b8717dfdaa2afa0a908f"
     },
+    "paged-bottom-margin-truncated-at-break": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-bottom-margin-truncated-at-break.html",
+      "html_sha256": "01acba1fee1a93249553b69392be989109e8989f4965d5ef13f2c9dd020eb01b",
+      "manifest_sha256": "1ed79a0cde9a2e435f1088b493d6c91a5241c3a5d90988af4fdc51f088aa3e4b",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-bottom-margin-truncated-at-break.pdf",
+        "sha256": "9dbbeaedc1d1c02d4fbd10212d1a59f5bb7da5d19404cf51086a0f94f6b05ade"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-bottom-margin-truncated-at-break.html",
+      "reference_html_sha256": "01acba1fee1a93249553b69392be989109e8989f4965d5ef13f2c9dd020eb01b"
+    },
     "paged-break-after-avoid-keep-next": {
       "category": "paged-media",
       "file": "cases/paged-media/paged-break-after-avoid-keep-next.html",
@@ -16226,6 +16366,48 @@
       "reference_file": "cases/paged-media/paged-pages-counter-immutable.html",
       "reference_html_sha256": "f0c5d378770baf94a112606ef123622e9663e369f57de23af9cccd31f8c4e769"
     },
+    "paged-print-fit-flex-item-overflow": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-print-fit-flex-item-overflow.html",
+      "html_sha256": "e252ce09ba1e711a5267711b062ab5aada20941fc30c234b35d29458a55a7302",
+      "manifest_sha256": "d17052df30b194ca0cf9ad659a75f8afb0bf8031df6293455efbe2fb31ed9380",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-print-fit-flex-item-overflow.pdf",
+        "sha256": "587b174a363200871c57025b33d9c1e92680334baa56dfa9aa441fab977254f8"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-print-fit-flex-item-overflow.html",
+      "reference_html_sha256": "e252ce09ba1e711a5267711b062ab5aada20941fc30c234b35d29458a55a7302"
+    },
+    "paged-print-fit-line-overflow": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-print-fit-line-overflow.html",
+      "html_sha256": "c80b12fadd72f414d309d2baf8ed8052203f8d77c6df868683ae924f4e7292ca",
+      "manifest_sha256": "496cd691dcd4ad6489b4f9dfde055889543f9d5ffb6da0789ca13c6fe6476d49",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-print-fit-line-overflow.pdf",
+        "sha256": "40ee7f3ed5a01fc87ef59c8d69edc48eb9e82f50a34bc4d49223680761e3c4bb"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-print-fit-line-overflow.html",
+      "reference_html_sha256": "c80b12fadd72f414d309d2baf8ed8052203f8d77c6df868683ae924f4e7292ca"
+    },
+    "paged-print-fit-overflow-hidden": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-print-fit-overflow-hidden.html",
+      "html_sha256": "632b0d096014405c5e43962de43d31d080c4af5b51467230f9116320b5c27148",
+      "manifest_sha256": "7d4a0613ee3b0646a4905826b844734d14025a0faca77a808863f4d7afd5b21a",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-print-fit-overflow-hidden.pdf",
+        "sha256": "ca093e566c68f81966635df14379d1ba5ff29489571fc08dd9205460dea335c8"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-print-fit-overflow-hidden.html",
+      "reference_html_sha256": "632b0d096014405c5e43962de43d31d080c4af5b51467230f9116320b5c27148"
+    },
     "paged-root-named-page": {
       "category": "paged-media",
       "file": "cases/paged-media/paged-root-named-page.html",
@@ -16422,6 +16604,20 @@
       "reference_file": "cases/positioning/positioning-absolute-containing-block-relative-ancestor.html",
       "reference_html_sha256": "81c346315294477ce6d990dc5502410c84706ae485d41bbcce6d4a2534aee785"
     },
+    "positioning-absolute-initial-containing-block": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-absolute-initial-containing-block.html",
+      "html_sha256": "554f6a78f71a99bff1699a3ebc614c64f06ad94509137a13deedac0b7a023b2c",
+      "manifest_sha256": "0f7c0eee71e599dd57b9c725e2e44bd9c8b649389d4928a25df349579e3c6139",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-absolute-initial-containing-block.pdf",
+        "sha256": "492055ce68e71902f5fd02941e216e34f4c0d10bf5db50744afa50416bf5c741"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-absolute-initial-containing-block.html",
+      "reference_html_sha256": "554f6a78f71a99bff1699a3ebc614c64f06ad94509137a13deedac0b7a023b2c"
+    },
     "positioning-absolute-percent-insets": {
       "category": "positioning",
       "file": "cases/positioning/positioning-absolute-percent-insets.html",
@@ -16435,6 +16631,48 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/positioning/positioning-absolute-percent-insets.html",
       "reference_html_sha256": "b02579a169d3d65a3ef1c523e7cf8aacd11addde19989ebd2f5158be4c88355c"
+    },
+    "positioning-absolute-static-position": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-absolute-static-position.html",
+      "html_sha256": "2c361c265e00ee9a7711de1322172f817c63c0c29c9b56a6d20a0eb2f3f66fff",
+      "manifest_sha256": "a0a0484b65765f7a53ac86387c23db9f66b356f0aca52251c20a7ce42b9923f2",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-absolute-static-position.pdf",
+        "sha256": "d23a7a2190a8b58a0ab43e3cab6d923bccc3fe56c63dd4f0ede83d42a75bbb03"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-absolute-static-position.html",
+      "reference_html_sha256": "2c361c265e00ee9a7711de1322172f817c63c0c29c9b56a6d20a0eb2f3f66fff"
+    },
+    "positioning-absolute-static-position-in-line": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-absolute-static-position-in-line.html",
+      "html_sha256": "15b3fc3319ebdaf1273aed2bf93b902d2e31b4266cc3296f1ca0362913852c7d",
+      "manifest_sha256": "0adaf48a0238c13d974b7f2020a10e24a7cf049c8e51f3a0c61b58439e17046e",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-absolute-static-position-in-line.pdf",
+        "sha256": "1266e7a38499be717b79239829c47a410626d78f4a3f5707b044b827786f2466"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-absolute-static-position-in-line.html",
+      "reference_html_sha256": "15b3fc3319ebdaf1273aed2bf93b902d2e31b4266cc3296f1ca0362913852c7d"
+    },
+    "positioning-absolute-text-content-box": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-absolute-text-content-box.html",
+      "html_sha256": "cf82a27c6c6690b0a381763ceeec2f2dc076f6969c09c8479aefe526a7c7aa44",
+      "manifest_sha256": "8fdbdfc7c75c356ef341d8245c1d2a43fc2573789e0b762f8db2d9a7d7546887",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-absolute-text-content-box.pdf",
+        "sha256": "cbfb0a8b68d46164015697b9db798892cbf4a0626c80bdc95b11304631ff32fe"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-absolute-text-content-box.html",
+      "reference_html_sha256": "cf82a27c6c6690b0a381763ceeec2f2dc076f6969c09c8479aefe526a7c7aa44"
     },
     "positioning-absolute-x-flexbox": {
       "category": "interactions",
@@ -21182,6 +21420,20 @@
       "reference_file": "cases/interactions/tables-x-typography-bold.html",
       "reference_html_sha256": "741f73d19a4bc23820df66e93184a116cba9e7534f1f66bd984a6dbc3b2f7e5e"
     },
+    "text-advanced-bidi-mixed-lines": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-bidi-mixed-lines.html",
+      "html_sha256": "430b2f4d0efbdd46be4904bf7285f859193e6f3d5d58e036f95e0632f02d6259",
+      "manifest_sha256": "18205417b82fe9c3094ddfc6be9a363fc3d475966535bafabb049e091132d1ff",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-bidi-mixed-lines.pdf",
+        "sha256": "8c2cd74971f7ff1f8b6a082e69e36edf8540940640c58b4cad66e3b2f9b3015f"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-bidi-mixed-lines.html",
+      "reference_html_sha256": "430b2f4d0efbdd46be4904bf7285f859193e6f3d5d58e036f95e0632f02d6259"
+    },
     "text-advanced-dir-auto": {
       "category": "text-advanced",
       "file": "cases/text-advanced/text-advanced-dir-auto.html",
@@ -21606,15 +21858,15 @@
       "category": "text-advanced",
       "file": "cases/text-advanced/text-advanced-text-wrap-mode-nowrap.html",
       "html_sha256": "9f38759cbbdb65e3bb5529b5eac348753bcfa647889e2365962aed1f24e7086a",
-      "manifest_sha256": "3caaa06fff858439c2fde046f289d09b689a85058efb83334ecb19636367cf9c",
+      "manifest_sha256": "33c48f9074636389245df9e2f6a4a7de6e295fd61ce761b42b4be05a08b2da5f",
       "oracle": "chrome",
       "pdf": {
         "file": "oracles/text-advanced/text-advanced-text-wrap-mode-nowrap.pdf",
-        "sha256": "160448a0fd43763390b7fa5866bdacfc6558b860f4e8a8404401f325e22242d4"
+        "sha256": "de10a01cbf061cf88e5a9c748c2809b45f4403965960b13237a9e53cac21397a"
       },
-      "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
-      "reference_file": "references/text-advanced/text-advanced-text-wrap-mode-nowrap.html",
-      "reference_html_sha256": "91ea16d9b0d8b55d9ea853420bb23311a4945723970ac403d7572d8f0f6f8595"
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-text-wrap-mode-nowrap.html",
+      "reference_html_sha256": "9f38759cbbdb65e3bb5529b5eac348753bcfa647889e2365962aed1f24e7086a"
     },
     "text-advanced-text-wrap-pretty": {
       "category": "text-advanced",
