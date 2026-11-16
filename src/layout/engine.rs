@@ -729,6 +729,28 @@ impl InlineDecorationId {
     }
 }
 
+/// The border of a non-replaced inline box, carried by each run inside it
+/// (`TextRun::inline_borders`).
+///
+/// Each line fragment paints its own piece (CSS 2.1 §8.6, `box-decoration-break:
+/// slice`): the top and bottom on every fragment, the left side only on the
+/// fragment that holds the box's left edge and the right side only on the one
+/// that holds its right edge (`show_left`, `show_right`, set per line after
+/// wrapping). The border sits outside the padding box of the box's own font's
+/// content area, whatever the fonts of the runs inside it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InlineBorder {
+    pub(crate) decoration: InlineDecorationId,
+    pub(crate) border: LayoutBorder,
+    pub(crate) radii: CornerRadii,
+    pub(crate) padding: EdgeSizes,
+    /// The box's content area above and below its baseline.
+    pub(crate) ascent: f32,
+    pub(crate) descent: f32,
+    pub(crate) show_left: bool,
+    pub(crate) show_right: bool,
+}
+
 /// Which visual edge of a non-replaced inline box a marker owns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InlineEdgeSide {
@@ -976,6 +998,9 @@ pub struct TextRun {
     /// Explicit run-only typography state. This keeps line height and border
     /// radius free of NaN/negative-value metadata channels.
     pub metadata: TextRunMetadata,
+    /// The borders of the bordered inline boxes around the run, innermost
+    /// first.
+    pub(crate) inline_borders: Vec<InlineBorder>,
 }
 
 impl Default for TextRun {
@@ -1002,6 +1027,7 @@ impl Default for TextRun {
             vertical_align: VerticalAlign::default(),
             text_shadow: Vec::new(),
             metadata: TextRunMetadata::default(),
+            inline_borders: Vec::new(),
         }
     }
 }

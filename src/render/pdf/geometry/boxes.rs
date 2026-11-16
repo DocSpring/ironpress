@@ -46,7 +46,11 @@ pub(in crate::render::pdf) enum BoxPaintGrid {
 }
 
 impl BoxPaintGrid {
-    fn resolve(self, page_content: PageContentTransform, border_box: PdfRect) -> PdfRect {
+    pub(in crate::render::pdf) fn resolve(
+        self,
+        page_content: PageContentTransform,
+        border_box: PdfRect,
+    ) -> PdfRect {
         match self {
             Self::Page => page_content.snap_layout_box(border_box),
             Self::AtomicInline(origin) => page_content.snap_layout_box_from(border_box, origin),

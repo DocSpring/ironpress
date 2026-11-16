@@ -54,6 +54,7 @@ pub(super) fn paint_simple_text_block(
                 if run.inline_box.is_some()
                     || !run.decorations.is_empty()
                     || run.background_color.is_some()
+                    || !run.inline_borders.is_empty()
                     || !run.text_shadow.is_empty()
                     || run.vertical_align != VerticalAlign::Baseline
                 {

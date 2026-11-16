@@ -349,12 +349,15 @@ pub(super) fn paint_text_box(
             line_bottom_y
         };
         let mut lx = text_x;
+        let mut border_pieces = InlineBorderPieces::default();
         for (run_index, run) in merged.iter().enumerate() {
             // Atomic inline box (e.g. a `list-style-image` marker):
             // paint the box/image and advance by its outer width;
             // The glyph painter would shape its empty text and draw
             // nothing, dropping the marker entirely.
             if let Some(inline) = run.inline_box.as_deref() {
+                let advance = run.atomic_inline_advance().unwrap_or_default();
+                border_pieces.add(run, lx, advance, text_y);
                 if !run.is_inline_edge() {
                     render_inline_box(
                         content,
@@ -419,6 +422,7 @@ pub(super) fn paint_text_box(
                     content.push_str("/GSDefault gs\n");
                 }
             }
+            border_pieces.add(run, lx, run_width, text_y);
             // A floated `::first-letter` drop cap is lowered so its
             // glyph top sits on the line's text top (css-pseudo-4 §2.2).
             let run_y = text_y
@@ -532,6 +536,7 @@ pub(super) fn paint_text_box(
             }
             lx += rw;
         }
+        border_pieces.paint(content, ctx);
     }
     if vertical {
         content.push_str("Q\n");

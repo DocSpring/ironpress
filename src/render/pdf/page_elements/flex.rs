@@ -462,8 +462,10 @@ pub(in crate::render::pdf) fn render_flex_row(
                 let mut x = text_x;
                 let inline_box_line =
                     InlineBoxLine::new(line, &merged, text_y, metrics, ctx.text.custom_fonts);
+                let mut border_pieces = InlineBorderPieces::default();
                 for (run_index, run) in merged.iter().enumerate() {
                     if let Some(advance) = run.atomic_inline_advance() {
+                        border_pieces.add(run, x, advance, text_y);
                         if let Some(inline) = run.inline_box.as_deref()
                             && !run.is_inline_edge()
                         {
@@ -532,6 +534,7 @@ pub(in crate::render::pdf) fn render_flex_row(
                             content.push_str("/GSDefault gs\n");
                         }
                     }
+                    border_pieces.add(run, x, rw, text_y);
 
                     decoration.paint_text(
                         content,
@@ -571,6 +574,7 @@ pub(in crate::render::pdf) fn render_flex_row(
 
                     x += rw;
                 }
+                border_pieces.paint(content, ctx);
             }
 
             // Render nested elements (tables, images, SVGs, blocks,

@@ -430,6 +430,7 @@ pub(super) fn render_cell_text(
         // applies.
         let mut deferred_inline: Vec<(&crate::layout::engine::InlineBox, f32, f32, f32)> =
             Vec::new();
+        let mut border_pieces = InlineBorderPieces::default();
         for (run_index, run) in merged.iter().enumerate() {
             // Atomic inline box (display: inline-block) in the cell's text
             // flow: paint the box and its inner content, then advance —
@@ -468,6 +469,7 @@ pub(super) fn render_cell_text(
                 continue;
             }
             if let Some(advance) = run.atomic_inline_advance() {
+                border_pieces.add(run, x, advance, text_y);
                 x += advance;
                 continue;
             }
@@ -499,6 +501,7 @@ pub(super) fn render_cell_text(
                 );
                 content.push_str("f\n");
             }
+            border_pieces.add(run, x, run_width, text_y);
 
             decoration.paint_text(
                 content,
@@ -518,6 +521,7 @@ pub(super) fn render_cell_text(
 
             x += run_width;
         }
+        border_pieces.paint(content, ctx);
 
         // Paint deferred relatively positioned inline boxes above the line's
         // in-flow content, preserving their source order.

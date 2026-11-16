@@ -97,6 +97,106 @@ pub(super) fn paint_box_decoration(
     }
 }
 
+/// The borders of the inline boxes on one line, collected run by run and
+/// painted once each box's pieces are joined, so a dashed or dotted border
+/// keeps one pattern across the box's runs (a change of font splits them).
+#[derive(Default)]
+pub(super) struct InlineBorderPieces {
+    pieces: Vec<InlineBorderPiece>,
+}
+
+struct InlineBorderPiece {
+    border: crate::layout::engine::InlineBorder,
+    /// How many bordered boxes are around the box: 0 for the outermost.
+    depth: usize,
+    left: f32,
+    right: f32,
+    text_y: f32,
+}
+
+impl InlineBorderPieces {
+    /// Add the borders of the inline boxes around `run` over its advance from
+    /// `left`, `width` wide, on the baseline `text_y`: joined to the piece
+    /// before it of the same box when they meet.
+    pub(super) fn add(&mut self, run: &TextRun, left: f32, width: f32, text_y: f32) {
+        let boxes = run.inline_borders.len();
+        for (index, border) in run.inline_borders.iter().enumerate() {
+            let right = left + width;
+            if let Some(piece) = self.pieces.iter_mut().rev().find(|piece| {
+                piece.border.decoration == border.decoration
+                    && piece.text_y == text_y
+                    && (piece.right - left).abs() < 0.01
+            }) {
+                piece.right = right;
+                piece.border.show_right = border.show_right;
+                continue;
+            }
+            self.pieces.push(InlineBorderPiece {
+                border: *border,
+                depth: boxes - 1 - index,
+                left,
+                right,
+                text_y,
+            });
+        }
+    }
+
+    /// Paint the pieces, the outermost boxes' first.
+    ///
+    /// Each piece's top and bottom span it. Its left side, with the box's
+    /// left padding and border width before the piece, is painted only where
+    /// the piece holds the box's left edge (`InlineBorder::show_left`), and
+    /// the right side likewise.
+    pub(super) fn paint(self, content: &mut String, ctx: &mut PageRenderContext<'_>) {
+        let content_space = ctx.text.pdf_writer.current_content_space();
+        let mut pieces = self.pieces;
+        pieces.sort_by_key(|piece| piece.depth);
+        for piece in pieces {
+            let inline = piece.border;
+            let mut border = inline.border;
+            let mut radii = inline.radii;
+            let mut x0 = piece.left;
+            let mut x1 = piece.right;
+            if inline.show_left {
+                x0 -= inline.padding.left + border.left.width;
+            } else {
+                border.left.width = 0.0;
+                radii = radii.clear_left();
+            }
+            if inline.show_right {
+                x1 += inline.padding.right + border.right.width;
+            } else {
+                border.right.width = 0.0;
+                radii = radii.clear_right();
+            }
+            let bottom =
+                piece.text_y - inline.descent - inline.padding.bottom - border.bottom.width;
+            let height = inline.ascent
+                + inline.descent
+                + inline.padding.vertical()
+                + border.top.width
+                + border.bottom.width;
+            // Chrome snaps an inline box's border box to whole pixels, as a
+            // block's.
+            let border_box = ctx.text.pdf_writer.snap_border_box(PdfRect::new(
+                x0,
+                bottom,
+                (x1 - x0).max(0.0),
+                height,
+            ));
+            paint_css_border(
+                content,
+                border_box,
+                &border,
+                radii,
+                content_space,
+                ctx.page_ext_gstates,
+                ctx.bg_alpha_counter,
+            );
+        }
+    }
+}
+
 /// Paint a layout border around a complete border box.
 ///
 /// A text box can be in normal flow or be positioned absolutely by a

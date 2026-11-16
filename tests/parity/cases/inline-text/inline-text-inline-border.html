@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>inline element borders take room and paint per line fragment</title>
+<style>
+  @page { size: 320px 304px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 32px; background: #ffffff; }
+  body { margin: 0; }
+  p { margin: 0; }
+  .b { border: 3px solid #c62828; padding: 0 4px; }
+  .w { width: 150px; }
+  .r { border: 2px solid #1565c0; border-radius: 6px; padding: 0 6px; background: #e3f2fd; }
+  .t { border-top: 2px solid #2e7d32; border-bottom: 4px solid #2e7d32; }
+</style>
+</head>
+<body>
+  <p>Pay <span class="b">$120</span> now</p>
+  <p>Pay <span class="b" style="background: #fff9c4">$120</span> now</p>
+  <p class="w">One <span class="b">alpha beta gamma delta</span> end</p>
+  <p>A <span class="b">x <span style="display: inline-block; width: 20px; height: 10px; background: #43a047"></span> y</span> B</p>
+  <p>A <span class="b"><span class="t">in</span> out</span> B</p>
+  <p>Status <span class="r">Paid</span> today</p>
+  <p>Big <span class="b" style="font-size: 24px">$9</span> and <span class="t">small</span></p>
+</body>
+</html>

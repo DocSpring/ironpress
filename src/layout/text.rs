@@ -123,8 +123,8 @@ impl InlineHorizontalEdges {
         parent_direction_rtl: bool,
         decoration_id: crate::layout::engine::InlineDecorationId,
     ) -> Self {
-        let left = style.margin.left + style.padding.left;
-        let right = style.padding.right + style.margin.right;
+        let left = style.margin.left + style.border.left.used_width() + style.padding.left;
+        let right = style.padding.right + style.border.right.used_width() + style.margin.right;
         if parent_direction_rtl {
             return Self {
                 start: right,
@@ -153,9 +153,12 @@ impl InlineHorizontalEdges {
     }
 
     /// Add edge advances to the flattened content owned by this inline box.
-    fn apply(self, runs: &mut Vec<TextRun>, start: usize) {
-        let retains_painted_edges = self.decoration.background_color.is_some()
-            && (!self.decoration.padding.is_zero() || !self.decoration.border_radii.is_zero());
+    /// `bordered`: the box paints a border, whose sides need its edges to find
+    /// the fragments that hold them.
+    fn apply(self, runs: &mut Vec<TextRun>, start: usize, bordered: bool) {
+        let retains_painted_edges = bordered
+            || (self.decoration.background_color.is_some()
+                && (!self.decoration.padding.is_zero() || !self.decoration.border_radii.is_zero()));
         if self.start != 0.0 || retains_painted_edges {
             runs.insert(
                 start,
@@ -199,8 +202,70 @@ fn apply_inline_horizontal_edges(
     if style.writing_mode.is_vertical() {
         return;
     }
-    InlineHorizontalEdges::from_style(style, parent_direction_rtl, decoration_id)
-        .apply(runs, start);
+    InlineHorizontalEdges::from_style(style, parent_direction_rtl, decoration_id).apply(
+        runs,
+        start,
+        inline_border_paints(style),
+    );
+}
+
+/// Whether a non-replaced inline box paints any side of a border.
+fn inline_border_paints(style: &ComputedStyle) -> bool {
+    let border = crate::layout::engine::LayoutBorder::from_computed(&style.border, style.color);
+    !style.writing_mode.is_vertical()
+        && [border.top, border.right, border.bottom, border.left]
+            .iter()
+            .any(|side| side.paints())
+}
+
+/// Give the runs inside a bordered inline box its border, after the borders
+/// of the bordered boxes inside it. The box's own edges stay outside it.
+fn apply_inline_border(
+    runs: &mut [TextRun],
+    start: usize,
+    style: &ComputedStyle,
+    decoration_id: crate::layout::engine::InlineDecorationId,
+    fonts: &HashMap<String, TtfFont>,
+) {
+    if !inline_border_paints(style) {
+        return;
+    }
+    let template = styled_text_run(String::new(), style, None, None, EdgeSizes::ZERO, fonts);
+    let line_height = crate::fonts::font_line_metrics(
+        template.css_font_family(),
+        template.font_size,
+        template.bold,
+        template.font_style.is_slanted(),
+        fonts,
+    )
+    .normal_line_height();
+    let strut = LineStrut::from_font(
+        template.css_font_family(),
+        template.font_size,
+        template.bold,
+        template.font_style.is_slanted(),
+        line_height,
+        fonts,
+    );
+    let border = crate::layout::engine::InlineBorder {
+        decoration: decoration_id,
+        border: crate::layout::engine::LayoutBorder::from_computed(&style.border, style.color),
+        radii: style.resolve_corner_radii(style.font_size, style.font_size),
+        padding: style.padding,
+        ascent: strut.above,
+        descent: strut.below,
+        show_left: false,
+        show_right: false,
+    };
+    for run in &mut runs[start..] {
+        let own_edge = run
+            .metadata
+            .inline_edge
+            .is_some_and(|edge| edge.decoration.id == decoration_id);
+        if !own_edge {
+            run.inline_borders.push(border);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1666,6 +1731,9 @@ fn resolved_text_line(
 /// fragment, but its left padding/radii belong only to the leftmost fragment
 /// and its right padding/radii only to the rightmost one (CSS2 §9.4.2).
 fn resolve_inline_fragment_decorations(lines: &mut [TextLine]) {
+    for line in lines.iter_mut() {
+        resolve_inline_fragment_borders(line);
+    }
     for line in lines {
         let edges: Vec<_> = line
             .runs
@@ -1720,6 +1788,49 @@ fn resolve_inline_fragment_decorations(lines: &mut [TextLine]) {
                 run.padding.right = edge.decoration.padding.right;
                 run.border_radii.top_right = edge.decoration.border_radii.top_right;
                 run.border_radii.bottom_right = edge.decoration.border_radii.bottom_right;
+            }
+        }
+    }
+}
+
+/// Show each inline border's left side on the line's first run inside it when
+/// the line holds the box's opening edge, and its right side on the last run
+/// when it holds the closing edge (CSS 2.1 §9.4.2, like the padding above).
+fn resolve_inline_fragment_borders(line: &mut TextLine) {
+    use crate::layout::engine::InlineEdgeSide;
+    let has_edge = |line: &TextLine, id, side| {
+        line.runs.iter().any(|run| {
+            run.metadata
+                .inline_edge
+                .is_some_and(|edge| edge.decoration.id == id && edge.side == side)
+        })
+    };
+    let mut ids = Vec::new();
+    for border in line.runs.iter().flat_map(|run| &run.inline_borders) {
+        if !ids.contains(&border.decoration) {
+            ids.push(border.decoration);
+        }
+    }
+    for id in ids {
+        let matching: Vec<usize> = (0..line.runs.len())
+            .filter(|&index| {
+                line.runs[index]
+                    .inline_borders
+                    .iter()
+                    .any(|border| border.decoration == id)
+            })
+            .collect();
+        let opening = has_edge(line, id, InlineEdgeSide::Opening);
+        let closing = has_edge(line, id, InlineEdgeSide::Closing);
+        let (Some(&first), Some(&last)) = (matching.first(), matching.last()) else {
+            continue;
+        };
+        for &index in &matching {
+            for border in &mut line.runs[index].inline_borders {
+                if border.decoration == id {
+                    border.show_left = opening && index == first;
+                    border.show_right = closing && index == last;
+                }
             }
         }
     }
@@ -4123,6 +4234,7 @@ fn collect_text_runs_inner(
                             decoration_id,
                         );
                         apply_inline_parent_background(runs, element_start, &style, decoration_id);
+                        apply_inline_border(runs, element_start, &style, decoration_id, fonts);
                         resolve_target_attrs(&mut runs[element_start..], el);
                         runs[element_start..]
                             .resolve_unclaimed_boundaries(BoundaryScope::of(&style, fonts));

@@ -27,6 +27,10 @@ pub(crate) fn coalesce_text_runs(runs: &[TextRun]) -> Vec<TextRun> {
                     previous.border_radii.bottom_right = run.border_radii.bottom_right;
                 }
                 previous.text.push_str(&run.text);
+                // The same boxes' borders: the right sides are the later run's.
+                for (border, next) in previous.inline_borders.iter_mut().zip(&run.inline_borders) {
+                    border.show_right = next.show_right;
+                }
                 previous.metadata.boundary = run.metadata.boundary;
             }
         } else {
@@ -61,6 +65,7 @@ pub(crate) fn text_runs_share_shaping_buffer(previous: &TextRun, next: &TextRun)
         && previous.vertical_align == next.vertical_align
         && shadows_match(&previous.text_shadow, &next.text_shadow)
         && metadata_matches(previous.metadata, next.metadata)
+        && inside_the_same_bordered_boxes(previous, next)
         // The bidi pass deliberately retained this visual-order boundary.
         && crate::bidi::has_rtl_chars(&previous.text) == crate::bidi::has_rtl_chars(&next.text)
 }
@@ -68,6 +73,15 @@ pub(crate) fn text_runs_share_shaping_buffer(previous: &TextRun, next: &TextRun)
 fn runs_continue_inline_decoration(previous: &TextRun, next: &TextRun) -> bool {
     previous.metadata.inline_decoration.is_some()
         && previous.metadata.inline_decoration == next.metadata.inline_decoration
+}
+
+fn inside_the_same_bordered_boxes(previous: &TextRun, next: &TextRun) -> bool {
+    previous.inline_borders.len() == next.inline_borders.len()
+        && previous
+            .inline_borders
+            .iter()
+            .zip(&next.inline_borders)
+            .all(|(previous, next)| previous.decoration == next.decoration)
 }
 
 fn resolved_metric_matches(previous: f32, next: f32) -> bool {

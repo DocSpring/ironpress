@@ -763,5 +763,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "inline-text-inline-border",
+    "category": "inline-text",
+    "feature": "inline-box-border",
+    "subfeature": "fragments",
+    "description": "A span's border takes room in the line with its padding, and each line fragment paints its piece: top and bottom on every fragment, the left side where the span starts and the right where it ends, around nested spans and an inline-block, with a radius and a background (CSS 2.1 sections 8.6 and 9.4.2).",
+    "file": "cases/inline-text/inline-text-inline-border.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

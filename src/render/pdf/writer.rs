@@ -129,6 +129,14 @@ impl PdfWriter {
         PdfContentSpace::page_css(self.page_content_transform)
     }
 
+    /// Snap a border box to the current paint grid, as `resolve_box_geometry`
+    /// snaps a box's edges.
+    pub(super) fn snap_border_box(&self, border_box: PdfRect) -> PdfRect {
+        self.graphics_state
+            .box_paint_grid
+            .resolve(self.page_content_transform, border_box)
+    }
+
     pub(super) fn resolve_box_geometry(&self, layout: LayoutBoxGeometry) -> BoxPaintGeometry {
         layout.for_paint(
             self.page_content_transform,

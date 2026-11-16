@@ -340,12 +340,21 @@ pub(super) fn render_text_block_lines(
         // in-flow inline-block can't paint over an earlier offset one.
         let mut deferred_inline: Vec<(&crate::layout::engine::InlineBox, f32, f32, f32)> =
             Vec::new();
+        let mut border_pieces = InlineBorderPieces::default();
         for (run_idx, run) in merged.iter().enumerate() {
             // Atomic inline box (display: inline-block): paint the
             // box and its inner content, then advance the cursor.
             if let Some(inline) = run.inline_box.as_deref() {
                 let ibx = bg_x + inline.margin_left;
                 let run_line_height = run_line_height_for_vertical_align(run);
+                // The borders of the inline boxes around this box or edge
+                // run across its advance.
+                border_pieces.add(
+                    run,
+                    bg_x,
+                    run.atomic_inline_advance().unwrap_or_default(),
+                    text_y,
+                );
                 if !run.is_inline_edge() {
                     // The inline element around a replaced box paints its
                     // background behind the box, across the box's advance.
@@ -412,6 +421,7 @@ pub(super) fn render_text_block_lines(
                 },
                 ctx,
             );
+            border_pieces.add(run, bg_x, run_width, text_y);
 
             if vertical {
                 let previous = merged[..run_idx]
@@ -460,6 +470,7 @@ pub(super) fn render_text_block_lines(
 
             bg_x += run_width;
         }
+        border_pieces.paint(content, ctx);
 
         // Paint deferred relatively-positioned inline boxes on top
         // of the in-flow line content, preserving source order.
