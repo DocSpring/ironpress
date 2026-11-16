@@ -4398,20 +4398,12 @@ fn flatten_element_with_running_mode(
                 let geometric_bullet = if marker_overridden {
                     None
                 } else {
-                    let marker_slot = if list_ctx.is_none()
-                        && style.display == Display::ListItem
-                        && style.list_style_position == ListStylePosition::Inside
-                    {
-                        BuiltInBulletSlot::StandaloneInside
+                    let marker_slot = if style.list_style_position == ListStylePosition::Inside {
+                        BuiltInBulletSlot::Inside
                     } else {
                         BuiltInBulletSlot::default()
                     };
-                    build_list_bullet_marker(
-                        &marker_style.list_style_type,
-                        used_font_size(marker_style, env.fonts),
-                        marker_style.color,
-                        marker_slot,
-                    )
+                    build_list_bullet_marker(marker_style, env.fonts, marker_slot)
                 };
                 if let Some(bullet) = geometric_bullet {
                     runs.push(TextRun {

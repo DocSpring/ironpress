@@ -85,6 +85,10 @@ pub struct InlineBox {
     pub image: Option<RasterImageAsset>,
     /// An inline `<svg>` drawn into the content box.
     pub(crate) svg: Option<Box<InlineSvg>>,
+    /// A built-in list bullet: Chromium lays it out as text in the marker's
+    /// font, so the run's font and line-height count in its line box as a
+    /// text run's do, whatever the size of the painted shape.
+    pub symbol_marker: bool,
     /// CSS relative-position paint offset (right, down) in points.
     pub rel_offset_x: f32,
     pub rel_offset_y: f32,

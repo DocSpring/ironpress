@@ -1474,12 +1474,7 @@ pub(crate) fn build_pseudo_block(
         let marker_start = runs.len();
         let marker_text = format_list_marker(&pseudo_style.list_style_type, 0);
         let marker_font = resolve_style_font_family(pseudo_style, fonts);
-        if let Some(bullet) = build_list_bullet_marker(
-            &pseudo_style.list_style_type,
-            used_font_size(pseudo_style, fonts),
-            pseudo_style.color,
-            Default::default(),
-        ) {
+        if let Some(bullet) = build_list_bullet_marker(pseudo_style, fonts, Default::default()) {
             runs.push(TextRun {
                 font_size: used_font_size(pseudo_style, fonts),
                 color: pseudo_style.color,
@@ -2247,41 +2242,40 @@ mod generated_content_tests {
 
     #[test]
     fn geometric_bullets_share_chromium_marker_slot() {
-        let disc = build_list_bullet_marker(
-            &ListStyleType::Disc,
-            16.5,
-            crate::types::Color::BLACK,
-            Default::default(),
-        )
-        .expect("disc is a geometric marker");
-        let square = build_list_bullet_marker(
-            &ListStyleType::Square,
-            16.5,
-            crate::types::Color::BLACK,
-            Default::default(),
-        )
-        .expect("square is a geometric marker");
-
-        for marker in [disc, square] {
-            assert!((marker.width - 5.25).abs() < f32::EPSILON);
-            assert!((marker.outer_width() - 15.0).abs() < f32::EPSILON);
-            assert!((marker.baseline_ascent.unwrap() - 7.5).abs() < f32::EPSILON);
-        }
+        let marker = |list_style_type: ListStyleType| {
+            let style = crate::style::computed::ComputedStyle {
+                font_size: 16.5,
+                list_style_type,
+                ..Default::default()
+            };
+            build_list_bullet_marker(&style, &HashMap::new(), Default::default())
+                .expect("a geometric marker")
+        };
+        let (disc, square) = (marker(ListStyleType::Disc), marker(ListStyleType::Square));
+        assert_eq!(
+            (disc.width, disc.outer_width(), disc.baseline_ascent),
+            (square.width, square.outer_width(), square.baseline_ascent)
+        );
     }
 
     #[test]
-    fn standalone_inside_bullets_use_their_own_marker_slot() {
-        let marker = build_list_bullet_marker(
-            &ListStyleType::Disc,
-            22.5,
-            crate::types::Color::BLACK,
-            BuiltInBulletSlot::StandaloneInside,
-        )
-        .expect("disc is a geometric marker");
-
-        assert!((marker.width - 6.75).abs() < f32::EPSILON);
-        assert!((marker.outer_width() - 30.0).abs() < f32::EPSILON);
-        assert!((marker.baseline_ascent.unwrap() - 9.75).abs() < f32::EPSILON);
+    fn inside_bullets_use_their_own_marker_slot() {
+        let style = crate::style::computed::ComputedStyle {
+            font_size: 22.5,
+            list_style_type: ListStyleType::Disc,
+            ..Default::default()
+        };
+        let inside = build_list_bullet_marker(&style, &HashMap::new(), BuiltInBulletSlot::Inside)
+            .expect("disc is a geometric marker");
+        let outside = build_list_bullet_marker(&style, &HashMap::new(), BuiltInBulletSlot::List)
+            .expect("disc is a geometric marker");
+        // The inside slot ends with a 1em margin after the bullet.
+        assert!(
+            (inside.outer_width() - (inside.width + 0.75 + 22.5)).abs() < 0.001,
+            "{}",
+            inside.outer_width()
+        );
+        assert_eq!(inside.width, outside.width);
     }
 
     #[test]

@@ -1138,6 +1138,11 @@ fn resolve_line_box_metrics(
             &mut below
         };
         if let Some(inline) = run.inline_box.as_deref() {
+            if inline.symbol_marker {
+                let extents = text_extents(run);
+                above = above.max(extents.above);
+                *below = below.max(extents.below);
+            }
             let box_ascent = inline.outer_baseline_ascent();
             let box_descent = (inline.outer_height() - box_ascent).max(0.0);
             let (box_above, box_below) = match inline.vertical_align {
@@ -3619,6 +3624,7 @@ fn build_inline_box(
         } else {
             0.0
         },
+        symbol_marker: false,
     })
 }
 

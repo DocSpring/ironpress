@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>built-in bullets are sized and placed from their font's ascent</title>
+<style>
+  @page { size: 304px 264px; margin: 0; }
+  html { font-family: ParitySans; font-size: 20px; line-height: 32px; background: #ffffff; }
+  body { margin: 12px; }
+  ul { margin: 0; padding-left: 64px; }
+  li { background: #f5f5f5; margin-bottom: 4px; }
+  li::marker { color: #d7263d; }
+  .s10::marker { font-size: 10px; }
+  .s16::marker { font-size: 16px; }
+  .s30::marker { font-size: 30px; }
+  .in { list-style-position: inside; }
+</style>
+</head>
+<body>
+  <ul>
+    <li class="s10">Disc 10</li>
+    <li class="s30">Disc 30</li>
+    <li class="s16" style="list-style-type: square">Square 16</li>
+    <li class="s30" style="list-style-type: circle">Circle 30</li>
+    <li class="s10 in">Inside 10</li>
+    <li class="s30 in" style="list-style-type: square">Inside 30</li>
+  </ul>
+</body>
+</html>

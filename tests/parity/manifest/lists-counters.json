@@ -586,5 +586,20 @@
       "probe-text-baseline",
       "probe-fill-box"
     ]
+  },
+  {
+    "id": "lists-counters-bullet-marker-sizes",
+    "category": "lists-counters",
+    "feature": "::marker font-size",
+    "subfeature": "built-in-bullet-geometry",
+    "description": "Disc, square and circle markers at 10, 16 and 30px, outside and inside: each bullet's size, its place before the content and its height come from the marker font's ascent, an inside bullet takes a 1em margin after it, and a large one makes its line as tall as its text would. Catches: bullet geometry fitted to one font size, and a bullet that counts only its painted shape in the line box.",
+    "file": "cases/lists-counters/lists-counters-bullet-marker-sizes.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "oracle": "chrome",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]
