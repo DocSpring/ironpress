@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mixed-direction paragraphs wrap in text order</title>
+<style>
+  @page { size: 320px 264px; margin: 0; }
+  html { font-family: ParitySans; font-size: 18px; line-height: 28px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; background: #eef1f8; }
+</style>
+</head>
+<body>
+  <p dir="rtl">אחד שתיים שלוש 120 ארבע חמש שש שבע שמונה תשע עשר</p>
+  <p dir="rtl">אחד שתיים <b>שלוש</b> ארבע <span style="color: #c62828">חמש שש</span> שבע AVATAR עשר</p>
+  <p>Total due <span dir="rtl">אחד שתיים</span> today and more words here</p>
+  <p>שלום עולם AVATAR</p>
+</body>
+</html>

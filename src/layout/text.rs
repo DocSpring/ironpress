@@ -504,6 +504,7 @@ pub(crate) fn text_run_shaping(style: &ComputedStyle) -> TextShaping {
     TextShaping {
         ligatures: style.ligatures_enabled,
         kerning: style.font_kerning_enabled,
+        ..TextShaping::default()
     }
     .tracked(style.letter_spacing)
 }
@@ -2136,7 +2137,18 @@ where
 /// the public layout API consuming: table sizing does not clone its run list.
 struct PreparedTextRuns {
     runs: Vec<TextRun>,
-    inferred_rtl: bool,
+    /// How each line's runs are put in visual order once the paragraph is
+    /// wrapped, or `None` when they're already in it.
+    line_bidi: Option<LineBidi>,
+}
+
+/// A paragraph is wrapped in logical order and each line is then reordered
+/// (UAX #9 §3.4): reordering first would wrap the paragraph in visual order,
+/// so a right-to-left paragraph's later words came first.
+#[derive(Clone, Copy)]
+struct LineBidi {
+    rtl: bool,
+    bidi_override: bool,
 }
 
 fn prepare_text_runs(
@@ -2146,19 +2158,18 @@ fn prepare_text_runs(
 ) -> PreparedTextRuns {
     let runs = expand_leader_placeholders(runs, options.max_width, fonts);
     let full_text: String = runs.iter().map(|run| run.text.as_str()).collect();
-    let inferred_rtl = !options.paragraph_rtl
-        && !options.bidi_plaintext
-        && !options.bidi_override
-        && crate::bidi::first_strong_is_rtl(&full_text);
-    let bidi_rtl = options.paragraph_rtl || inferred_rtl;
-    let runs = if !options.bidi_plaintext
-        && (options.bidi_override || bidi_rtl || crate::bidi::has_rtl_chars(&full_text))
-    {
-        crate::bidi::reorder_runs_bidi(&runs, bidi_rtl, options.bidi_override)
-    } else {
-        runs
-    };
-    PreparedTextRuns { runs, inferred_rtl }
+    // The paragraph's direction is its `direction` (with `dir="auto"` already
+    // resolved from its text), never inferred from the text: Chrome lays a
+    // Hebrew paragraph without `dir` out left to right.
+    let line_bidi = (!options.bidi_plaintext
+        && (options.bidi_override
+            || options.paragraph_rtl
+            || crate::bidi::has_rtl_chars(&full_text)))
+    .then_some(LineBidi {
+        rtl: options.paragraph_rtl,
+        bidi_override: options.bidi_override,
+    });
+    PreparedTextRuns { runs, line_bidi }
 }
 
 /// Produce the exact token stream consumed by the line wrapper.  Intrinsic
@@ -2624,7 +2635,7 @@ pub(crate) fn wrap_text_runs(
 ) -> Vec<TextLine> {
     let PreparedTextRuns {
         mut runs,
-        inferred_rtl,
+        line_bidi,
     } = prepare_text_runs(runs, options, fonts);
     crate::layout::text_emphasis::resolve_text_emphasis_metrics(&mut runs, fonts);
     let line_height_factor = options.line_height_factor.max(0.0);
@@ -3179,6 +3190,12 @@ pub(crate) fn wrap_text_runs(
         }
     }
 
+    if let Some(bidi) = line_bidi {
+        for line in &mut lines {
+            line.runs = crate::bidi::reorder_runs_bidi(&line.runs, bidi.rtl, bidi.bidi_override);
+        }
+    }
+
     if options.bidi_plaintext {
         for line in &mut lines {
             let line_text: String = line.runs.iter().map(|r| r.text.as_str()).collect();
@@ -3193,11 +3210,6 @@ pub(crate) fn wrap_text_runs(
                 let line_width = crate::layout::helpers::measure_runs_width(&line.runs, fonts);
                 line.x_offset += (options.max_width - line_width).max(0.0);
             }
-        }
-    } else if inferred_rtl {
-        for line in &mut lines {
-            let line_width = crate::layout::helpers::measure_runs_width(&line.runs, fonts);
-            line.x_offset += (options.max_width - line_width).max(0.0);
         }
     }
 

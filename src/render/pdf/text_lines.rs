@@ -744,7 +744,7 @@ pub(super) fn push_line_text_clip(
                 ));
                 cur_baseline = target_baseline;
             }
-            let encoded = encode_pdf_text(&run.text);
+            let encoded = encode_pdf_text(&run.unshaped_drawing_text());
             content.push_str(&format!("({encoded}) Tj\n"));
         }
     } else {
@@ -820,7 +820,7 @@ pub(super) fn push_line_text_clip(
                     }
                 }
             } else {
-                let encoded = encode_pdf_text(&run.text);
+                let encoded = encode_pdf_text(&run.unshaped_drawing_text());
                 content.push_str(&format!(
                     "1 0 0 1 {} {} Tm\n",
                     format_pdf_number(x),

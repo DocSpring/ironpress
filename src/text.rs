@@ -815,6 +815,15 @@ fn shape_text_glyphs(
     let mut buffer = rustybuzz::UnicodeBuffer::new();
     buffer.push_str(text);
     buffer.guess_segment_properties();
+    match shaping.direction {
+        crate::layout::engine::ShapingDirection::FromText => {}
+        crate::layout::engine::ShapingDirection::LeftToRight => {
+            buffer.set_direction(rustybuzz::Direction::LeftToRight)
+        }
+        crate::layout::engine::ShapingDirection::RightToLeft => {
+            buffer.set_direction(rustybuzz::Direction::RightToLeft)
+        }
+    }
     if matches!(direction, TextShapingDirection::Vertical) {
         // HarfBuzz/Rustybuzz enables vertical OpenType features for TTB. This
         // also obtains per-glyph vertical advances and origins from `vmtx` and

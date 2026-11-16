@@ -768,5 +768,22 @@
       "probe-border-box",
       "probe-color-swatch"
     ]
+  },
+  {
+    "id": "text-advanced-bidi-mixed-lines",
+    "category": "text-advanced",
+    "feature": "direction:rtl basic inline paragraph",
+    "subfeature": "bidi-mixed-lines",
+    "description": "Right-to-left paragraphs of two lines with a number, a Latin word and inline elements, an RTL span in an LTR paragraph, and a Hebrew paragraph without dir. Catches: reordering runs into visual order before wrapping, which puts a paragraph's first words on its last line; spaces lost between right-to-left words; a paragraph's direction inferred from its text.",
+    "file": "cases/text-advanced/text-advanced-bidi-mixed-lines.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "oracle": "chrome",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box",
+      "probe-border-box",
+      "probe-color-swatch"
+    ]
   }
 ]

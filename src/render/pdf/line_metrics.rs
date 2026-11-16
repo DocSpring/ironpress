@@ -462,12 +462,14 @@ pub(super) fn line_text_content_extents(
         })
 }
 
-/// Estimate line width using TTF metrics for custom fonts.
+/// Estimate line width using TTF metrics for custom fonts, from the runs as
+/// they're painted: coalesced into shaping buffers, so letters that join (an
+/// Arabic word split at its parentheses) are measured joined.
 pub(super) fn estimate_line_width_with_fonts(
     line: &TextLine,
     custom_fonts: &HashMap<String, TtfFont>,
 ) -> f32 {
-    line.runs
+    crate::text::coalesce_text_runs(&line.runs)
         .iter()
         .map(|run| estimate_run_width_with_fonts(run, custom_fonts))
         .sum()
@@ -582,5 +584,46 @@ mod tests {
 
         let metrics = upright_vertical_line_metrics(&line, &fonts);
         assert!((metrics.ascender + metrics.descender - line.height).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_word_split_into_runs_is_measured_as_it_is_painted() {
+        // The line breaker splits "(جيد)" at its parentheses into a run per
+        // character. Paint joins them into one shaping buffer, where the
+        // Arabic letters take their joined forms, so right and centre
+        // alignment must measure them joined too.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let font = crate::parser::ttf::parse_ttf(
+            std::fs::read(root.join("tests/parity/fonts/ParitySans.ttf"))
+                .expect("ParitySans test font"),
+        )
+        .expect("valid ParitySans TTF");
+        let fonts = HashMap::from([(
+            crate::system_fonts::font_variant_key("ParitySans", false, false),
+            font,
+        )]);
+        let run = |text: &str| TextRun {
+            text: text.to_string(),
+            font_size: 20.0,
+            font_family: FontFamily::Custom("ParitySans".to_string()),
+            ..Default::default()
+        };
+        let line = |runs: Vec<TextRun>| TextLine {
+            runs,
+            ..Default::default()
+        };
+        let split = line("جيد".chars().map(|ch| run(&ch.to_string())).collect());
+        let whole = line(vec![run("جيد")]);
+        let separate: f32 = split
+            .runs
+            .iter()
+            .map(|run| estimate_run_width_with_fonts(run, &fonts))
+            .sum();
+        let joined = estimate_line_width_with_fonts(&whole, &fonts);
+        assert!(
+            separate > joined + 1.0,
+            "isolated forms are wider: {separate} vs {joined}"
+        );
+        assert!((estimate_line_width_with_fonts(&split, &fonts) - joined).abs() < 0.01);
     }
 }

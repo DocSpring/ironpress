@@ -79,6 +79,7 @@ language-tags = "0.3.2"
 # enables wasm_js for that shared dependency graph; 0.4 would leave 0.3 unconfigured.
 getrandom = { version = "0.3", optional = true }
 unicode-bidi = "0.3.18"
+unicode-script = "0.5.8"
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.13.2"
 

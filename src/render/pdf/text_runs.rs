@@ -417,7 +417,7 @@ pub(super) fn render_run_glyph_layers_in_space(
         if word_spacing != 0.0 {
             content.push_str(&format!("{} Tw\n", text_space.length(word_spacing)));
         }
-        let encoded = encode_pdf_text(&run.text);
+        let encoded = encode_pdf_text(&run.unshaped_drawing_text());
         if text_space.is_page_css() {
             let origin = text_space.point(PdfPoint::new(x, text_y));
             content.push_str(&format!(

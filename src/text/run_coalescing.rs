@@ -26,10 +26,18 @@ pub(crate) fn coalesce_text_runs(runs: &[TextRun]) -> Vec<TextRun> {
                     previous.border_radii.top_right = run.border_radii.top_right;
                     previous.border_radii.bottom_right = run.border_radii.bottom_right;
                 }
-                previous.text.push_str(&run.text);
                 // The same boxes' borders: the right sides are the later run's.
                 for (border, next) in previous.inline_borders.iter_mut().zip(&run.inline_borders) {
                     border.show_right = next.show_right;
+                }
+                // Right-to-left pieces are in visual order with their text in
+                // logical order, so the piece to the right comes first in the
+                // text. In both directions the boundary to the right is the
+                // later run's (`reorder_runs_bidi`).
+                if run.metadata.bidi_rtl {
+                    previous.text.insert_str(0, &run.text);
+                } else {
+                    previous.text.push_str(&run.text);
                 }
                 previous.metadata.boundary = run.metadata.boundary;
             }
@@ -46,6 +54,8 @@ pub(crate) fn text_runs_share_shaping_buffer(previous: &TextRun, next: &TextRun)
         && next.inline_box.is_none()
         && !previous.metadata.text_combine_upright.is_active()
         && !next.metadata.text_combine_upright.is_active()
+        && previous.metadata.bidi_rtl == next.metadata.bidi_rtl
+        && previous.metadata.script == next.metadata.script
         && previous.font_size == next.font_size
         && previous.bold == next.bold
         && previous.font_style == next.font_style
@@ -238,5 +248,35 @@ mod tests {
         assert_eq!(coalesced[0].text, "Centered Span");
         assert_eq!(coalesced[0].padding.left, 3.0);
         assert_eq!(coalesced[0].padding.right, 3.0);
+    }
+
+    #[test]
+    fn right_to_left_pieces_join_in_text_order() {
+        // In visual order, the piece to the left comes later in the text.
+        let piece = |text: &str| {
+            let mut run = TextRun {
+                text: text.to_string(),
+                ..Default::default()
+            };
+            run.metadata.bidi_rtl = true;
+            run
+        };
+        let coalesced = coalesce_text_runs(&[piece(" שתיים"), piece("אחד")]);
+        assert_eq!(coalesced.len(), 1);
+        assert_eq!(coalesced[0].text, "אחד שתיים");
+    }
+
+    #[test]
+    fn pieces_of_different_directions_stay_apart() {
+        let mut rtl = TextRun {
+            text: "אחד".to_string(),
+            ..Default::default()
+        };
+        rtl.metadata.bidi_rtl = true;
+        let ltr = TextRun {
+            text: " 120".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(coalesce_text_runs(&[ltr, rtl]).len(), 2);
     }
 }

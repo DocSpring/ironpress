@@ -877,6 +877,14 @@ pub struct TextRunMetadata {
     /// An `outside` list marker: it can push its line down but doesn't make
     /// it taller below the baseline (`resolve_line_box_metrics`).
     pub(crate) is_outside_marker: bool,
+    /// A piece of a line at a right-to-left bidi level: its text is in
+    /// logical order, shaped right to left, so the piece visually before it
+    /// on the line follows it in the text (`reorder_runs_bidi`).
+    pub(crate) bidi_rtl: bool,
+    /// The script a piece of a bidi line is shaped in, with spaces and
+    /// punctuation taking the script before them (`reorder_runs_bidi`);
+    /// `None` outside bidi lines.
+    pub(crate) script: Option<unicode_script::Script>,
     pub whitespace: RunWhitespace,
     pub(crate) inline_edge: Option<InlineEdge>,
     pub(crate) inline_decoration: Option<InlineDecorationId>,
@@ -895,6 +903,20 @@ pub struct TextRunMetadata {
 pub struct TextShaping {
     pub ligatures: bool,
     pub kerning: bool,
+    /// The direction to shape in: a piece of a bidi line is shaped in its
+    /// level's direction, so a piece of only spaces and punctuation at a
+    /// right-to-left level is drawn right to left (`reorder_runs_bidi`).
+    pub(crate) direction: ShapingDirection,
+}
+
+/// The direction a run is shaped in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub(crate) enum ShapingDirection {
+    /// From the text's first strong character, for text outside a bidi line.
+    #[default]
+    FromText,
+    LeftToRight,
+    RightToLeft,
 }
 
 impl TextShaping {
@@ -904,6 +926,7 @@ impl TextShaping {
     pub const KERNING_ONLY: Self = Self {
         ligatures: false,
         kerning: true,
+        direction: ShapingDirection::FromText,
     };
 
     /// The feature set once CSS tracking applies: a non-zero `letter-spacing`
@@ -913,7 +936,7 @@ impl TextShaping {
     pub const fn tracked(self, letter_spacing: f32) -> Self {
         Self {
             ligatures: self.ligatures && letter_spacing == 0.0,
-            kerning: self.kerning,
+            ..self
         }
     }
 }
@@ -923,6 +946,7 @@ impl Default for TextShaping {
         Self {
             ligatures: true,
             kerning: true,
+            direction: ShapingDirection::FromText,
         }
     }
 }
@@ -1077,6 +1101,37 @@ impl TextRun {
     /// the same geometry.
     pub(crate) fn text_advance(&self, raw_width: f32, text: &str) -> f32 {
         self.inline_advance(self.internal_text_advance(raw_width, text))
+    }
+
+    /// The run's characters in the order they're drawn, for a font that isn't
+    /// shaped (the PDF base fonts): a run shaped right to left is drawn in
+    /// reverse with its brackets mirrored (UAX #9 L4), which the shaper does
+    /// for other fonts.
+    pub(crate) fn unshaped_drawing_text(&self) -> std::borrow::Cow<'_, str> {
+        if self.shaping.direction != ShapingDirection::RightToLeft {
+            return std::borrow::Cow::Borrowed(&self.text);
+        }
+        std::borrow::Cow::Owned(
+            self.text
+                .chars()
+                .rev()
+                .map(|character| match character {
+                    '(' => ')',
+                    ')' => '(',
+                    '[' => ']',
+                    ']' => '[',
+                    '{' => '}',
+                    '}' => '{',
+                    '<' => '>',
+                    '>' => '<',
+                    '«' => '»',
+                    '»' => '«',
+                    '‹' => '›',
+                    '›' => '‹',
+                    other => other,
+                })
+                .collect(),
+        )
     }
 
     pub(crate) fn internal_text_advance(&self, raw_width: f32, text: &str) -> f32 {

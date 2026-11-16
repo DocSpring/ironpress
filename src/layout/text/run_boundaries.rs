@@ -16,15 +16,16 @@ pub(crate) struct BoundaryScope<'a> {
     spacing: TextSpacing,
     /// The fonts to kern with, or `None` when this scope doesn't kern across boundaries
     kerning: Option<&'a HashMap<String, TtfFont>>,
+    /// The paragraph is right to left.
+    rtl: bool,
 }
 
 impl<'a> BoundaryScope<'a> {
     pub(crate) fn of(style: &ComputedStyle, fonts: &'a HashMap<String, TtfFont>) -> Self {
         Self {
             spacing: TextSpacing::from_style(style),
-            // Bidi reordering puts the runs of a right-to-left line in another order than the source's, and the
-            // advance belongs to the run before the boundary in the source.
-            kerning: (!style.direction_rtl).then_some(fonts),
+            kerning: Some(fonts),
+            rtl: style.direction_rtl,
         }
     }
 
@@ -33,6 +34,7 @@ impl<'a> BoundaryScope<'a> {
         Self {
             spacing,
             kerning: None,
+            rtl: false,
         }
     }
 }
@@ -74,7 +76,7 @@ impl InlineTextSequence for [TextRun] {
                         && !separated
                         && let Some(fonts) = scope.kerning
                     {
-                        let kerning = boundary_kerning(previous_run, current_run, fonts);
+                        let kerning = boundary_kerning(previous_run, current_run, scope.rtl, fonts);
                         if kerning != 0.0 {
                             previous_run
                                 .metadata
@@ -93,20 +95,93 @@ impl InlineTextSequence for [TextRun] {
     }
 }
 
-/// The pair kerning of the last glyph before a boundary and the first after it, unless either one is right-to-left.
-/// The caller has checked that nothing between the runs (an inline element's margin, border or padding, an atomic
-/// inline) separates the glyphs.
-fn boundary_kerning(left: &TextRun, right: &TextRun, fonts: &HashMap<String, TtfFont>) -> f32 {
-    let right_to_left = |character: Option<char>| {
-        character.is_some_and(|character| {
-            matches!(
-                bidi_class(character),
-                BidiClass::R | BidiClass::AL | BidiClass::AN
-            )
-        })
+/// The pair kerning of the last glyph before a boundary and the first after it, when both are in the same bidi
+/// level run: two right-to-left letters, or two left-to-right characters (in a right-to-left paragraph, two strong
+/// left-to-right letters, as a neutral or a digit there can take another level). Bidi reordering moves the advance
+/// of a right-to-left pair to the right side of the piece after it (`reorder_runs_bidi`). The caller has checked
+/// that nothing between the runs (an inline element's margin, border or padding, an atomic inline) separates the
+/// glyphs.
+fn boundary_kerning(
+    left: &TextRun,
+    right: &TextRun,
+    paragraph_rtl: bool,
+    fonts: &HashMap<String, TtfFont>,
+) -> f32 {
+    let (Some(left_char), Some(right_char)) =
+        (left.text.chars().next_back(), right.text.chars().next())
+    else {
+        return 0.0;
     };
-    if right_to_left(left.text.chars().next_back()) || right_to_left(right.text.chars().next()) {
+    let (left_class, right_class) = (bidi_class(left_char), bidi_class(right_char));
+    let right_to_left = |class: BidiClass| matches!(class, BidiClass::R | BidiClass::AL);
+    let left_to_right = |class: BidiClass| {
+        if paragraph_rtl {
+            class == BidiClass::L
+        } else {
+            !right_to_left(class) && class != BidiClass::AN
+        }
+    };
+    let same_run = (right_to_left(left_class) && right_to_left(right_class))
+        || (left_to_right(left_class) && left_to_right(right_class));
+    if !same_run {
         return 0.0;
     }
     crate::text::inline_boundary_kerning_advance(left, right, fonts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::computed::FontFamily;
+
+    fn parity_sans_fonts() -> HashMap<String, TtfFont> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let font = crate::parser::ttf::parse_ttf(
+            std::fs::read(root.join("tests/parity/fonts/ParitySans.ttf"))
+                .expect("ParitySans test font"),
+        )
+        .expect("valid ParitySans TTF");
+        HashMap::from([(
+            crate::system_fonts::font_variant_key("ParitySans", false, false),
+            font,
+        )])
+    }
+
+    fn run(text: &str) -> TextRun {
+        TextRun {
+            text: text.to_string(),
+            font_size: 18.0,
+            font_family: FontFamily::Custom("ParitySans".to_string()),
+            ..Default::default()
+        }
+    }
+
+    /// The kerning left after the first of two runs, in a paragraph of `direction_rtl`.
+    fn kerning(left: &str, right: &str, direction_rtl: bool) -> f32 {
+        let fonts = parity_sans_fonts();
+        let style = ComputedStyle {
+            direction_rtl,
+            ..Default::default()
+        };
+        let mut runs = vec![run(left), run(right)];
+        runs.as_mut_slice()
+            .resolve_unclaimed_boundaries(BoundaryScope::of(&style, &fonts));
+        runs[0].metadata.boundary.total()
+    }
+
+    #[test]
+    fn left_to_right_letters_kern_across_a_boundary_in_a_right_to_left_paragraph() {
+        // Two strong left-to-right letters share a level run whatever the
+        // paragraph's direction, as Chrome shapes them together.
+        let ltr = kerning("F", "irst", false);
+        assert!(ltr < 0.0, "F/i kern: {ltr}");
+        assert_eq!(kerning("F", "irst", true), ltr);
+    }
+
+    #[test]
+    fn a_neutral_at_the_boundary_of_a_right_to_left_paragraph_does_not_kern() {
+        // A neutral there can take the paragraph's level while the letter
+        // after it doesn't, so they may not be neighbours on the line.
+        assert_eq!(kerning("(", "F", true), 0.0);
+    }
 }
