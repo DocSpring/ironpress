@@ -3,6 +3,7 @@ mod anonymous_blocks;
 mod atomic_inline;
 mod body_box;
 mod break_margins;
+mod collapsed_space;
 mod container_flow;
 mod filter_cells;
 mod flex_intrinsic;

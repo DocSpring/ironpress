@@ -1202,6 +1202,9 @@ enum InterWordSpace {
     /// A highlighted following run must not paint the preceding space, so the
     /// space is shaped with the previous run and emitted separately.
     PreviousRun,
+    /// The space is an earlier run's in the source (`collapsed_space_owner`):
+    /// shaped with it (its font, size and kerning) and painted as part of it.
+    EarlierRun,
 }
 
 /// Width pieces for one ordinary text token.  `end_width` deliberately applies
@@ -1218,7 +1221,10 @@ struct NormalTokenMeasurement {
 
 impl NormalTokenMeasurement {
     fn end_width(self, line_width: f32) -> f32 {
-        let with_leading = if self.inter_word_space == InterWordSpace::PreviousRun {
+        let with_leading = if matches!(
+            self.inter_word_space,
+            InterWordSpace::PreviousRun | InterWordSpace::EarlierRun
+        ) {
             line_width + self.leading_width
         } else {
             line_width
@@ -1234,6 +1240,9 @@ struct NormalTokenContext<'a> {
     previous_ends_whitespace: bool,
     preserve_spacing: bool,
     joins_previous: bool,
+    /// The run whose text holds the collapsed space before the token in the
+    /// source, when it's an earlier run than the token's own.
+    space_owner: Option<&'a TextRun>,
     leading_tracking: f32,
     outgoing_advance: f32,
 }
@@ -1266,8 +1275,27 @@ fn measure_normal_token(
     }
 
     let previous_run = context.preceding_runs.last();
+    if let Some(owner) = context.space_owner {
+        let space = collapsed_space_width(context.preceding_runs, owner, fonts);
+        return NormalTokenMeasurement {
+            inter_word_space: InterWordSpace::EarlierRun,
+            leading_width: context.leading_tracking + space,
+            text_width: word_width,
+            word_width,
+        };
+    }
     let previous_background = previous_run.and_then(|run| run.background_color);
-    if previous_background != template.background_color && template.background_color.is_some() {
+    // A space that starts the highlighted run's own text is that run's, and
+    // takes its background.
+    let space_is_own = template
+        .text
+        .chars()
+        .next()
+        .is_some_and(is_collapsible_space);
+    if previous_background != template.background_color
+        && template.background_color.is_some()
+        && !space_is_own
+    {
         let previous_run = previous_run.unwrap_or(template);
         NormalTokenMeasurement {
             inter_word_space: InterWordSpace::PreviousRun,
@@ -1342,18 +1370,71 @@ impl InlineTokenMeasurement {
     }
 }
 
-fn measure_inline_token(
-    template: &TextRun,
+/// The width of the collapsed space `owner`'s text holds, before the next
+/// token: shaped with the text before it when they share a shaping buffer, so
+/// a pair kerned with the space keeps its kerning.
+fn collapsed_space_width(
+    preceding_runs: &[TextRun],
+    owner: &TextRun,
+    fonts: &HashMap<String, TtfFont>,
+) -> f32 {
+    joined_token_advance(preceding_runs, " ", owner, fonts)
+        .unwrap_or_else(|| estimate_text_width_for_run(" ", owner, fonts))
+}
+
+/// The run whose source text holds the collapsed space between the tokens of
+/// runs `previous` and `current`, when it's an earlier run than `current`:
+/// the end of `previous`'s text, or a run of only spaces between them. A
+/// sequence of collapsible spaces keeps its first space (CSS Text 3 §4.1.1),
+/// which stays in its element, with that element's font and decorations.
+fn collapsed_space_owner(
+    runs: &[TextRun],
+    previous: Option<usize>,
+    current: usize,
+) -> Option<usize> {
+    let previous = previous.filter(|previous| *previous < current)?;
+    let is_text = |run: &TextRun| run.inline_box.is_none() && !run.is_inline_edge();
+    let previous_run = &runs[previous];
+    if is_text(previous_run)
+        && previous_run
+            .text
+            .chars()
+            .last()
+            .is_some_and(is_collapsible_space)
+    {
+        return Some(previous);
+    }
+    (previous + 1..current).find(|&index| {
+        let run = &runs[index];
+        is_text(run) && !run.text.is_empty() && run.text.chars().all(is_collapsible_space)
+    })
+}
+
+#[derive(Clone, Copy)]
+struct InlineTokenContext<'a> {
+    preceding_runs: &'a [TextRun],
     line_has_content: bool,
     previous_ends_whitespace: bool,
     joins_prev: bool,
+    /// As `NormalTokenContext::space_owner`.
+    space_owner: Option<&'a TextRun>,
+}
+
+fn measure_inline_token(
+    template: &TextRun,
+    context: InlineTokenContext<'_>,
     fonts: &HashMap<String, TtfFont>,
 ) -> InlineTokenMeasurement {
-    let leading_width = if line_has_content && !joins_prev && !previous_ends_whitespace {
-        estimate_text_width_for_run(" ", template, fonts)
-    } else {
-        0.0
-    };
+    let leading_width =
+        if context.line_has_content && !context.joins_prev && !context.previous_ends_whitespace {
+            collapsed_space_width(
+                context.preceding_runs,
+                context.space_owner.unwrap_or(template),
+                fonts,
+            )
+        } else {
+            0.0
+        };
     InlineTokenMeasurement {
         leading_width,
         box_width: template.atomic_inline_advance().unwrap_or_default(),
@@ -2121,22 +2202,40 @@ fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledW
     styled_words
 }
 
+/// The line a token is measured onto: its width so far, the fragments on it
+/// (the shaping context), and whether its text ends with a collapsible space.
+#[derive(Clone, Copy)]
+struct MeasuredLine<'a> {
+    width: f32,
+    runs: &'a [TextRun],
+    ends_whitespace: bool,
+}
+
 fn measure_styled_token_end(
     token: &StyledWord,
     runs: &[TextRun],
-    line_width: f32,
-    preceding_runs: &[TextRun],
-    previous_ends_whitespace: bool,
+    line: MeasuredLine<'_>,
+    space_owner: Option<usize>,
     options: TextWrapOptions,
     fonts: &HashMap<String, TtfFont>,
 ) -> f32 {
+    let MeasuredLine {
+        width: line_width,
+        runs: preceding_runs,
+        ends_whitespace: previous_ends_whitespace,
+    } = line;
     let run = &runs[token.run_index];
+    let space_owner = space_owner.map(|owner| &runs[owner]);
     if run.inline_box.is_some() {
         return measure_inline_token(
             run,
-            line_width > 0.0,
-            previous_ends_whitespace,
-            token.joins_prev,
+            InlineTokenContext {
+                preceding_runs,
+                line_has_content: line_width > 0.0,
+                previous_ends_whitespace,
+                joins_prev: token.joins_prev,
+                space_owner,
+            },
             fonts,
         )
         .end_width(line_width);
@@ -2161,6 +2260,7 @@ fn measure_styled_token_end(
             previous_ends_whitespace,
             preserve_spacing: token.preserve_spacing,
             joins_previous: token.joins_prev,
+            space_owner,
             leading_tracking: token.leading_tracking(run, line_width > 0.0),
             outgoing_advance: token.outgoing_advance(run),
         },
@@ -2250,8 +2350,13 @@ pub(crate) fn measure_text_intrinsic_widths(
         }
     };
 
+    // The run of the previous token, for the collapsed space before this one
+    // (`collapsed_space_owner`).
+    let mut previous_token_run: Option<usize> = None;
     for token in &tokens {
         let run = &runs[token.run_index];
+        let space_owner = collapsed_space_owner(&runs, previous_token_run, token.run_index);
+        previous_token_run = Some(token.run_index);
         if token.text == "\n" && run.inline_box.is_none() {
             max_content = max_content.max(required_outer_width(
                 max_line_width,
@@ -2270,9 +2375,12 @@ pub(crate) fn measure_text_intrinsic_widths(
         max_line_width = measure_styled_token_end(
             token,
             &runs,
-            max_line_width,
-            &max_context,
-            max_previous_ends_whitespace,
+            MeasuredLine {
+                width: max_line_width,
+                runs: &max_context,
+                ends_whitespace: max_previous_ends_whitespace,
+            },
+            space_owner,
             options,
             fonts,
         );
@@ -2298,9 +2406,12 @@ pub(crate) fn measure_text_intrinsic_widths(
             min_group_width = measure_styled_token_end(
                 token,
                 &runs,
-                min_group_width,
-                &min_context,
-                min_previous_ends_whitespace,
+                MeasuredLine {
+                    width: min_group_width,
+                    runs: &min_context,
+                    ends_whitespace: min_previous_ends_whitespace,
+                },
+                space_owner,
                 options,
                 fonts,
             );
@@ -2355,6 +2466,21 @@ pub(crate) fn measure_text_intrinsic_widths(
 
 fn push_token_shaping_context(context: &mut Vec<TextRun>, token: &StyledWord, template: &TextRun) {
     context.push(template.text_fragment(strip_soft_hyphens(&token.text), token.ends_run));
+}
+
+/// Put the collapsed space whose text `owner` holds on the line: at the end of
+/// the line's last fragment when that's `owner`'s text (`appendable`), so it's
+/// shaped with it, or else as a fragment of its own with `owner`'s style.
+fn place_collapsed_space(current_runs: &mut Vec<TextRun>, owner: &TextRun, appendable: bool) {
+    match current_runs.last_mut() {
+        Some(last) if appendable => last.text.push(' '),
+        _ => {
+            let mut space = owner.text_fragment(" ".to_string(), false);
+            space.inline_box = None;
+            space.vertical_align = VerticalAlign::Baseline;
+            current_runs.push(space);
+        }
+    }
 }
 
 /// Simple text wrapping using character width estimation.
@@ -2416,6 +2542,11 @@ pub(crate) fn wrap_text_runs(
     // `bs_break_run_idx` is the count of runs in `current_runs` at the last such
     // opportunity (just after a placed space run).
     let mut bs_break_run_idx: usize = 0;
+    // The previous token's run, for the collapsed space before each token
+    // (`collapsed_space_owner`), and the line's run count just after the last
+    // ordinary text fragment, which a space that ends its text joins.
+    let mut previous_token_run: Option<usize> = None;
+    let mut text_fragment_end: Option<usize> = None;
 
     // CSS `text-indent` only shortens the FIRST formatted line: the inline
     // content available before wrapping is `max_width - text_indent` while no
@@ -2448,6 +2579,11 @@ pub(crate) fn wrap_text_runs(
             ends_run,
         } = token;
         let template = &runs[run_index];
+        let space_owner = collapsed_space_owner(&runs, previous_token_run, run_index);
+        // A space that ends the previous token's text joins its fragment.
+        let space_joins_fragment =
+            space_owner == previous_token_run && text_fragment_end == Some(current_runs.len());
+        previous_token_run = Some(run_index);
         if word == "\n" {
             // Line break
             push_wrapped_line(&mut lines, &mut current_runs, line_height, options, fonts);
@@ -2587,9 +2723,13 @@ pub(crate) fn wrap_text_runs(
                 .is_some_and(is_collapsible_space);
             let mut measurement = measure_inline_token(
                 template,
-                current_width > 0.0,
-                prev_emitted_ws,
-                joins_prev,
+                InlineTokenContext {
+                    preceding_runs: &current_runs,
+                    line_has_content: current_width > 0.0,
+                    previous_ends_whitespace: prev_emitted_ws,
+                    joins_prev,
+                    space_owner: space_owner.map(|owner| &runs[owner]),
+                },
                 fonts,
             );
             let end_width = if template.is_opening_inline_edge() {
@@ -2608,14 +2748,26 @@ pub(crate) fn wrap_text_runs(
                 push_wrapped_line(&mut lines, &mut current_runs, line_height, options, fonts);
                 current_width = 0.0;
                 line_height = run_line_height(template);
-                measurement = measure_inline_token(template, false, true, joins_prev, fonts);
+                measurement = measure_inline_token(
+                    template,
+                    InlineTokenContext {
+                        preceding_runs: &[],
+                        line_has_content: false,
+                        previous_ends_whitespace: true,
+                        joins_prev,
+                        space_owner: None,
+                    },
+                    fonts,
+                );
             }
             if measurement.leading_width > 0.0 {
-                // Emit the inter-word space as a run so the box advances past it.
-                let mut space = template.text_fragment(" ".to_string(), false);
-                space.inline_box = None;
-                space.vertical_align = VerticalAlign::Baseline;
-                current_runs.push(space);
+                // The inter-word space before the box, so the box advances past it.
+                let owner = space_owner.map_or(template, |owner| &runs[owner]);
+                place_collapsed_space(
+                    &mut current_runs,
+                    owner,
+                    space_owner.is_some() && space_joins_fragment,
+                );
             }
             current_width = measurement.end_width(current_width);
             if template.is_inline_edge() {
@@ -2729,6 +2881,7 @@ pub(crate) fn wrap_text_runs(
                 previous_ends_whitespace,
                 preserve_spacing,
                 joins_previous: joins_prev,
+                space_owner: space_owner.map(|owner| &runs[owner]),
                 leading_tracking,
                 outgoing_advance,
             },
@@ -2772,6 +2925,7 @@ pub(crate) fn wrap_text_runs(
                         previous_ends_whitespace: true,
                         preserve_spacing,
                         joins_previous: joins_prev,
+                        space_owner: None,
                         leading_tracking: 0.0,
                         outgoing_advance,
                     },
@@ -2823,6 +2977,7 @@ pub(crate) fn wrap_text_runs(
                     previous_ends_whitespace: true,
                     preserve_spacing,
                     joins_previous: joins_prev,
+                    space_owner: None,
                     leading_tracking: 0.0,
                     outgoing_advance,
                 },
@@ -2856,6 +3011,12 @@ pub(crate) fn wrap_text_runs(
                 });
                 run_word
             }
+            InterWordSpace::EarlierRun => {
+                if let Some(owner) = space_owner {
+                    place_collapsed_space(&mut current_runs, &runs[owner], space_joins_fragment);
+                }
+                run_word
+            }
             InterWordSpace::CurrentRun => {
                 format!(" {run_word}")
             }
@@ -2865,6 +3026,7 @@ pub(crate) fn wrap_text_runs(
         line_height = line_height.max(run_line_height(template));
 
         current_runs.push(template.text_fragment(text, ends_run));
+        text_fragment_end = Some(current_runs.len());
     }
 
     if !current_runs.is_empty() {
@@ -5042,8 +5204,11 @@ mod indent_tests {
         assert_eq!(exact.len(), 1);
         assert_eq!(below.len(), 2);
         assert_eq!(line_text(&exact[0]), "alpha beta");
-        assert_eq!(exact[0].runs[1].text, " ");
-        assert!(exact[0].runs[1].background_color.is_none());
+        // The space ends the unhighlighted run's text, so it is that run's and
+        // takes no background.
+        assert_eq!(exact[0].runs[0].text, "alpha ");
+        assert!(exact[0].runs[0].background_color.is_none());
+        assert_eq!(exact[0].runs[1].text, "beta");
     }
 
     #[test]

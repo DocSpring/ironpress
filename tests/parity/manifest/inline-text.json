@@ -751,5 +751,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-text-baseline", "probe-fill-box"]
+  },
+  {
+    "id": "inline-text-collapsed-space-owner",
+    "category": "inline-text",
+    "feature": "white-space-collapsing",
+    "subfeature": "space-owner",
+    "description": "The space between a word and a larger span keeps the size of the text that holds it: the end of the text before, a space-only text node between two elements, or the start of the span's own text (CSS Text 3 section 4.1.1).",
+    "file": "cases/inline-text/inline-text-collapsed-space-owner.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

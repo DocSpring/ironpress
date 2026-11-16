@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a collapsed space keeps the style of the text that holds it</title>
+<style>
+  @page { size: 320px 240px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 40px; background: #ffffff; }
+  body { margin: 0; }
+  p { margin: 0; }
+  .big { font-size: 32px; background: #e8eefb; }
+  .pad { padding-left: 4px; }
+</style>
+</head>
+<body>
+  <p>Total <span class="big">$120</span> due</p>
+  <p>Total<span class="big"> $120</span> due</p>
+  <p><b>Total</b> <span class="big">$120</span> due</p>
+  <p>Total <span class="big pad">$120</span> due</p>
+</body>
+</html>

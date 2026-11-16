@@ -68,10 +68,9 @@ pub(crate) use super::traversal::{
 #[cfg(test)]
 use super::text::OverflowWrap;
 use super::text::{
-    InlineRunCollector, TextWrapOptions, collapse_whitespace, estimate_word_width,
-    has_non_collapsible_text, parent_line_strut, push_text_run_with_fallback,
-    resolve_style_font_family, text_run_line_height_factor, used_font_size, used_line_height,
-    wrap_text_runs,
+    InlineRunCollector, TextWrapOptions, collapse_whitespace, has_non_collapsible_text,
+    parent_line_strut, push_text_run_with_fallback, resolve_style_font_family,
+    text_run_line_height_factor, used_font_size, used_line_height, wrap_text_runs,
 };
 /// A single border side for layout rendering.
 #[derive(Debug, Clone, Copy)]
@@ -4355,28 +4354,6 @@ fn flatten_element_with_running_mode(
                 // surcharges would double-count its contribution.
                 let marker_line_height_factor =
                     text_run_line_height_factor(marker_style, env.fonts);
-                if style.list_style_position == ListStylePosition::Outside
-                    && marker_text.chars().last().is_some_and(char::is_whitespace)
-                    && marker_style.font_size > style.font_size
-                {
-                    let marker_space = estimate_word_width(
-                        " ",
-                        marker_style.font_size,
-                        &marker_font_family,
-                        marker_bold,
-                        marker_font_style.is_slanted(),
-                        env.fonts,
-                    );
-                    let item_space = estimate_word_width(
-                        " ",
-                        style.font_size,
-                        &resolve_style_font_family(&style, env.fonts),
-                        style.font_weight == FontWeight::Bold,
-                        style.font_style.is_slanted(),
-                        env.fonts,
-                    );
-                    marker_suffix_gap = (marker_space - item_space).max(0.0);
-                }
                 let marker_gap_writing_mode = if style.writing_mode == WritingMode::HorizontalTb {
                     parent_style.writing_mode
                 } else {
