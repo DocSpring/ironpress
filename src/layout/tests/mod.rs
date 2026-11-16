@@ -2,6 +2,7 @@ mod absolute_static_position;
 mod anonymous_blocks;
 mod atomic_inline;
 mod body_box;
+mod break_margins;
 mod container_flow;
 mod filter_cells;
 mod flex_intrinsic;

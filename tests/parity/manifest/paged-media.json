@@ -1376,5 +1376,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "paged-bottom-margin-truncated-at-break",
+    "category": "paged-media",
+    "feature": "fragmentation",
+    "subfeature": "margin-truncation",
+    "description": "A paragraph whose border box fits at the bottom of the page stays there although its bottom margin runs past the page's end: a margin at an unforced break is truncated (CSS Fragmentation 3 section 5.2).",
+    "file": "cases/paged-media/paged-bottom-margin-truncated-at-break.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

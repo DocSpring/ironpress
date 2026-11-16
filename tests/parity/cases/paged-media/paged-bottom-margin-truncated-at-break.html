@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a bottom margin at a break is truncated</title>
+<style>
+  @page { size: 320px 200px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 0; }
+  .filler { height: 120px; background: #cfd8e3; }
+  p { margin: 0 0 24px; background: #e8eefb; }
+</style>
+</head>
+<body>
+  <div class="filler"></div>
+  <p>This line fits; its margin does not.</p>
+  <p>The next paragraph starts the second page.</p>
+</body>
+</html>

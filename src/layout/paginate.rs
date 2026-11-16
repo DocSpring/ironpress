@@ -3091,6 +3091,10 @@ pub(crate) fn paginate_with_context(
         };
         let margin_top_val = collapsed_margin;
         let element_height = margin_top_val + content_h_val + margin_bottom_val;
+        // Whether the box fits leaves out its bottom margin: a margin at a
+        // break is truncated (CSS Fragmentation 3 §5.2), so a box whose
+        // border box fits stays on the page even when its margin doesn't.
+        let fit_height = margin_top_val + content_h_val;
         let mut pending_footnotes = Vec::new();
         collect_footnotes_from_element(&element, &mut pending_footnotes);
         let pending_non_block_footnotes: Vec<_> = pending_footnotes
@@ -3178,7 +3182,7 @@ pub(crate) fn paginate_with_context(
         });
         let (break_decision_height, break_footer_reserve) = table_keep_break_height
             .or(avoid_break_height)
-            .map_or((element_height, footer_reserve), |height| (height, 0.0));
+            .map_or((fit_height, footer_reserve), |height| (height, 0.0));
         // A class-A break before the box is useful only when the box (or the
         // keep-together group being judged) can fit in a fresh fragmentainer.
         // If it cannot, moving it merely wastes the current page before the
@@ -3216,11 +3220,8 @@ pub(crate) fn paginate_with_context(
             // footnote collection, and decoration slicing remain centralized.
             let line_policy_requires_break = avoid_group.is_none()
                 && break_footer_reserve == 0.0
-                && equal_with_roundoff(break_decision_height, element_height)
-                && !exceeds_with_roundoff(
-                    y + element_height,
-                    content_height_before_pending_footnotes,
-                );
+                && equal_with_roundoff(break_decision_height, fit_height)
+                && !exceeds_with_roundoff(y + fit_height, content_height_before_pending_footnotes);
             if line_policy_requires_break
                 && let Some(index) = footnote_line_policy_break_index(
                     &element,
@@ -3383,9 +3384,8 @@ pub(crate) fn paginate_with_context(
         } else {
             margin_top_val
         };
-        let effective_element_height = effective_margin_top
-            + effective_flow_geometry.content_height
-            + effective_flow_geometry.margins.end;
+        // Without its bottom margin, which a break truncates.
+        let effective_fit_height = effective_margin_top + effective_flow_geometry.content_height;
 
         // Handle floated elements (floats don't participate in margin collapsing)
         if elem_float != Float::None {
@@ -3448,7 +3448,7 @@ pub(crate) fn paginate_with_context(
         }
         if elem_position == Position::Static
             && may_fragment_internally
-            && exceeds_with_roundoff(y + effective_element_height, effective_content_height)
+            && exceeds_with_roundoff(y + effective_fit_height, effective_content_height)
         {
             let avail_below_box_top = effective_content_height - (y + effective_margin_top);
             // A too-tall text block splits at a line boundary; a too-tall raster
