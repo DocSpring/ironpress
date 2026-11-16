@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>an absolute box with no positioned ancestor is placed in the page area</title>
+<style>
+  @page { size: 320px 320px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 1.5; background: #ffffff; }
+  body { margin: 16px; }
+  p { margin: 0 0 16px; }
+  .abs { position: absolute; width: 48px; height: 16px; }
+</style>
+</head>
+<body>
+  <p>Before the boxes</p>
+  <div style="padding-left:32px"><div class="abs" style="top:120px; background:#2e7d32"></div></div>
+  <div><div class="abs" style="top:160px; right:24px; background:#ad1457"></div></div>
+  <div style="padding-left:32px; background:#e8eefb"><span>Text</span><div class="abs" style="bottom:24px; background:#1f4fa8"></div></div>
+</body>
+</html>

@@ -2307,7 +2307,16 @@ fn layout_document_pass(
             font_size: parent_style.font_size,
             percent_width_basis: available_width,
         },
-        containing_block: None,
+        // An absolute box with no positioned ancestor is placed in the
+        // initial containing block, the page area (CSS 2.1 §10.1). A
+        // positioned ancestor replaces it for its descendants, with `None`
+        // while its own size is still unknown.
+        containing_block: Some(ContainingBlock {
+            x: 0.0,
+            width: initial_containing_block.width,
+            height: initial_containing_block.height,
+            depth: 0,
+        }),
         percent_height_cb: None,
         root_font_size: parent_style.root_font_size,
     };

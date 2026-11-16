@@ -370,5 +370,20 @@
       "probe-fill-box",
       "probe-block-flow"
     ]
+  },
+  {
+    "id": "positioning-absolute-initial-containing-block",
+    "category": "positioning",
+    "feature": "position:absolute",
+    "subfeature": "initial-containing-block",
+    "description": "An absolute box with no positioned ancestor takes its top, right and bottom insets from the page area, the initial containing block, not from its static parent, and keeps its static position on an axis whose insets are auto (CSS 2.1 sections 10.1, 10.3.7 and 10.6.4).",
+    "file": "cases/positioning/positioning-absolute-initial-containing-block.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
   }
 ]

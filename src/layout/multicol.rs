@@ -150,8 +150,16 @@ pub(crate) fn layout_multicol_container(
     }
 
     // ---- Lay out each top-level child into its own buffer at column width ----
-    let col_ctx = ctx.with_parent(col_width, None, style.font_size);
-    let full_ctx = ctx.with_parent(inner_width, None, style.font_size);
+    // A positioned multicol container is its absolute descendants'
+    // containing block, but its size is known only once the columns are
+    // balanced: they stay unresolved until `emit_multicol_wrapper` supplies it.
+    let descendant_ctx = if crate::layout::helpers::establishes_containing_block(style) {
+        ctx.with_containing_block(None)
+    } else {
+        *ctx
+    };
+    let col_ctx = descendant_ctx.with_parent(col_width, None, style.font_size);
+    let full_ctx = descendant_ctx.with_parent(inner_width, None, style.font_size);
 
     let mut child_ancestors: Vec<AncestorInfo> = ancestors.to_vec();
     child_ancestors.push(AncestorInfo {

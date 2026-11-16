@@ -130,6 +130,21 @@ impl TableDescendantLayout {
         }
     }
 
+    /// The layout for the contents of a box in the table (a cell, a caption).
+    /// A positioned one is its absolute descendants' containing block, which
+    /// the renderer places at the box (`CellBox::established_containing_block_depth`),
+    /// so they don't take the one around the table.
+    fn within(self, style: &ComputedStyle) -> Self {
+        if crate::layout::helpers::establishes_containing_block(style) {
+            Self {
+                layout: self.layout.with_containing_block(None),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     fn child_context(self, width: f32, parent: &ComputedStyle) -> LayoutContext {
         self.layout
             .with_parent(width, parent.height, parent.font_size)
@@ -4160,6 +4175,10 @@ fn layout_table_cell_flow(
     context: TableCellFlowContext<'_, '_, '_>,
     env: &mut LayoutEnv,
 ) {
+    let context = TableCellFlowContext {
+        descendant_layout: context.descendant_layout.within(context.style),
+        ..context
+    };
     let sequence = InlineContentSequence::new(nodes);
     let anonymous_blocks_from = match context.pass {
         TableCellFlowPass::Layout => first_block_before_inline_content(sequence, context, env),

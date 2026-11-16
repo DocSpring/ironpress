@@ -30,7 +30,6 @@ pub(in crate::render::pdf) fn render_container(
     let c_overflow_y = &element.overflow.y;
     let c_box_transform = &element.paint.group.transform;
     let c_transform = &c_box_transform.value;
-    let c_containing_block = &element.positioning.containing_block;
     let c_box_shadow = &element.paint.shadows;
     let c_bg_gradient = &element.paint.background.layers.gradient;
     let c_bg_radial = &element.paint.background.layers.radial_gradient;
@@ -53,10 +52,9 @@ pub(in crate::render::pdf) fn render_container(
 
     let container_w = block_width.resolve(available_width);
     let container_x = match c_position {
-        Position::Absolute | Position::Fixed => c_containing_block
-            .map_or(margin.left + c_offset_left, |cb| {
-                margin.left + cb.x + c_offset_left
-            }),
+        Position::Absolute | Position::Fixed => {
+            frame.positioned_x(&element.positioning, ctx.initial_fixed_origin.x)
+        }
         _ => match c_float {
             Float::Right => margin.left + available_width - container_w,
             _ => margin.left + c_offset_left,

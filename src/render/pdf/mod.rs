@@ -506,9 +506,12 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
                 page_paint_box,
                 page_size.height,
             )
+            // Fixed boxes, and absolute boxes with no positioned ancestor, are
+            // placed in the page area, not inside the body's margin, border
+            // and padding.
             .with_initial_fixed_origin(PdfPoint::new(
-                flow_margin.left,
-                page_size.height - flow_margin.top,
+                page_margin.left,
+                page_size.height - page_margin.top,
             ));
             let mut stacking_plan = StackingPaintPlan::default();
             let mut page_background_plan = StackingPaintPlan::default();

@@ -26,7 +26,6 @@ pub(in crate::render::pdf) fn render_text_block(
     let position = &element.positioning.scheme;
     let offset_top = &element.positioning.insets.top;
     let offset_left = &element.positioning.insets.left;
-    let containing_block = &element.positioning.containing_block;
     let box_shadow = &element.paint.shadows;
     let visible = &element.paint.visible;
     let clip_rect = &element.clipping.rect;
@@ -84,9 +83,7 @@ pub(in crate::render::pdf) fn render_text_block(
             // Position relative to the containing block.
             // bottom/right offsets are pre-resolved into top/left
             // at layout time, so we only use offset_left here.
-            containing_block.map_or(margin.left + offset_left, |cb| {
-                margin.left + cb.x + offset_left
-            })
+            frame.positioned_x(&element.positioning, ctx.initial_fixed_origin.x)
         }
         Position::Relative | Position::Sticky => margin.left + offset_left,
         Position::Static => match float {
