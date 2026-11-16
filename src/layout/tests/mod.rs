@@ -16,6 +16,7 @@ mod inline_selectors;
 mod inline_svg;
 mod list_markers;
 mod lists;
+mod outside_marker_line;
 mod paged_breaks;
 mod positioning;
 mod print_fit_content;

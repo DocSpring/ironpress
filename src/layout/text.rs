@@ -1047,7 +1047,31 @@ fn resolve_line_box_metrics(
     let mut below = parent.map_or(f32::NEG_INFINITY, |strut| strut.below);
     let shift_basis = line_primary_font_size(runs);
     let line_x_height = line_primary_x_height_ratio(runs, fonts) * shift_basis;
+    // An outside list marker can push the line down, but the line isn't made
+    // taller below the baseline for it, as Chrome lays it out. Its extent
+    // below is used only when nothing else gives one.
+    let mut marker_below = f32::NEG_INFINITY;
+    let text_extents = |run: &TextRun| {
+        let factor = if run.line_height_factor.is_finite() {
+            run.line_height_factor.max(0.0)
+        } else {
+            fallback_line_height_factor.max(0.0)
+        };
+        line_extents(
+            run.css_font_family(),
+            run.line_height_font_size(),
+            run.bold,
+            run.font_style.is_slanted(),
+            run.line_height_font_size() * factor,
+            fonts,
+        )
+    };
     for run in runs {
+        let below = if run.metadata.is_outside_marker {
+            &mut marker_below
+        } else {
+            &mut below
+        };
         if let Some(inline) = run.inline_box.as_deref() {
             let box_ascent = inline.baseline_ascent.unwrap_or(inline.height);
             let box_descent = (inline.height - box_ascent).max(0.0);
@@ -1083,28 +1107,19 @@ fn resolve_line_box_metrics(
                 | VerticalAlign::TextBottom => continue,
             };
             above = above.max(box_above.max(0.0));
-            below = below.max(box_below.max(0.0));
+            *below = below.max(box_below.max(0.0));
             continue;
         }
         if is_drop_cap_marker_run(run) || !has_non_collapsible_text(&run.text) {
             continue;
         }
-        let factor = if run.line_height_factor.is_finite() {
-            run.line_height_factor.max(0.0)
-        } else {
-            fallback_line_height_factor.max(0.0)
-        };
-        let extents = line_extents(
-            run.css_font_family(),
-            run.line_height_font_size(),
-            run.bold,
-            run.font_style.is_slanted(),
-            run.line_height_font_size() * factor,
-            fonts,
-        );
+        let extents = text_extents(run);
         let shift = run.vertical_align_shift(shift_basis);
         above = above.max(extents.above + shift);
-        below = below.max(extents.below - shift);
+        *below = below.max(extents.below - shift);
+    }
+    if !below.is_finite() {
+        below = marker_below;
     }
     // `text-emphasis` uses a ruby annotation (css-text-decor-4 §3.4). When its
     // selected annotation side cannot fit in the base run's leading, Chrome

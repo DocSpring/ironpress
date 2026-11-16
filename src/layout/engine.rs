@@ -852,6 +852,9 @@ pub struct TextRunMetadata {
     /// only on the resulting single-glyph composition.
     pub text_combine_upright: crate::style::computed::TextCombineUpright,
     pub is_drop_cap: bool,
+    /// An `outside` list marker: it can push its line down but doesn't make
+    /// it taller below the baseline (`resolve_line_box_metrics`).
+    pub(crate) is_outside_marker: bool,
     pub whitespace: RunWhitespace,
     pub(crate) inline_edge: Option<InlineEdge>,
     pub(crate) inline_decoration: Option<InlineDecorationId>,
@@ -4418,6 +4421,9 @@ fn flatten_element_with_running_mode(
             }
             let marker_hang =
                 if has_marker && style.list_style_position == ListStylePosition::Outside {
+                    for run in &mut runs[marker_run_start..] {
+                        run.metadata.is_outside_marker = true;
+                    }
                     measure_runs_width(&runs[marker_run_start..], env.fonts)
                 } else {
                     0.0

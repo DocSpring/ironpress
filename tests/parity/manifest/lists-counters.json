@@ -571,5 +571,20 @@
       "probe-border-box",
       "probe-color-swatch"
     ]
+  },
+  {
+    "id": "lists-counters-marker-small-font-size",
+    "category": "lists-counters",
+    "feature": "::marker font-size",
+    "subfeature": "marker-smaller-than-text",
+    "description": "Markers smaller than the item text, with the item's 38px line-height: the first line keeps that height, because an outside marker that reaches lower than the text doesn't make the line taller in Chrome. Catches: a line box that takes the marker's descent and leading.",
+    "file": "cases/lists-counters/lists-counters-marker-small-font-size.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "oracle": "chrome",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]
