@@ -1809,6 +1809,12 @@ pub fn compute_root_padding(rules: &[CssRule], page_size: PageSize) -> EdgeSizes
     compute_root_element_style(rules, page_size).padding
 }
 
+/// The used border widths declared on `body`, `html`, or `:root`. They inset
+/// the body's content inside its padding, like the padding, on every page.
+pub fn compute_root_border_widths(rules: &[CssRule], page_size: PageSize) -> EdgeSizes {
+    compute_root_element_style(rules, page_size).border.widths()
+}
+
 /// Resolved text properties for one CSS page-margin box.
 #[derive(Debug, Clone)]
 pub struct PageMarginTextDefaults {
@@ -2011,6 +2017,17 @@ fn collect_id_defs(nodes: &[DomNode], defs: &mut HashMap<String, ElementNode>) {
             }
             collect_id_defs(&el.children, defs);
         }
+    }
+}
+
+/// The border-box extent of the body from a length: its own `width` or
+/// `height` (`authored`), which `box-sizing: border-box` makes the border box,
+/// or else the content extent the page leaves it. `edges`: padding and border.
+fn body_border_box_extent(length: f32, authored: bool, border_box_sizing: bool, edges: f32) -> f32 {
+    if authored && border_box_sizing {
+        length
+    } else {
+        length + edges
     }
 }
 
@@ -2270,20 +2287,48 @@ fn layout_document_pass(
         );
     }
 
-    if html_has_bg && body_has_bg && background_paint_differs(&html_style, &body_style) {
-        let body_w =
-            body_style.width.unwrap_or(available_width).max(0.0) + body_style.padding.horizontal();
-        let body_h =
-            body_style.height.unwrap_or(content_height).max(0.0) + body_style.padding.vertical();
-        let body_offset_top = first_root_child_margin_top(nodes, &parent_style, rules);
+    // The body's own box: its border, and its background when the root has
+    // a different one. Pagination cuts it to each page.
+    let body_paints_background =
+        html_has_bg && body_has_bg && background_paint_differs(&html_style, &body_style);
+    let body_border = body_style.border.widths();
+    if body_paints_background || body_border.horizontal() + body_border.vertical() > 0.0 {
+        let padding = body_style.padding;
+        let border_box_sizing =
+            body_style.box_sizing == crate::style::computed::BoxSizing::BorderBox;
+        let separated_top = padding.top > 0.0 || body_border.top > 0.0;
+        let top = if separated_top {
+            body_style.margin.top
+        } else {
+            body_style
+                .margin
+                .top
+                .max(first_root_child_margin_top(nodes, &parent_style, rules))
+        };
         elements.push(
-            BackgroundBox::new(
+            super::elements::BodyBox::new(
                 &body_style,
-                BackgroundBoxGeometry::repeated_canvas(
-                    Size::new(body_w, body_h),
-                    crate::types::Point::new(0.0, body_offset_top),
-                    -1,
-                ),
+                super::elements::BodyBoxGeometry {
+                    left: -(padding.left + body_border.left),
+                    width: body_border_box_extent(
+                        body_style.width.unwrap_or(available_width),
+                        body_style.width.is_some(),
+                        border_box_sizing,
+                        padding.horizontal() + body_border.horizontal(),
+                    ),
+                    top,
+                    padding_bottom: padding.bottom,
+                    holds_last_margin: padding.bottom > 0.0 || body_border.bottom > 0.0,
+                    height: body_style.height.map(|height| {
+                        body_border_box_extent(
+                            height,
+                            true,
+                            border_box_sizing,
+                            padding.vertical() + body_border.vertical(),
+                        )
+                    }),
+                },
+                body_paints_background,
             )
             .boxed(),
         );

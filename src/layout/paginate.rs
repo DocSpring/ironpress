@@ -3546,7 +3546,9 @@ pub(crate) fn paginate_with_context(
     let has_real_content = current_elements
         .iter()
         .any(|(_, element)| element.page_content_role().retains_page());
-    if !current_elements.is_empty() && (has_real_content || pages.is_empty()) {
+    let ends_on_pending_page =
+        !current_elements.is_empty() && (has_real_content || pages.is_empty());
+    if ends_on_pending_page {
         pages.push(Page {
             elements: current_elements,
             print_content_scale: Default::default(),
@@ -3573,7 +3575,36 @@ pub(crate) fn paginate_with_context(
         });
     }
 
+    let flow_end = ends_on_pending_page.then_some(crate::layout::elements::FlowEnd {
+        content_bottom: y,
+        margin_bottom: prev_margin_bottom,
+    });
+    fit_body_boxes(&mut pages, flow_end);
     pages
+}
+
+/// Cut the body's box to each page: it starts on the first page and ends on
+/// the last, after the flow's end. `flow_end`: `None` when the flow ended on
+/// a page that was dropped as blank, so the body runs to the last page's end.
+fn fit_body_boxes(pages: &mut [Page], flow_end: Option<crate::layout::elements::FlowEnd>) {
+    let last = pages.len().saturating_sub(1);
+    for (index, page) in pages.iter_mut().enumerate() {
+        let Some(geometry) = page.geometry else {
+            continue;
+        };
+        let page_area = geometry.page_area_in_flow_space();
+        let end = (index == last).then(|| {
+            flow_end.unwrap_or(crate::layout::elements::FlowEnd {
+                content_bottom: page_area.origin.y + page_area.size.height,
+                margin_bottom: 0.0,
+            })
+        });
+        for (y, element) in &mut page.elements {
+            if let Some(body) = element.body_box_mut() {
+                *y = body.fit_page(page_area, index == 0, end);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -221,6 +221,10 @@ impl LayoutElement for FragmentBox {
         self.source.page_area_background()
     }
 
+    fn body_box_mut(&mut self) -> Option<&mut super::BodyBox> {
+        self.source.body_box_mut()
+    }
+
     fn filter_holder_mut(&mut self) -> Option<&mut dyn FilterHolder> {
         self.source.filter_holder_mut()
     }

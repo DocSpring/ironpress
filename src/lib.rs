@@ -717,6 +717,11 @@ impl HtmlConverter {
         let body_padding = layout::engine::compute_root_padding(&rules, effective_page_size);
         effective_margin.right += body_padding.right;
         effective_margin.left += body_padding.left;
+        // The body's left and right borders lie between its margin and its
+        // padding, so they inset its content too.
+        let body_border = layout::engine::compute_root_border_widths(&rules, effective_page_size);
+        effective_margin.right += body_border.right;
+        effective_margin.left += body_border.left;
 
         // Body max-width + margin:auto centers body content within the page's
         // printable area (e.g. `body { max-width: 640px; margin: auto; }` on

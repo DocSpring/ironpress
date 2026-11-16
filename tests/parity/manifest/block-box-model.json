@@ -846,5 +846,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "block-box-model-body-border-pages",
+    "category": "block-box-model",
+    "feature": "box-decoration",
+    "subfeature": "root-border-slices",
+    "description": "The body's border and its own background (the root has a different one) are cut at each page: side borders on every page, the top border on the first and the bottom border after the last line's margin and the bottom padding on the last (CSS 2.1 sections 8.5 and 14.2).",
+    "file": "cases/block-box-model/block-box-model-body-border-pages.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

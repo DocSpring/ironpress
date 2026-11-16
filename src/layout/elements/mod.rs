@@ -5,6 +5,7 @@
 //! object-safe visitor is the one intentional dispatch boundary.
 
 mod background;
+mod body_box;
 mod container;
 mod flex;
 mod form;
@@ -24,6 +25,7 @@ pub(crate) mod test_support;
 mod text;
 
 pub(crate) use background::{BackgroundBox, BackgroundBoxGeometry, PageAreaInFlowSpace};
+pub(crate) use body_box::{BodyBox, BodyBoxGeometry, FlowEnd};
 pub(crate) use container::Container;
 pub(crate) use flex::{FlexContent, FlexRow};
 pub(crate) use form::{FormField, FormFieldKind};
@@ -272,6 +274,11 @@ pub(crate) trait LayoutElement: Debug {
     }
 
     fn page_area_background(&self) -> Option<&dyn PageAreaBackground> {
+        None
+    }
+
+    /// The body's box, which pagination cuts into one slice per page.
+    fn body_box_mut(&mut self) -> Option<&mut BodyBox> {
         None
     }
 
@@ -524,6 +531,10 @@ impl LayoutElement for LayoutNode {
 
     fn page_area_background(&self) -> Option<&dyn PageAreaBackground> {
         self.as_ref().page_area_background()
+    }
+
+    fn body_box_mut(&mut self) -> Option<&mut BodyBox> {
+        self.as_mut().body_box_mut()
     }
 
     fn filter_holder_mut(&mut self) -> Option<&mut dyn FilterHolder> {

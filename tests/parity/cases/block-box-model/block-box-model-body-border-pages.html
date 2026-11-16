@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>the body's border and background, cut at each page</title>
+<style>
+  @page { size: 320px 200px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 8px 16px; padding: 8px 12px; border: 4px solid #c0392b; background: #e8eefb; }
+  p { margin: 0 0 12px; }
+  .tall { height: 260px; background: #cfd8e3; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+  <p>The body's top border is on the first page.</p>
+  <div class="tall"></div>
+  <p>Its bottom border follows this line.</p>
+</body>
+</html>

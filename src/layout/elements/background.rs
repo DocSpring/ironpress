@@ -44,15 +44,6 @@ impl BackgroundBoxGeometry {
         }
     }
 
-    pub(crate) const fn repeated_canvas(size: Size, origin: Point, z_index: i32) -> Self {
-        Self {
-            size,
-            origin,
-            z_index,
-            layer: BackgroundBoxLayer::RepeatedCanvas,
-        }
-    }
-
     pub(crate) fn repeated_page_area(page_area: PageAreaInFlowSpace, z_index: i32) -> Self {
         let repeated = RepeatedPageAreaGeometry { page_area };
         let layout_box = repeated.layout_box(PrintContentScale::default());
@@ -85,8 +76,6 @@ impl RepeatedPageAreaGeometry {
 enum BackgroundBoxLayer {
     /// An `@page` backdrop already assigned to one physical page.
     PageBackdrop,
-    /// A fixed-size document-canvas decoration repeated on every page.
-    RepeatedCanvas,
     /// The propagated root canvas fitted to each selected page area.
     RepeatedPageArea(RepeatedPageAreaGeometry),
 }
@@ -166,7 +155,6 @@ impl PageAreaBackground for BackgroundBox {
         match self.layer {
             BackgroundBoxLayer::PageBackdrop => PageAreaPaintSpace::PhysicalPage,
             BackgroundBoxLayer::RepeatedPageArea(_) => PageAreaPaintSpace::FittedDocumentCanvas,
-            BackgroundBoxLayer::RepeatedCanvas => PageAreaPaintSpace::FittedDocumentCanvas,
         }
     }
 }
