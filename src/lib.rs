@@ -5503,11 +5503,13 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         }
     }
 
-    /// The text runs and image XObjects an uncompressed PDF draws
+    /// The text runs and image XObjects an uncompressed PDF draws: a text
+    /// object for each run, whether its glyphs are drawn with one `TJ` or one
+    /// at a time (a font whose shaping offsets glyphs)
     fn drawn_content(pdf: &[u8]) -> (usize, usize) {
         let text = String::from_utf8_lossy(pdf);
         (
-            text.matches("] TJ").count(),
+            text.lines().filter(|line| *line == "BT").count(),
             text.matches("/Subtype /Image").count(),
         )
     }
@@ -5522,9 +5524,10 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
         for (html, runs, images) in [
             (format!(r#"<p><a href="https://example.com">{image}</a></p>"#), 0, 1),
             (format!("<p>Logo <strong>{image}</strong> text</p>"), 2, 1),
-            (r#"<div>Lead <span>in <div style="display: inline-block">X</div></span> tail</div>"#.to_string(), 4, 0),
-            (r#"<div>Lead <span>in <span style="display: inline-flex">F</span></span> tail</div>"#.to_string(), 4, 0),
-            (r#"<div>Lead <span>in <span style="float: right">F</span></span> tail</div>"#.to_string(), 4, 0),
+            // "Lead in " (the text and the span's share a font), the box's text and " tail"
+            (r#"<div>Lead <span>in <div style="display: inline-block">X</div></span> tail</div>"#.to_string(), 3, 0),
+            (r#"<div>Lead <span>in <span style="display: inline-flex">F</span></span> tail</div>"#.to_string(), 3, 0),
+            (r#"<div>Lead <span>in <span style="float: right">F</span></span> tail</div>"#.to_string(), 3, 0),
         ] {
             let (drawn_runs, drawn_images) = drawn_content(&converter.convert(&html).unwrap());
             assert!(drawn_runs >= runs && drawn_images >= images, "{html}: {drawn_runs} runs, {drawn_images} images");

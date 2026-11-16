@@ -654,6 +654,36 @@ fn current_generator_sha256(parity_dir: &Path) -> Option<String> {
     Some(sha256_hex(&bytes))
 }
 
+/// The Linux system fonts that the oracle's generic families resolve to, by
+/// the label each one's bytes are hashed under in the font bundle digest.
+const ORACLE_SYSTEM_FONTS: [(&str, &str); 4] = [
+    (
+        "generic-sans",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ),
+    (
+        "generic-serif",
+        "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+    ),
+    (
+        "generic-monospace",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    ),
+    (
+        "cjk-sans",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    ),
+];
+
+/// Whether this host has the oracle's system fonts, so a committed lock's
+/// font bundle digest can match it.
+#[cfg(test)]
+fn host_has_oracle_system_fonts() -> bool {
+    ORACLE_SYSTEM_FONTS
+        .iter()
+        .all(|(_, path)| Path::new(path).is_file())
+}
+
 fn current_font_bundle_sha256(parity_dir: &Path) -> Option<String> {
     use sha2::{Digest, Sha256};
 
@@ -685,24 +715,7 @@ fn current_font_bundle_sha256(parity_dir: &Path) -> Option<String> {
         hasher.update(std::fs::read(path).ok()?);
         hasher.update([0]);
     }
-    for (label, path) in [
-        (
-            "generic-sans",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        ),
-        (
-            "generic-serif",
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-        ),
-        (
-            "generic-monospace",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        ),
-        (
-            "cjk-sans",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        ),
-    ] {
+    for (label, path) in ORACLE_SYSTEM_FONTS {
         let path = Path::new(path);
         // The generator fails closed when these Linux oracle inputs are absent.
         // A non-Linux unit-test host may omit them; its digest then cannot match
@@ -1006,13 +1019,21 @@ mod tests {
     fn rejects_every_unclaimed_pdf_in_the_recursive_oracle_corpus() {
         let directory = TestDir::new();
         directory.write_lock(b"%PDF oracle");
-        let orphan_paths = [
+        // On a case-insensitive filesystem (macOS's default), `example.PDF`
+        // is the claimed `example.pdf`, so it can't be an orphan beside it.
+        let probe = directory.parity.join("case-probe");
+        std::fs::write(&probe, b"").unwrap();
+        let case_sensitive = !directory.parity.join("CASE-PROBE").exists();
+        std::fs::remove_file(probe).unwrap();
+        let orphan_paths: Vec<&str> = [
             "oracles/test/orphan.pdf",
             "oracles/unknown/orphan.pdf",
             "oracles/test/nested/orphan.pdf",
-            "oracles/test/example.PDF",
-        ];
-        for relative in orphan_paths {
+        ]
+        .into_iter()
+        .chain(case_sensitive.then_some("oracles/test/example.PDF"))
+        .collect();
+        for relative in orphan_paths.iter().copied() {
             let path = directory.parity.join(relative);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, b"%PDF orphan").unwrap();
@@ -1314,6 +1335,18 @@ mod tests {
             return;
         }
         assert!(present);
+        if !host_has_oracle_system_fonts() {
+            // Without the oracle's Linux fonts (a macOS host), the font bundle
+            // digest can't match any provenance, which fails closed. Every
+            // other check still has to pass.
+            assert!(
+                stale
+                    .iter()
+                    .all(|entry| entry.reason == "invalid-provenance"),
+                "{stale:?}"
+            );
+            return;
+        }
         assert!(stale.is_empty(), "{stale:?}");
     }
 }

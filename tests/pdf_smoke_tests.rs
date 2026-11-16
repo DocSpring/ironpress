@@ -48,38 +48,40 @@ fn pdf_has_text(pdf: &[u8], text: &str) -> bool {
     if cmaps.is_empty() {
         return false;
     }
+    // Decode the glyphs each text object shows, through `TJ` arrays or one
+    // `Tj` per glyph (a font positioned glyph by glyph), in drawing order.
     let mut decoded = String::new();
-    let mut search_pos = 0;
-    while let Some(tj_end) = cmap_str[search_pos..].find("] TJ") {
-        let tj_end_abs = search_pos + tj_end;
-        if let Some(tj_start) = cmap_str[..tj_end_abs].rfind('[') {
-            let arr = &cmap_str[tj_start + 1..tj_end_abs];
-            let hexes: Vec<String> = {
-                let mut v = Vec::new();
-                let mut ap = 0;
-                while let Some(o) = arr[ap..].find('<') {
-                    let oa = ap + o;
-                    if let Some(c) = arr[oa..].find('>') {
-                        v.push(arr[oa + 1..oa + c].trim().to_uppercase());
-                        ap = oa + c + 1;
-                    } else {
-                        break;
-                    }
-                }
-                v
+    for text_object in cmap_str.split("\nBT\n").skip(1) {
+        let text_object = text_object.split("\nET").next().unwrap_or_default();
+        let mut hexes = Vec::new();
+        for line in text_object.lines() {
+            let line = line.trim();
+            let operands = if let Some(array) = line.strip_suffix("] TJ") {
+                array.trim_start_matches('[')
+            } else if let Some(string) = line.strip_suffix(" Tj") {
+                string
+            } else {
+                continue;
             };
-            for cmap in &cmaps {
-                let d: String = hexes
-                    .iter()
-                    .filter_map(|h| cmap.get(h.as_str()).copied())
-                    .collect();
-                if !d.is_empty() {
-                    decoded.push_str(&d);
-                }
+            let mut rest = operands;
+            while let Some(open) = rest.find('<') {
+                let Some(close) = rest[open..].find('>') else {
+                    break;
+                };
+                hexes.push(rest[open + 1..open + close].trim().to_uppercase());
+                rest = &rest[open + close + 1..];
             }
         }
-        decoded.push(' ');
-        search_pos = tj_end_abs + 4;
+        for cmap in &cmaps {
+            let d: String = hexes
+                .iter()
+                .filter_map(|h| cmap.get(h.as_str()).copied())
+                .collect();
+            if !d.is_empty() {
+                decoded.push_str(&d);
+                decoded.push(' ');
+            }
+        }
     }
     decoded.contains(text)
 }
