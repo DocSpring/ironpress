@@ -270,7 +270,7 @@ fn apply_authored_spacing(run: &TextRun, glyphs: &mut [crate::text::ShapedGlyph]
     }
 }
 
-pub(super) fn flex_cell_baseline(cell: &FlexCell, fonts: &HashMap<String, TtfFont>) -> Option<f32> {
+pub(crate) fn flex_cell_baseline(cell: &FlexCell, fonts: &HashMap<String, TtfFont>) -> Option<f32> {
     let mut prior = 0.0;
     let last = cell
         .lines

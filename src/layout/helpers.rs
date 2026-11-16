@@ -979,7 +979,7 @@ pub(crate) fn apply_first_line_style(
         .iter()
         .map(|run| {
             if let Some(inline) = run.inline_box.as_deref() {
-                inline.height
+                inline.outer_height()
             } else {
                 run.font_size * run.line_height_factor
             }
@@ -1868,6 +1868,8 @@ fn build_pseudo_inline_box(
         height,
         margin_left: pseudo_style.margin.left.max(0.0),
         margin_right: pseudo_style.margin.right.max(0.0),
+        margin_top: pseudo_style.margin.top.max(0.0),
+        margin_bottom: pseudo_style.margin.bottom.max(0.0),
         paint: InlineBoxPaint {
             background_color: pseudo_style.background_color,
             border,
@@ -1914,6 +1916,8 @@ fn build_pseudo_image_box(
         height,
         margin_left: pseudo_style.margin.left.max(0.0),
         margin_right: pseudo_style.margin.right.max(0.0),
+        margin_top: pseudo_style.margin.top.max(0.0),
+        margin_bottom: pseudo_style.margin.bottom.max(0.0),
         paint: InlineBoxPaint {
             border: LayoutBorder::from_computed(&pseudo_style.border, pseudo_style.color),
             border_image: pseudo_style.border_image.paint(),

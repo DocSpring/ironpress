@@ -22,6 +22,7 @@ pub(crate) use geometry::{
     source_geometry,
 };
 pub(crate) use source_graphic::paint_source_graphic;
+pub(crate) use text::flex_cell_baseline;
 pub(crate) use text::table_row_baseline_shifts;
 
 #[cfg(test)]

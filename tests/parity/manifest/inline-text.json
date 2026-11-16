@@ -775,5 +775,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "inline-text-inline-block-vertical-margins",
+    "category": "inline-text",
+    "feature": "vertical-align",
+    "subfeature": "inline-block-margin-box",
+    "description": "An inline-block is aligned in its line by its margin box: vertical margins make the line taller, a top box taller than the line grows it below the baseline and a bottom box above it, and rows of block-tagged inline-blocks follow the same rules (CSS 2.1 section 10.8).",
+    "file": "cases/inline-text/inline-text-inline-block-vertical-margins.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

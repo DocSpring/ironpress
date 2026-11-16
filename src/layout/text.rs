@@ -1138,8 +1138,8 @@ fn resolve_line_box_metrics(
             &mut below
         };
         if let Some(inline) = run.inline_box.as_deref() {
-            let box_ascent = inline.baseline_ascent.unwrap_or(inline.height);
-            let box_descent = (inline.height - box_ascent).max(0.0);
+            let box_ascent = inline.outer_baseline_ascent();
+            let box_descent = (inline.outer_height() - box_ascent).max(0.0);
             let (box_above, box_below) = match inline.vertical_align {
                 VerticalAlign::Sub => (
                     box_ascent - shift_basis * crate::render::pdf::SUB_SHIFT_RATIO,
@@ -1160,8 +1160,8 @@ fn resolve_line_box_metrics(
                     (box_ascent + shift, box_descent - shift)
                 }
                 VerticalAlign::Middle => (
-                    inline.height / 2.0 + line_x_height / 2.0,
-                    inline.height / 2.0 - line_x_height / 2.0,
+                    inline.outer_height() / 2.0 + line_x_height / 2.0,
+                    inline.outer_height() / 2.0 - line_x_height / 2.0,
                 ),
                 VerticalAlign::Baseline => (box_ascent, box_descent),
                 // These align after the baseline-aligned line box has been
@@ -1199,21 +1199,22 @@ fn resolve_line_box_metrics(
     if !above.is_finite() || !below.is_finite() {
         return None;
     }
-    let deferred_box_height = runs
-        .iter()
-        .filter_map(|run| run.inline_box.as_deref())
-        .filter(|inline| {
-            matches!(
-                inline.vertical_align,
-                VerticalAlign::Top
-                    | VerticalAlign::TextTop
-                    | VerticalAlign::Bottom
-                    | VerticalAlign::TextBottom
-            )
-        })
-        .map(|inline| inline.height)
-        .fold(0.0f32, f32::max);
-    Some(((above + below).max(deferred_box_height), above))
+    // A `top`- or `bottom`-aligned box taller than the line makes the line
+    // taller, below the baseline for `top` and above it for `bottom`, so the
+    // line's text moves down beside a tall `bottom` box (CSS 2.1 §10.8, as
+    // Chromium applies them in source order). Each is its margin box.
+    for inline in runs.iter().filter_map(|run| run.inline_box.as_deref()) {
+        let extra = inline.outer_height() - (above + below);
+        if extra <= 0.0 {
+            continue;
+        }
+        match inline.vertical_align {
+            VerticalAlign::Top | VerticalAlign::TextTop => below += extra,
+            VerticalAlign::Bottom | VerticalAlign::TextBottom => above += extra,
+            _ => {}
+        }
+    }
+    Some((above + below, above))
 }
 
 /// One wrappable token (a word, a preserved space-run, a `\n`, or an atomic
@@ -2915,8 +2916,8 @@ pub(crate) fn wrap_text_runs(
                 | crate::style::computed::VerticalAlign::Super
                 | crate::style::computed::VerticalAlign::Length(_)
                 | crate::style::computed::VerticalAlign::Percent(_) => {
-                    let box_ascent = inline.baseline_ascent.unwrap_or(inline.height);
-                    let box_descent = (inline.height - box_ascent).max(0.0);
+                    let box_ascent = inline.outer_baseline_ascent();
+                    let box_descent = (inline.outer_height() - box_ascent).max(0.0);
                     let shift = match inline.vertical_align {
                         crate::style::computed::VerticalAlign::Sub => {
                             -shift_basis_fs * crate::render::pdf::SUB_SHIFT_RATIO
@@ -2982,11 +2983,11 @@ pub(crate) fn wrap_text_runs(
                         0.5
                     };
                     let xh = xh_ratio * shift_basis_fs;
-                    let box_above = inline.height / 2.0 + xh / 2.0;
-                    let box_below = (inline.height / 2.0 - xh / 2.0).max(0.0);
+                    let box_above = inline.outer_height() / 2.0 + xh / 2.0;
+                    let box_below = (inline.outer_height() / 2.0 - xh / 2.0).max(0.0);
                     box_above.max(text_above) + box_below.max(text_below)
                 }
-                _ => inline.height,
+                _ => inline.outer_height(),
             };
             line_height = line_height.max(box_extent);
             current_runs.push(template.clone());
@@ -3591,6 +3592,8 @@ fn build_inline_box(
         height: total_h,
         margin_left: style.margin.left.max(0.0),
         margin_right: style.margin.right.max(0.0),
+        margin_top: style.margin.top.max(0.0),
+        margin_bottom: style.margin.bottom.max(0.0),
         paint: InlineBoxPaint {
             background_color: style.background_color,
             border: LayoutBorder::from_computed(&style.border, style.color),

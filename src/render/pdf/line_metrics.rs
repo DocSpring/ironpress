@@ -289,8 +289,8 @@ fn line_box_metrics_with_resolved_baseline(
             )
         {
             // Box ascent above its own baseline and descent below it.
-            let box_ascent = inline.baseline_ascent.unwrap_or(inline.height);
-            let box_descent = (inline.height - box_ascent).max(0.0);
+            let box_ascent = inline.outer_baseline_ascent();
+            let box_descent = (inline.outer_height() - box_ascent).max(0.0);
             // Sub/super shift the box's baseline relative to the line baseline,
             // moving its extents by a fraction of the run font size; middle centres
             // the box on `baseline + x-height/2`.
@@ -309,8 +309,8 @@ fn line_box_metrics_with_resolved_baseline(
                     (box_ascent + shift, box_descent - shift)
                 }
                 VerticalAlign::Middle => (
-                    inline.height / 2.0 + line_x_height / 2.0,
-                    inline.height / 2.0 - line_x_height / 2.0,
+                    inline.outer_height() / 2.0 + line_x_height / 2.0,
+                    inline.outer_height() / 2.0 - line_x_height / 2.0,
                 ),
                 _ => (box_ascent, box_descent),
             };

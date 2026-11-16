@@ -139,12 +139,12 @@ pub(super) fn render_inline_box(
     pdf_writer: &mut PdfWriter,
     page_images: &mut Vec<ImageRef>,
 ) {
-    let h = inline.height;
-    // The box's own baseline as a distance from its TOP edge: for an
-    // inline-block with in-flow line content this is its last line box's
-    // baseline (CSS2 §10.8.1); with no content baseline the box's bottom margin
-    // edge is its baseline, so the ascent equals the full height.
-    let box_ascent = inline.baseline_ascent.unwrap_or(h);
+    // The box is aligned by its margin box (CSS 2.1 §10.8): `h` is its
+    // height, and its own baseline sits `box_ascent` below its top margin
+    // edge, at its last line box's baseline or with none at its bottom margin
+    // edge (§10.8.1). `box_bottom` below is the margin box's bottom.
+    let h = inline.outer_height();
+    let box_ascent = inline.outer_baseline_ascent();
     // Bottom edge of the box (PDF, y-up) for each vertical-align mode. The box
     // baseline sits at `box_top - box_ascent = box_bottom + h - box_ascent`;
     // aligning it to a target line baseline gives
@@ -183,9 +183,9 @@ pub(super) fn render_inline_box(
     // without changing its in-flow slot: x right, y down (PDF y is up, so the
     // downward shift subtracts from y).
     let box_x = box_x + inline.rel_offset_x;
-    let box_bottom = box_bottom - inline.rel_offset_y;
+    let box_bottom = box_bottom + inline.margin_bottom - inline.rel_offset_y;
     let geometry = LayoutBoxGeometry::from_layout(
-        PdfRect::new(box_x, box_bottom, inline.width, h),
+        PdfRect::new(box_x, box_bottom, inline.width, inline.height),
         &inline.paint.border,
         inline.padding,
         inline.paint.border_image.as_ref(),

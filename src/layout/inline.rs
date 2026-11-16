@@ -40,6 +40,7 @@ use super::text::{
     resolved_line_height_factor, text_run_line_height_factor, used_font_size, wrap_text_runs,
 };
 
+mod atomic_row;
 mod row_cursor;
 
 use row_cursor::{InlineRowCursor, InlineRowSeparator, InlineRowUnit};
@@ -207,6 +208,25 @@ pub(crate) fn layout_inline_block_group_with_env_and_spacing(
     env: &mut LayoutEnv,
 ) {
     layout_inline_block_group_inner(elements, parent_style, ctx, output, ancestors, env);
+}
+
+/// The parent font's x-height as a fraction of its size, for `middle`.
+fn font_x_height_ratio(
+    family: &crate::style::computed::FontFamily,
+    style: &ComputedStyle,
+    fonts: &HashMap<String, TtfFont>,
+) -> f32 {
+    if let crate::style::computed::FontFamily::Custom(name) = family
+        && let Some((_, font)) = crate::system_fonts::find_font(
+            fonts,
+            name,
+            style.font_weight.is_bold(),
+            style.font_style.is_slanted(),
+        )
+    {
+        return font.x_height_ratio();
+    }
+    0.5
 }
 
 fn inline_text_cell(
@@ -993,6 +1013,10 @@ fn layout_inline_block_group_inner(
         nested_elements: Vec<LayoutNode>,
         space_before: bool,
         suppress_strut_descent: bool,
+        vertical_align: crate::style::computed::VerticalAlign,
+        /// The box's own baseline doesn't come from its content: it clips its
+        /// overflow, so its baseline is its bottom margin edge (CSS 2.1 §10.8.1).
+        clips_overflow: bool,
     }
 
     let mut items: Vec<InlineBlockItem> = Vec::new();
@@ -1134,6 +1158,8 @@ fn layout_inline_block_group_inner(
                 nested_elements,
                 space_before: *space_before,
                 suppress_strut_descent: false,
+                vertical_align: child_style.vertical_align,
+                clips_overflow: child_style.overflow.clips(),
             });
             continue;
         }
@@ -1187,6 +1213,8 @@ fn layout_inline_block_group_inner(
                 nested_elements,
                 space_before: *space_before,
                 suppress_strut_descent: false,
+                vertical_align: child_style.vertical_align,
+                clips_overflow: child_style.overflow.clips(),
             });
             continue;
         }
@@ -1321,6 +1349,8 @@ fn layout_inline_block_group_inner(
             suppress_strut_descent: child_style.width_keyword
                 == Some(IntrinsicWidthKeyword::MinContent)
                 && child_style.overflow_wrap == OverflowWrap::Anywhere,
+            vertical_align: child_style.vertical_align,
+            clips_overflow: child_style.overflow.clips(),
         });
     }
 
@@ -1338,25 +1368,44 @@ fn layout_inline_block_group_inner(
     // themselves. Compute the strut split about the baseline from the parent's
     // font metrics so a `font-size: 0` container (strut = 0) is unaffected.
     let strut = parent_line_strut(parent_style, fonts);
-    let strut_above = strut.above;
-    let strut_below = strut.below;
-    let strut_lh = strut_above + strut_below;
     let parent_family = super::text::resolve_style_font_family(parent_style, fonts);
+    let parent_font_size = used_font_size(parent_style, fonts);
+    let row_strut = atomic_row::AtomicRowStrut {
+        above: strut.above,
+        below: strut.below,
+        x_height: font_x_height_ratio(&parent_family, parent_style, fonts) * parent_font_size,
+        font_size: parent_font_size,
+        line_height: strut.above + strut.below,
+    };
+    // Each row's boxes are aligned as a line box aligns them (CSS 2.1 §10.8),
+    // and the painter places each one where that puts it.
+    let finish_row = |mut cells: Vec<FlexCell>,
+                      boxes: &[atomic_row::AtomicRowBox],
+                      suppress_strut_descent: bool|
+     -> (Vec<FlexCell>, f32) {
+        let (height, tops) = if suppress_strut_descent {
+            let bare = atomic_row::AtomicRowStrut {
+                above: 0.0,
+                below: 0.0,
+                ..row_strut
+            };
+            let (height, tops) = atomic_row::align_atomic_row(boxes, bare);
+            (height.max(row_strut.line_height), tops)
+        } else {
+            atomic_row::align_atomic_row(boxes, row_strut)
+        };
+        for (cell, top) in cells.iter_mut().zip(tops) {
+            cell.y_offset += top;
+            cell.align_self = crate::style::computed::AlignSelf::FlexStart;
+        }
+        (cells, height)
+    };
     // Position items horizontally, wrapping to new rows when they exceed available width
     let mut rows: Vec<(Vec<FlexCell>, f32)> = Vec::new(); // (cells, row_height)
     let mut current_cells: Vec<FlexCell> = Vec::new();
+    let mut current_boxes: Vec<atomic_row::AtomicRowBox> = Vec::new();
     let mut x = 0.0f32;
-    // Tallest in-flow box on the current row (its extent above the line baseline,
-    // which for these top-anchored baseline boxes is the full margin-box height).
-    let mut max_item_height = 0.0f32;
     let mut row_suppress_strut_descent = false;
-    let finish_row_height = |max_item_height: f32, suppress_strut_descent: bool| -> f32 {
-        if suppress_strut_descent {
-            max_item_height.max(strut_lh)
-        } else {
-            max_item_height.max(strut_above) + strut_below
-        }
-    };
     let inline_grid_space = estimate_word_width(
         " ",
         parent_style.font_size,
@@ -1371,12 +1420,12 @@ fn layout_inline_block_group_inner(
         let item_total_w = item.margins.left + item.width + item.margins.right;
         // Wrap to new row if this item would overflow
         if !current_cells.is_empty() && exceeds_with_roundoff(x + item_total_w, available_width) {
-            rows.push((
+            rows.push(finish_row(
                 std::mem::take(&mut current_cells),
-                finish_row_height(max_item_height, row_suppress_strut_descent),
+                &std::mem::take(&mut current_boxes),
+                row_suppress_strut_descent,
             ));
             x = 0.0;
-            max_item_height = 0.0;
             row_suppress_strut_descent = false;
         }
 
@@ -1384,7 +1433,7 @@ fn layout_inline_block_group_inner(
             x += inline_grid_space;
         }
         x += item.margins.left;
-        current_cells.push(FlexCell {
+        let cell = FlexCell {
             lines: item.lines.clone(),
             x_offset: x,
             width: item.width,
@@ -1403,16 +1452,28 @@ fn layout_inline_block_group_inner(
             y_offset: item.margins.top,
             role: FlexItemRole::AtomicInline(item.kind),
             ..Default::default()
+        };
+        let outer_height = item.margins.top + item.height + item.margins.bottom;
+        let baseline = if item.clips_overflow {
+            None
+        } else {
+            crate::layout::filter::surface::flex_cell_baseline(&cell, fonts)
+        };
+        current_boxes.push(atomic_row::AtomicRowBox {
+            height: outer_height,
+            ascent: baseline.map_or(outer_height, |baseline| item.margins.top + baseline),
+            vertical_align: item.vertical_align,
         });
+        current_cells.push(cell);
         x += item.width + item.margins.right;
-        max_item_height = max_item_height.max(item.margins.top + item.height + item.margins.bottom);
         row_suppress_strut_descent |= item.suppress_strut_descent;
     }
     // Flush last row
     if !current_cells.is_empty() {
-        rows.push((
+        rows.push(finish_row(
             current_cells,
-            finish_row_height(max_item_height, row_suppress_strut_descent),
+            &current_boxes,
+            row_suppress_strut_descent,
         ));
     }
 

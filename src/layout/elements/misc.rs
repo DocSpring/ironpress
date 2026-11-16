@@ -211,6 +211,8 @@ impl ProgressBar {
             height: self.size.height,
             margin_left: style.margin.left.max(0.0),
             margin_right: style.margin.right.max(0.0),
+            margin_top: style.margin.top.max(0.0),
+            margin_bottom: style.margin.bottom.max(0.0),
             paint: InlineBoxPaint {
                 background_color: Some(self.colors.track),
                 centered_stroke: Some(Self::outline()),

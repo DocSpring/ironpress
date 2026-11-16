@@ -69,6 +69,10 @@ pub struct InlineBox {
     /// Horizontal margins add inline advance but are not painted.
     pub margin_left: f32,
     pub margin_right: f32,
+    /// Vertical margins: the margin box, not the border box, is the box's
+    /// extent in its line and what `vertical-align` aligns (CSS 2.1 §10.8).
+    pub margin_top: f32,
+    pub margin_bottom: f32,
     pub paint: InlineBoxPaint,
     pub padding: EdgeSizes,
     /// CSS `vertical-align` relative to the line baseline.
@@ -98,5 +102,19 @@ impl InlineBox {
     /// Total inline advance including horizontal margins.
     pub fn outer_width(&self) -> f32 {
         self.width + self.margin_left + self.margin_right
+    }
+
+    /// The margin box's height: the box's extent in its line.
+    pub fn outer_height(&self) -> f32 {
+        self.margin_top + self.height + self.margin_bottom
+    }
+
+    /// The distance from the top margin edge to the box's baseline: its last
+    /// line's baseline, or with none its bottom margin edge (CSS 2.1 §10.8.1).
+    pub fn outer_baseline_ascent(&self) -> f32 {
+        self.margin_top
+            + self
+                .baseline_ascent
+                .unwrap_or(self.height + self.margin_bottom)
     }
 }

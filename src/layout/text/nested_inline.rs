@@ -174,6 +174,8 @@ pub(super) fn image_box(
         height: size.height,
         margin_left: style.margin.left.max(0.0),
         margin_right: style.margin.right.max(0.0),
+        margin_top: style.margin.top.max(0.0),
+        margin_bottom: style.margin.bottom.max(0.0),
         paint: InlineBoxPaint {
             background_color: style.background_color,
             border: LayoutBorder::from_computed(&style.border, style.color),
@@ -197,6 +199,8 @@ fn svg_box(svg: crate::layout::elements::Svg, style: &ComputedStyle) -> InlineBo
         height: size.height,
         margin_left: style.margin.left.max(0.0),
         margin_right: style.margin.right.max(0.0),
+        margin_top: style.margin.top.max(0.0),
+        margin_bottom: style.margin.bottom.max(0.0),
         paint: InlineBoxPaint {
             background_color: style.background_color,
             border: svg.geometry.border,

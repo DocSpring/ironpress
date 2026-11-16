@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>inline-blocks are aligned by their margin boxes</title>
+<style>
+  @page { size: 320px 384px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 24px; background: #ffffff; }
+  body { margin: 0; }
+  p, div.row { margin: 0; background: #eeeeee; }
+  .k { display: inline-block; width: 32px; height: 40px; background: #1565c0; }
+  .s { display: inline-block; width: 16px; height: 16px; background: #c62828; }
+  .tag { display: inline-block; padding: 2px 6px; background: #2e7d32; color: #ffffff; }
+</style>
+</head>
+<body>
+  <p>Base <span class="k" style="margin-bottom: 8px"></span> <span class="tag" style="margin: 6px 2px">Paid</span> end</p>
+  <p>Top <span class="k" style="vertical-align: top; margin-top: 6px"></span> <span class="s" style="vertical-align: top"></span> end</p>
+  <p>Bottom <span class="k" style="vertical-align: bottom"></span> <span class="s" style="vertical-align: bottom; margin-bottom: 4px"></span> end</p>
+  <p>Middle <span class="k" style="vertical-align: middle; margin-top: 10px"></span> end</p>
+  <div class="row"><div class="k" style="vertical-align: top"></div><div class="s" style="vertical-align: top; margin-top: 8px"></div></div>
+  <div class="row"><div class="k" style="vertical-align: bottom; margin-bottom: 6px"></div><div class="tag">Paid</div><div class="tag" style="padding-top: 12px">Due</div></div>
+  <div class="row"><div class="tag" style="vertical-align: middle">One</div><div class="k" style="margin: 4px 0"></div></div>
+</body>
+</html>

@@ -11,6 +11,7 @@ mod flex_item_blocks;
 mod gauges;
 mod generated_content;
 mod grid_red_team;
+mod inline_block_vertical;
 mod inline_border;
 mod inline_row_height;
 mod inline_selectors;
