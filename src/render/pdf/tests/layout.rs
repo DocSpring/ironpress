@@ -637,6 +637,7 @@ fn render_cell_text_vertical_centering() {
                 height: 16.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             ..Default::default()
@@ -743,6 +744,7 @@ fn render_cell_text_paints_relative_inline_boxes_above_in_flow_siblings() {
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             ..Default::default()

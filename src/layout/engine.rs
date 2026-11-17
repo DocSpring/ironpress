@@ -874,6 +874,9 @@ pub struct TextRunMetadata {
     /// only on the resulting single-glyph composition.
     pub text_combine_upright: crate::style::computed::TextCombineUpright,
     pub is_drop_cap: bool,
+    /// Where a float inside the paragraph's text occurs: the index of the
+    /// float among the paragraph's floats. The run itself takes no room.
+    pub(crate) float_anchor: Option<usize>,
     /// An `outside` list marker: it can push its line down but doesn't make
     /// it taller below the baseline (`resolve_line_box_metrics`).
     pub(crate) is_outside_marker: bool,
@@ -1025,6 +1028,20 @@ pub struct TextRun {
     /// The borders of the bordered inline boxes around the run, innermost
     /// first.
     pub(crate) inline_borders: Vec<InlineBorder>,
+}
+
+impl TextRun {
+    /// The place in a paragraph's text where its float number `index` occurs.
+    pub(crate) fn float_anchor(index: usize) -> Self {
+        Self {
+            inline_box: Some(Box::default()),
+            metadata: TextRunMetadata {
+                float_anchor: Some(index),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
 }
 
 impl Default for TextRun {
@@ -1433,7 +1450,24 @@ pub struct TextLine {
     /// floated initial are shifted right by the drop cap's width so they wrap
     /// beside it. Zero for ordinary lines.
     pub x_offset: f32,
+    /// How much of the line's containing block the floats beside it take from
+    /// each side (CSS 2.1 §9.5): the line box is shortened by these, and
+    /// aligns within what is left.
+    pub float_insets: LineInsets,
     pub metadata: TextLineMetadata,
+}
+
+/// Lengths taken from the left and right of a line box, in px.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LineInsets {
+    pub left: f32,
+    pub right: f32,
+}
+
+impl LineInsets {
+    pub fn horizontal(self) -> f32 {
+        self.left + self.right
+    }
 }
 
 /// The format of an embedded image.
@@ -2467,6 +2501,7 @@ fn layout_document_pass(
         table_cell_sizing: super::table::TableCellSizingContext::root(&mut table_cell_sizing),
         depth,
         grid_item_heights: &mut grid_item_heights,
+        floats: crate::layout::floats::FloatFrames::default(),
     };
     if let Some(root) =
         RootFormattingContext::from_projected_body(nodes, &body_style, available_width)
@@ -2507,12 +2542,15 @@ fn layout_document_pass(
             );
         }
     } else {
+        env.floats
+            .enter(&elements, root_ctx.available_width(), Default::default());
         flatten_nodes(
             nodes,
             LayoutTreeContext::new(&parent_style, &root_ctx, &ancestors),
             &mut elements,
             &mut env,
         );
+        env.floats.leave(&mut elements);
     }
 
     // Pagination is the first point where page number, spread side, blank
@@ -3893,6 +3931,7 @@ fn flatten_element_with_running_mode(
                 height: used_line_height(&style, env.fonts),
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             };
             output.push(TextBlock::plain(vec![line]).boxed());
@@ -3919,12 +3958,18 @@ fn flatten_element_with_running_mode(
                 &style,
                 env.filter_dpi,
             ) {
-                output.push(add_inline_replaced_baseline_gap(
-                    img_element,
-                    &style,
-                    env.fonts,
-                    InlineBaselineGapRounding::Fractional,
-                ));
+                output.push(
+                    if crate::layout::floats::FloatSide::of(style.float).is_some() {
+                        super::images::float_box_around_replaced(img_element, &style)
+                    } else {
+                        add_inline_replaced_baseline_gap(
+                            img_element,
+                            &style,
+                            env.fonts,
+                            InlineBaselineGapRounding::Fractional,
+                        )
+                    },
+                );
             }
             return;
         }
@@ -4598,7 +4643,27 @@ fn flatten_element_with_running_mode(
                     inner_width
                 };
                 let text_indent = style.text_indent.resolve(vertical_inline_extent) - marker_hang;
-                let lines = wrap_text_runs(
+                // Floats earlier in the formatting context shorten the item's
+                // lines, and its outside marker moves with them.
+                let line_floats = (!effective_writing_mode.is_vertical()
+                    && style.float == crate::style::computed::Float::None
+                    && !style.position.is_absolute())
+                .then(|| {
+                    env.floats
+                        .beside_next_block(output, style.margin.top, style.clear)
+                })
+                .flatten()
+                .map(|floats| {
+                    floats.lines(
+                        style.border.top.used_width() + style.padding.top,
+                        item_left
+                            + style.margin.left
+                            + style.border.left.used_width()
+                            + style.padding.left,
+                        inner_width,
+                    )
+                });
+                let lines = crate::layout::text::wrap_text_runs_beside_floats(
                     runs,
                     TextWrapOptions::new(
                         vertical_inline_extent,
@@ -4617,6 +4682,7 @@ fn flatten_element_with_running_mode(
                     // (css-lists-3 §6: outside markers sit outside the principal box).
                     .with_text_indent(text_indent),
                     env.fonts,
+                    line_floats.as_ref(),
                 );
                 let vertical_column_advance = if vertical_marker_match {
                     lines.iter().map(|line| line.height).fold(0.0_f32, f32::max)
@@ -4841,18 +4907,26 @@ fn flatten_element_with_running_mode(
         if el.tag == HtmlTag::Table
             || matches!(style.display, Display::Table | Display::InlineTable)
         {
-            flatten_table(
-                el,
+            layout_avoiding_floats(
                 &style,
+                &layout_ctx,
                 output,
-                pseudo_styles.generated().boxes(el),
                 env,
-                TableLayoutContext::new(
-                    &layout_ctx,
-                    ancestors,
-                    ElementSiblingContext::new(child_index, sibling_count),
-                    positioned_depth,
-                ),
+                |layout_ctx, output, env| {
+                    flatten_table(
+                        el,
+                        &style,
+                        output,
+                        pseudo_styles.generated().boxes(el),
+                        env,
+                        TableLayoutContext::new(
+                            layout_ctx,
+                            ancestors,
+                            ElementSiblingContext::new(child_index, sibling_count),
+                            positioned_depth,
+                        ),
+                    );
+                },
             );
             return;
         }
@@ -5119,10 +5193,7 @@ fn wrap_list_item_box(
                 border: LayoutBorder::from_computed(&style.border, style.color),
             },
             paint: crate::layout::elements::BoxPaint::from_style(style, size),
-            flow: crate::layout::elements::BlockFlow {
-                float: style.float,
-                clear: style.clear,
-            },
+            flow: crate::layout::elements::BlockFlow::from_style(style),
             positioning: crate::layout::elements::Positioning::from_style(style)
                 .with_resolved_insets(EdgeSizes::new(
                     style.top.unwrap_or_default(),
@@ -5211,6 +5282,42 @@ fn inline_loose_list_p(
 /// computed `display` value (flex, grid, block, inline-block, or inline).
 ///
 /// Handles page-break-after emission and CSS counter cleanup.
+/// Lay out a box that starts a formatting context of its own (a table, a flex
+/// or grid container) clear of the floats beside it
+/// ([`crate::layout::floats::FloatAvoidance`]).
+fn layout_avoiding_floats(
+    style: &ComputedStyle,
+    ctx: &LayoutContext,
+    output: &mut Vec<LayoutNode>,
+    env: &mut LayoutEnv,
+    layout: impl FnOnce(&LayoutContext, &mut Vec<LayoutNode>, &mut LayoutEnv),
+) {
+    let avoidance = (crate::layout::floats::FloatSide::of(style.float).is_none()
+        && !style.position.is_absolute()
+        && !matches!(
+            style.display,
+            Display::InlineFlex | Display::InlineGrid | Display::InlineTable
+        ))
+    .then(|| env.floats.avoidance(output, style))
+    .flatten();
+    let Some(avoidance) = avoidance else {
+        layout(ctx, output, env);
+        return;
+    };
+    let ctx = avoidance.layout_width().map_or(*ctx, |width| {
+        ctx.with_parent_and_basis(
+            width,
+            ctx.parent.percent_width_basis,
+            ctx.parent.content_height,
+            ctx.parent.font_size,
+        )
+    });
+    let mut laid_out = Vec::new();
+    layout(&ctx, &mut laid_out, env);
+    avoidance.apply(&mut laid_out);
+    output.append(&mut laid_out);
+}
+
 #[allow(clippy::too_many_arguments)]
 fn route_element(
     el: &ElementNode,
@@ -5237,15 +5344,23 @@ fn route_element(
             el
         };
         let flex_output_start = output.len();
-        layout_flex_container(
-            flex_el,
+        layout_avoiding_floats(
             style,
             &layout_ctx,
             output,
-            child_ancestors,
-            generated_styles.boxes(el),
-            positioned_depth,
             env,
+            |layout_ctx, output, env| {
+                layout_flex_container(
+                    flex_el,
+                    style,
+                    layout_ctx,
+                    output,
+                    child_ancestors,
+                    generated_styles.boxes(el),
+                    positioned_depth,
+                    env,
+                );
+            },
         );
         apply_direct_flex_item_filters(
             flex_el,
@@ -5260,14 +5375,22 @@ fn route_element(
 
     // Grid container handling
     if style.display == Display::Grid {
-        layout_grid_container(
-            el,
+        layout_avoiding_floats(
             style,
             &layout_ctx,
             output,
-            child_ancestors,
-            positioned_depth,
             env,
+            |layout_ctx, output, env| {
+                layout_grid_container(
+                    el,
+                    style,
+                    layout_ctx,
+                    output,
+                    child_ancestors,
+                    positioned_depth,
+                    env,
+                );
+            },
         );
 
         return;

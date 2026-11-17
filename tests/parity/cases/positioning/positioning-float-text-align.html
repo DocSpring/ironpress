@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>centered, right-aligned and justified lines use the space beside a float</title>
+<style>
+  @page { size: 320px 248px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .box { float: right; width: 88px; height: 120px; background: #2e7d5b; }
+  .c { text-align: center; } .r { text-align: right; } .j { text-align: justify; }
+</style>
+</head>
+<body>
+  <div class="box"></div>
+  <p class="c">Centered text beside a right float wraps here.</p>
+  <p class="r">Right-aligned text ends at the float edge.</p>
+  <p class="j">Justified text stretches to the float edge on every line but the last one.</p>
+</body>
+</html>

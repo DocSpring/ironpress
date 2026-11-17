@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tables and flex containers sit beside a float when they fit and below it when they don't, and one without a width takes the space beside it</title>
+<style>
+  @page { size: 320px 320px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .float { float: left; width: 80px; height: 40px; background: #b05a8a; }
+  .clear { clear: both; height: 8px; }
+  table { border-collapse: collapse; }
+  td { border: 1px solid #333333; padding: 2px; }
+  .flex { display: flex; background: #dde3ea; }
+  .flex div + div { margin-left: 10px; }
+</style>
+</head>
+<body>
+  <div class="float"></div>
+  <table style="width:180px"><tr><td>Fits beside</td></tr></table>
+  <div class="clear"></div>
+  <div class="float"></div>
+  <table style="width:250px"><tr><td>Too wide to fit beside</td></tr></table>
+  <div class="clear"></div>
+  <div class="float"></div>
+  <div class="flex"><div>Flex one</div><div>Flex two</div></div>
+</body>
+</html>

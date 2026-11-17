@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a float too wide for the space beside earlier floats moves below them</title>
+<style>
+  @page { size: 320px 144px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .a { float: left; width: 120px; height: 20px; background: #b5476b; }
+  .b { float: left; width: 200px; height: 20px; background: #3f6fb0; }
+</style>
+</head>
+<body>
+  <div class="a"></div><div class="b"></div>
+  <p>The second float is too wide and moves down below the first.</p>
+</body>
+</html>

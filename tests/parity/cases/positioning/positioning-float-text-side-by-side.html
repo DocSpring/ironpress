@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>left floats sit side by side and text wraps past both</title>
+<style>
+  @page { size: 320px 168px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .a { float: left; width: 60px; height: 52px; margin-right: 8px; background: #b5476b; }
+  .b { float: left; width: 40px; height: 30px; background: #3f6fb0; }
+</style>
+</head>
+<body>
+  <div class="a"></div><div class="b"></div>
+  <p>Two floats on the left side and then some words that wrap around both of them and continue below.</p>
+</body>
+</html>

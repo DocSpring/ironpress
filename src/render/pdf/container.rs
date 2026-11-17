@@ -45,6 +45,11 @@ pub(super) struct ContainerRenderOptions {
     pub(super) device_space_available: bool,
     pub(super) paint_phase: ElementPaintPhase,
     pub(super) stacking_scope: StackingScope,
+    /// The container's own decoration painted in an earlier pass of its
+    /// stacking context, so its in-flow children's decorations go to that
+    /// context's decoration layer too: under the floats, which paint between
+    /// in-flow backgrounds and in-flow content (CSS 2.1 Appendix E).
+    pub(super) defer_child_decorations: bool,
 }
 
 impl Default for ContainerRenderOptions {
@@ -53,6 +58,7 @@ impl Default for ContainerRenderOptions {
             device_space_available: false,
             paint_phase: ElementPaintPhase::All,
             stacking_scope: StackingScope::Local,
+            defer_child_decorations: false,
         }
     }
 }
@@ -389,6 +395,7 @@ pub(super) fn render_container_children(
     let device_space_available = options.device_space_available;
     let paint_phase = options.paint_phase;
     let stacking_scope = options.stacking_scope;
+    let defer_child_decorations = options.defer_child_decorations && !stacking_scope.is_local();
     let mut stacking_plan = StackingPaintPlan::default();
 
     // Separate children handled by render_nested_table_rows from those rendered
@@ -523,14 +530,22 @@ pub(super) fn render_container_children(
             };
             let (decoration_handled, _, decoration, decoration_descendants) =
                 render_phase(ElementPaintPhase::Decoration, abs_origins, ctx);
-            ctx.stacking.commit(
-                stacking_scope,
-                content,
-                &mut stacking_plan,
-                crate::layout::elements::StackingLevel::in_flow_decoration(),
-                decoration,
-                decoration_descendants,
-            );
+            if defer_child_decorations {
+                ctx.stacking.defer(
+                    crate::layout::elements::StackingLevel::in_flow_decoration(),
+                    decoration,
+                );
+                ctx.stacking.restore(decoration_descendants);
+            } else {
+                ctx.stacking.commit(
+                    stacking_scope,
+                    content,
+                    &mut stacking_plan,
+                    crate::layout::elements::StackingLevel::in_flow_decoration(),
+                    decoration,
+                    decoration_descendants,
+                );
+            }
             let (contents_handled, result, contents, contents_descendants) =
                 render_phase(ElementPaintPhase::Contents, abs_origins, ctx);
             ctx.stacking.commit(

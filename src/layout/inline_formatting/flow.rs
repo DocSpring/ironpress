@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::layout::context::{LayoutContext, LayoutEnv};
 use crate::layout::elements::LayoutNode;
 use crate::layout::engine::TextRun;
+use crate::layout::floats::FloatsInText;
 use crate::layout::inline::layout_inline_mixed_sequence_with_env;
 use crate::layout::text::{InlineRunCollector, InlineRunContext};
 use crate::parser::css::{AncestorInfo, SelectorContext};
@@ -169,6 +170,7 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
             .into_iter()
             .peekable();
         let mut runs = Vec::new();
+        let mut floats_in_text = FloatsInText::default();
         // A row of atomic inlines at either end of the sequence lays out the
         // generated content at that end; otherwise the runs carry it.
         let mut before_pending = true;
@@ -207,7 +209,7 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
             };
             if let Some(segment) = atomic_segments.next_if(|segment| segment.start() == node_index)
             {
-                self.flush(&mut runs, output, env);
+                self.flush(&mut runs, &mut floats_in_text, output, env);
                 if layout_inline_mixed_sequence_with_env(
                     segment.bounded_by(sequence),
                     anonymous_style.as_ref().unwrap_or(self.parent_style),
@@ -243,8 +245,23 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
                 InlineContentSequence::segment(sequence.source_nodes(), node_index, node_index + 1);
             match child {
                 Some((_, child)) if child.role == InlineFormattingRole::Hidden => {}
+                // A float after some text floats from the line it occurs on,
+                // and the text carries on around it.
+                Some((element, child))
+                    if child.role == InlineFormattingRole::Outside
+                        && FloatsInText::occurs_in_text(
+                            &child.style,
+                            &runs,
+                            &env.floats,
+                            output,
+                        ) =>
+                {
+                    let mut laid_out = Vec::new();
+                    blocks.layout_block(element, child, &mut laid_out, env);
+                    floats_in_text.take(laid_out, &mut runs, output);
+                }
                 Some((element, child)) if child.role == InlineFormattingRole::Outside => {
-                    self.flush(&mut runs, output, env);
+                    self.flush(&mut runs, &mut floats_in_text, output, env);
                     blocks.layout_block(element, child, output, env);
                 }
                 Some((element, child)) if child.role == InlineFormattingRole::OutOfFlow => {
@@ -262,17 +279,26 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
         if after_pending {
             sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
         }
-        self.flush(&mut runs, output, env);
+        self.flush(&mut runs, &mut floats_in_text, output, env);
     }
 
-    fn flush(&self, runs: &mut Vec<TextRun>, output: &mut Vec<LayoutNode>, env: &LayoutEnv<'_>) {
-        output.extend(
-            AnonymousInlineFormattingContext::new(
-                self.parent_style,
-                self.content.available_width(),
-                env.fonts,
-            )
-            .layout_runs(std::mem::take(runs)),
-        );
+    fn flush(
+        &self,
+        runs: &mut Vec<TextRun>,
+        floats_in_text: &mut FloatsInText,
+        output: &mut Vec<LayoutNode>,
+        env: &LayoutEnv<'_>,
+    ) {
+        if runs.is_empty() {
+            floats_in_text.emit(&[], output);
+            return;
+        }
+        let width = self.content.available_width();
+        let floats = floats_in_text.line_floats(&env.floats, output, 0.0, width);
+        let (block, tops) =
+            AnonymousInlineFormattingContext::new(self.parent_style, width, env.fonts)
+                .layout_runs_among_floats(std::mem::take(runs), floats, &floats_in_text.boxes());
+        floats_in_text.emit(&tops, output);
+        output.extend(block);
     }
 }

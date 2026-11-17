@@ -86,13 +86,16 @@ pub(in crate::render::pdf) fn render_text_block(
             frame.positioned_x(&element.positioning, ctx.initial_fixed_origin.x)
         }
         Position::Relative | Position::Sticky => margin.left + offset_left,
-        Position::Static => match float {
-            Float::Right => {
-                let render_w = block_width.resolve(available_width);
-                margin.left + available_width - render_w
-            }
-            _ => margin.left + offset_left,
-        },
+        Position::Static => {
+            element.flow.float_inline_shift()
+                + match float {
+                    Float::Right => {
+                        let render_w = block_width.resolve(available_width);
+                        margin.left + available_width - render_w
+                    }
+                    _ => margin.left + offset_left,
+                }
+        }
     };
     // PDF y-axis is bottom-up.
     // y_pos already includes absolute/relative offsets from pagination.

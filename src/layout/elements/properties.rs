@@ -413,6 +413,35 @@ pub(crate) fn text_lines_have_outset_shadows(lines: &[crate::layout::engine::Tex
 pub(crate) struct BlockFlow {
     pub(crate) float: Float,
     pub(crate) clear: Clear,
+    /// Where its block formatting context placed a float, relative to the
+    /// plain left or right placement; `None` until one has.
+    pub(crate) float_offset: Option<crate::layout::floats::FloatOffset>,
+    /// Its left and right margins, which a float's margin box includes.
+    pub(crate) inline_margins: crate::layout::floats::InlineMargins,
+    /// For a float inside a paragraph's text: how far below its place in the
+    /// flow the line it occurs on starts, which it can't float above.
+    pub(crate) float_line_offset: f32,
+}
+
+impl BlockFlow {
+    /// How far its formatting context moved a float sideways from its plain
+    /// placement; zero for any other box.
+    pub(crate) fn float_inline_shift(&self) -> f32 {
+        self.float_offset.map_or(0.0, |offset| offset.inline)
+    }
+
+    pub(crate) fn from_style(style: &crate::style::computed::ComputedStyle) -> Self {
+        Self {
+            float: style.float,
+            clear: style.clear,
+            float_offset: None,
+            inline_margins: crate::layout::floats::InlineMargins {
+                left: style.margin.left,
+                right: style.margin.right,
+            },
+            float_line_offset: 0.0,
+        }
+    }
 }
 
 /// Block-axis spacing and non-painting trailing flow extent.

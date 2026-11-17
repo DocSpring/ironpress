@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats inside padded and decorated blocks shorten their lines</title>
+<style>
+  @page { size: 320px 216px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .card { padding: 10px; background: #eef1f8; border: 2px solid #6e6e6e; margin-bottom: 8px; }
+  .box { float: right; width: 60px; height: 40px; background: #2e7d5b; }
+  .lead { float: left; width: 48px; height: 48px; background: #b5476b; }
+  .note { background: #f7e7c6; }
+</style>
+</head>
+<body>
+  <div class="card"><div class="box"></div><p>Nested container text beside a float inside padding.</p></div>
+  <div class="lead"></div>
+  <p class="note">A paragraph with a background runs under the float while its text wraps beside it.</p>
+</body>
+</html>

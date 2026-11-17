@@ -173,6 +173,10 @@ impl LayoutElement for FragmentBox {
         self.source.block_flow_owner()
     }
 
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
+        self.source.block_flow_owner_mut()
+    }
+
     fn paint_group_owner(&self) -> Option<&dyn PaintGroupOwner> {
         self.source.paint_group_owner()
     }

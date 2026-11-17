@@ -152,6 +152,10 @@ impl LayoutElement for TableBoxDecoration {
         Some(&self.block)
     }
 
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
+        Some(&mut self.block)
+    }
+
     fn paint_group_owner(&self) -> Option<&dyn PaintGroupOwner> {
         Some(&self.block)
     }

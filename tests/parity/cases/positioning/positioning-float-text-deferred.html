@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a float that doesn't fit beside its line's text floats from the next line, and one in a decorated paragraph keeps the text one paragraph</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .wide { float: right; width: 120px; height: 24px; background: #7aa6d8; }
+  .boxed { padding: 6px; background: #eef0f6; }
+  .total { float: right; background: #f7d774; }
+</style>
+</head>
+<body>
+  <p>Some words before and words after that fill the line <span class="wide"></span> and the text continues after it.</p>
+  <p class="boxed">Total due today <span class="total">$1,234.00</span> thanks for your business and more words.</p>
+</body>
+</html>

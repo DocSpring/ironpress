@@ -123,10 +123,11 @@ pub(super) fn render_nested_container(
     // Absolute Containers anchor to their containing block's padding
     // box (resolved by depth, skipping static intermediates).
     let nk_anchor = abs_child_anchor(nk_containing_block, abs_origins, self_pad_origin);
-    let normal_inline_offset = match nk_float {
-        Float::Right => width - nk_w,
-        _ => 0.0,
-    };
+    let normal_inline_offset = child.flow.float_inline_shift()
+        + match nk_float {
+            Float::Right => width - nk_w,
+            _ => 0.0,
+        };
     let flow_origin = child.positioning.resolve_in_flow_origin(
         crate::types::Point::new(normal_inline_offset, container_top_y - y),
         crate::types::Size::new(nk_w, nk_total_h),
@@ -226,7 +227,7 @@ pub(super) fn render_nested_container(
         // Advance the flow cursor exactly as the normal container path
         // (the filter does not change layout).
         if nk_is_float {
-            prev_margin_bottom = 0.0;
+            // A float leaves the margins around it to collapse.
         } else if planned_flow_top.is_some() {
             prev_margin_bottom = *margin_bottom;
         } else if !nk_is_abs {
@@ -274,7 +275,7 @@ pub(super) fn render_nested_container(
             }
         {
             if nk_is_float {
-                prev_margin_bottom = 0.0;
+                // A float leaves the margins around it to collapse.
             } else if planned_flow_top.is_some() {
                 prev_margin_bottom = *margin_bottom;
             } else if !nk_is_abs {
@@ -313,7 +314,7 @@ pub(super) fn render_nested_container(
             }
         {
             if nk_is_float {
-                prev_margin_bottom = 0.0;
+                // A float leaves the margins around it to collapse.
             } else if planned_flow_top.is_some() {
                 prev_margin_bottom = *margin_bottom;
             } else if !nk_is_abs {
@@ -350,7 +351,7 @@ pub(super) fn render_nested_container(
                 border,
             );
             if nk_is_float {
-                prev_margin_bottom = 0.0;
+                // A float leaves the margins around it to collapse.
             } else if planned_flow_top.is_some() {
                 prev_margin_bottom = *margin_bottom;
             } else if !nk_is_abs {
@@ -675,6 +676,7 @@ pub(super) fn render_nested_container(
                 device_space_available: device_space_available && nk_transform.is_none(),
                 paint_phase: phase,
                 stacking_scope: StackingScope::for_element(child),
+                defer_child_decorations: false,
             },
         );
 
@@ -704,7 +706,7 @@ pub(super) fn render_nested_container(
     // flow cursor. A float's bottom is tracked via the simulator for
     // later `clear` siblings; it breaks the margin-collapse chain.
     if nk_is_float {
-        prev_margin_bottom = 0.0;
+        // A float leaves the margins around it to collapse.
     } else if planned_flow_top.is_some() {
         prev_margin_bottom = *margin_bottom;
     } else if !nk_is_abs {

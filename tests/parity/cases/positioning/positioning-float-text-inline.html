@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats inside a paragraph's text shorten its lines from the line where they occur</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  img { float: left; width: 48px; height: 40px; margin-right: 6px; }
+  .paid { float: right; padding: 2px 6px; background: #f7d774; }
+</style>
+</head>
+<body>
+  <p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQwIiBmaWxsPSIjMmU3ZDViIi8+PC9zdmc+" alt="">A logo floated at the start of the paragraph with words wrapping beside it and below.</p>
+  <p>Some words before <span class="paid">Paid</span> and words after the floated span that keep on going.</p>
+</body>
+</html>

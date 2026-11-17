@@ -473,6 +473,15 @@ pub(crate) fn element_float(element: &dyn LayoutElement) -> Float {
         .map_or(Float::None, |owner| owner.block_flow().float)
 }
 
+/// Where a float's block formatting context placed it, once it has.
+pub(crate) fn element_float_offset(
+    element: &dyn LayoutElement,
+) -> Option<crate::layout::floats::FloatOffset> {
+    element
+        .block_flow_owner()
+        .and_then(|owner| owner.block_flow().float_offset)
+}
+
 /// The CSS `clear` value of a block-level layout element.
 fn element_clear(element: &dyn LayoutElement) -> Clear {
     element
@@ -606,13 +615,47 @@ pub(crate) struct BlockFlowResult {
 }
 
 #[derive(Default)]
-struct BlockFlowAccumulator {
+pub(crate) struct BlockFlowAccumulator {
     result: BlockFlowResult,
     prev_margin_bottom: Option<f32>,
 }
 
 impl BlockFlowAccumulator {
-    fn include(&mut self, index: usize, child: &dyn LayoutElement, outer_height: f32) {
+    /// The top of the margin box of a float that comes next: its position in
+    /// the flow, before its formatting context moves it beside or below earlier
+    /// floats.
+    pub(crate) const fn next_float_top(&self) -> f32 {
+        self.result.height
+    }
+
+    /// The bottom of the flow so far, without the last block's bottom margin.
+    pub(crate) fn flow_bottom(&self) -> f32 {
+        self.result.height - self.prev_margin_bottom.unwrap_or(0.0)
+    }
+
+    /// The border-box top of an in-flow block that comes next, with
+    /// `margin_top` collapsing with the previous block's bottom margin and
+    /// `clear` moving it below the floats on that side.
+    pub(crate) fn next_block_top(&self, margin_top: f32, clear: Clear) -> f32 {
+        let clear_to = match clear {
+            Clear::Left => self.result.left_float_bottom,
+            Clear::Right => self.result.right_float_bottom,
+            Clear::Both => self
+                .result
+                .left_float_bottom
+                .max(self.result.right_float_bottom),
+            Clear::None => f32::NEG_INFINITY,
+        };
+        if clear != Clear::None && clear_to > self.result.height {
+            return clear_to + margin_top;
+        }
+        let overlap = self.prev_margin_bottom.map_or(0.0, |previous| {
+            previous + margin_top - collapse_pair(margin_top, previous)
+        });
+        self.result.height + margin_top - overlap
+    }
+
+    pub(crate) fn include(&mut self, index: usize, child: &dyn LayoutElement, outer_height: f32) {
         if element_is_out_of_flow(child) {
             // Out of flow: contributes nothing and leaves the collapse chain.
             return;
@@ -628,23 +671,24 @@ impl BlockFlowAccumulator {
             // A float is pinned to the current content bottom and stacked below
             // an earlier float on the same side, but does not advance normal flow.
             let side_bottom = if float == Float::Left {
-                self.result.left_float_bottom
+                &mut self.result.left_float_bottom
             } else {
-                self.result.right_float_bottom
+                &mut self.result.right_float_bottom
             };
-            let float_top = (self.result.height + margin_top).max(side_bottom);
+            // A float its formatting context placed sits where that put it;
+            // otherwise it stacks below the earlier floats on its side.
+            let float_top = match element_float_offset(child) {
+                Some(offset) => self.result.height + margin_top + offset.block,
+                None => (self.result.height + margin_top).max(*side_bottom),
+            };
             let border_box_height = (outer_height - margin_top - margin_bottom).max(0.0);
-            let float_bottom = float_top + border_box_height;
-            if float == Float::Left {
-                self.result.left_float_bottom = float_bottom;
-            } else {
-                self.result.right_float_bottom = float_bottom;
-            }
+            *side_bottom = side_bottom.max(float_top + border_box_height + margin_bottom);
             self.result.floats.push(FloatPlacement {
                 index,
                 top: float_top,
             });
-            self.prev_margin_bottom = None;
+            // Out of flow, it leaves the margins of the blocks around it to
+            // collapse with each other (CSS 2.1 §8.3.1).
             return;
         }
 
@@ -3387,13 +3431,23 @@ pub(crate) fn paginate_with_context(
         // Without its bottom margin, which a break truncates.
         let effective_fit_height = effective_margin_top + effective_flow_geometry.content_height;
 
-        // Handle floated elements (floats don't participate in margin collapsing)
+        // A float's margins collapse with nothing, and being out of flow it
+        // leaves the previous block's bottom margin to collapse with the next
+        // block's top margin (CSS 2.1 §8.3.1): its margin box starts below
+        // that bottom margin, and the flow doesn't move.
         if elem_float != Float::None {
-            y += effective_margin_top;
-            let float_y_end = y + content_h_val;
+            let margin_box_top = if page_broke_mid_loop {
+                y
+            } else {
+                y + prev_margin_bottom
+            };
+            // Its placement beside or below earlier floats moves only the float.
+            let float_y = margin_box_top
+                + effective_flow_geometry.margins.start
+                + element_float_offset(element.as_ref()).map_or(0.0, |offset| offset.block);
             let region = FloatRegion {
-                y_start: y,
-                y_end: float_y_end,
+                y_start: float_y,
+                y_end: float_y + content_h_val,
                 side: elem_float,
             };
             if elem_float == Float::Left {
@@ -3407,8 +3461,10 @@ pub(crate) fn paginate_with_context(
                 first_on_page,
             );
             collect_footnotes_from_element(&element, &mut current_footnotes);
-            current_elements.push((y, element));
-            prev_margin_bottom = 0.0;
+            current_elements.push((float_y, element));
+            if page_broke_mid_loop {
+                prev_margin_bottom = 0.0;
+            }
             first_on_page = false;
             continue;
         }

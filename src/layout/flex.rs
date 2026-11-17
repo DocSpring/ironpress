@@ -482,6 +482,7 @@ fn merge_text_block_into_cell(
                     height: element.box_model.margins.start,
                     baseline_ascent: None,
                     x_offset: 0.0,
+                    float_insets: Default::default(),
                     metadata: Default::default(),
                 });
             }

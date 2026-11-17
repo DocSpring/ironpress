@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a float's margins collapse with nothing, and the margins of the blocks around it still collapse</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .first { margin: 0 0 10px; background: #dde3ea; }
+  .second { margin: 20px 0 0; background: #dde3ea; }
+  .float { float: left; width: 40px; height: 20px; margin: 4px 10px 6px 12px; background: #b05a8a; }
+  .box { background: #f1f1f1; padding: 4px; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <p class="first">First</p>
+  <div class="float"></div>
+  <p class="second">Second paragraph text</p>
+  <div class="box">
+    <p class="first">First</p>
+    <div class="float"></div>
+    <p class="second">Second paragraph text</p>
+  </div>
+</body>
+</html>

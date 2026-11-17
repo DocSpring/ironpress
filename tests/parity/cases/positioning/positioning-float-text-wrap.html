@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lines beside a float are shortened and lengthen again below it</title>
+<style>
+  @page { size: 320px 208px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .box { float: left; width: 80px; height: 64px; margin: 0 10px 4px 0; background: #2e7d5b; }
+  .tall { float: right; width: 72px; height: 40px; margin: 0 0 0 8px; background: #b5476b; }
+</style>
+</head>
+<body>
+  <div class="box"></div>
+  <p>The first paragraph wraps beside the green float and then runs the full width of the page below it.</p>
+  <div class="tall"></div>
+  <p>A right float shortens these lines from the other side.</p>
+</body>
+</html>

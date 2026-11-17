@@ -56,10 +56,13 @@ pub(super) fn opaque_block_coverer_rect(
                         self.margin.left + containing_block.x + left
                     }),
                 Position::Relative | Position::Sticky => self.margin.left + left,
-                Position::Static => match element.flow.float {
-                    Float::Right => self.margin.left + self.available_width - width,
-                    _ => self.margin.left + left,
-                },
+                Position::Static => {
+                    element.flow.float_inline_shift()
+                        + match element.flow.float {
+                            Float::Right => self.margin.left + self.available_width - width,
+                            _ => self.margin.left + left,
+                        }
+                }
             };
             let top = self.page_size.height - self.margin.top - self.y_pos;
             let padding_box_height = text_block_total_height(
@@ -95,10 +98,11 @@ pub(super) fn opaque_block_coverer_rect(
                 return;
             }
             let width = element.box_model.size.resolve_width(self.available_width);
-            let x = match element.flow.float {
-                Float::Right => self.margin.left + self.available_width - width,
-                _ => self.margin.left + element.positioning.insets.left,
-            };
+            let x = element.flow.float_inline_shift()
+                + match element.flow.float {
+                    Float::Right => self.margin.left + self.available_width - width,
+                    _ => self.margin.left + element.positioning.insets.left,
+                };
             let top = self.page_size.height - self.margin.top - self.y_pos;
             let natural_height = element.box_model.padding.vertical()
                 + collapsed_children_height(&element.children)

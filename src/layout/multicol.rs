@@ -654,10 +654,7 @@ fn emit_multicol_wrapper(
             border,
         },
         paint: BoxPaint::from_style(style, geometry.size),
-        flow: crate::layout::elements::BlockFlow {
-            float: style.float,
-            clear: style.clear,
-        },
+        flow: crate::layout::elements::BlockFlow::from_style(style),
         positioning: Positioning::from_style(style)
             .with_resolved_insets(crate::types::EdgeSizes {
                 left: geometry.inline_offset.value(),

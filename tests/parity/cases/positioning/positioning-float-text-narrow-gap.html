@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a line that does not fit beside the floats moves below them</title>
+<style>
+  @page { size: 320px 168px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .l { float: left; width: 130px; height: 32px; background: #b5476b; }
+  .r { float: right; width: 130px; height: 56px; background: #3f6fb0; }
+</style>
+</head>
+<body>
+  <div class="l"></div><div class="r"></div>
+  <p>Extraordinarily long words cannot squeeze into the gap.</p>
+</body>
+</html>

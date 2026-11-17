@@ -2,10 +2,11 @@
 //!
 //! A fixed-size box can contribute overflow on a later fragmentainer without
 //! occupying normal flow there. Ordinary content on that page supplies the
-//! backdrop, so those continuations paint after main-flow boxes. Page-level
-//! phase splitting is reserved for that overflow relationship: an ordinary
-//! principal box stays atomic here and resolves its descendant phases inside
-//! its own recursive stacking context.
+//! backdrop, so those continuations paint after main-flow boxes. Floats paint
+//! between in-flow blocks' backgrounds and their inline content (CSS 2.1
+//! Appendix E), so a page with floats also paints its in-flow boxes in two
+//! phases. Otherwise an ordinary principal box stays atomic here and resolves
+//! its descendant phases inside its own recursive stacking context.
 
 use crate::layout::elements::{LayoutElement, LayoutNode, PageContentRole};
 
@@ -38,10 +39,36 @@ impl PlannedPageElement {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct PaintParticipant {
     role: PageContentRole,
     supports_phases: bool,
+    /// Where it paints: a float, an in-flow block, or neither (a positioned
+    /// box).
+    order: PaintOrder,
+    /// Whether a float paints in it.
+    holds_float: bool,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum PaintOrder {
+    #[default]
+    InFlow,
+    Float,
+    Other,
+}
+
+impl PaintOrder {
+    fn of(element: &dyn LayoutElement) -> Self {
+        let level = crate::layout::engine::layout_element_paint_order(element);
+        if level == crate::layout::elements::StackingLevel::float() {
+            Self::Float
+        } else if level.is_in_flow() {
+            Self::InFlow
+        } else {
+            Self::Other
+        }
+    }
 }
 
 pub(super) fn plan_page_elements(elements: &[(f32, LayoutNode)]) -> Vec<PlannedPageElement> {
@@ -50,6 +77,8 @@ pub(super) fn plan_page_elements(elements: &[(f32, LayoutNode)]) -> Vec<PlannedP
         .map(|(_, element)| PaintParticipant {
             role: element.page_content_role(),
             supports_phases: supports_phased_paint(element.as_ref()),
+            order: PaintOrder::of(element.as_ref()),
+            holds_float: holds_float(element.as_ref()),
         })
         .collect::<Vec<_>>();
     plan_participants(&participants)
@@ -60,8 +89,25 @@ fn plan_participants(participants: &[PaintParticipant]) -> Vec<PlannedPageElemen
         .iter()
         .any(|participant| participant.role == PageContentRole::OverflowContinuation);
     if !has_overflow {
-        return (0..participants.len())
-            .map(|index| PlannedPageElement::new(index, ElementPaintPhase::All))
+        let has_float = participants
+            .iter()
+            .any(|participant| participant.order == PaintOrder::Float || participant.holds_float);
+        return participants
+            .iter()
+            .enumerate()
+            .flat_map(|(index, participant)| {
+                let phases: &[ElementPaintPhase] = if has_float
+                    && participant.supports_phases
+                    && participant.order == PaintOrder::InFlow
+                {
+                    &[ElementPaintPhase::Decoration, ElementPaintPhase::Contents]
+                } else {
+                    &[ElementPaintPhase::All]
+                };
+                phases
+                    .iter()
+                    .map(move |phase| PlannedPageElement::new(index, *phase))
+            })
             .collect();
     }
 
@@ -86,6 +132,16 @@ fn plan_participants(participants: &[PaintParticipant]) -> Vec<PlannedPageElemen
     plan
 }
 
+/// Whether a float paints inside `element`, so its in-flow boxes' backgrounds
+/// go under the float and their text over it.
+fn holds_float(element: &dyn LayoutElement) -> bool {
+    let mut found = false;
+    element.visit_children(&mut |child| {
+        found |= PaintOrder::of(child) == PaintOrder::Float || holds_float(child);
+    });
+    found
+}
+
 fn supports_phased_paint(element: &dyn LayoutElement) -> bool {
     element
         .box_paint_owner()
@@ -102,10 +158,12 @@ mod tests {
             PaintParticipant {
                 role: PageContentRole::OverflowContinuation,
                 supports_phases: false,
+                ..Default::default()
             },
             PaintParticipant {
                 role: PageContentRole::MainFlow,
                 supports_phases: false,
+                ..Default::default()
             },
         ];
 
@@ -124,10 +182,12 @@ mod tests {
             PaintParticipant {
                 role: PageContentRole::MainFlow,
                 supports_phases: true,
+                ..Default::default()
             },
             PaintParticipant {
                 role: PageContentRole::MainFlow,
                 supports_phases: false,
+                ..Default::default()
             },
         ];
 
@@ -146,10 +206,12 @@ mod tests {
             PaintParticipant {
                 role: PageContentRole::OverflowContinuation,
                 supports_phases: false,
+                ..Default::default()
             },
             PaintParticipant {
                 role: PageContentRole::MainFlow,
                 supports_phases: true,
+                ..Default::default()
             },
         ];
 
@@ -164,15 +226,47 @@ mod tests {
     }
 
     #[test]
+    fn floats_paint_between_in_flow_backgrounds_and_text() {
+        let participants = [
+            PaintParticipant {
+                order: PaintOrder::Float,
+                supports_phases: true,
+                ..Default::default()
+            },
+            PaintParticipant {
+                supports_phases: true,
+                ..Default::default()
+            },
+            PaintParticipant {
+                order: PaintOrder::Other,
+                supports_phases: true,
+                ..Default::default()
+            },
+        ];
+
+        assert_eq!(
+            plan_participants(&participants),
+            vec![
+                PlannedPageElement::new(0, ElementPaintPhase::All),
+                PlannedPageElement::new(1, ElementPaintPhase::Decoration),
+                PlannedPageElement::new(1, ElementPaintPhase::Contents),
+                PlannedPageElement::new(2, ElementPaintPhase::All),
+            ]
+        );
+    }
+
+    #[test]
     fn phase_capable_boxes_keep_css_decoration_and_content_order() {
         let participants = [
             PaintParticipant {
                 role: PageContentRole::OverflowContinuation,
                 supports_phases: true,
+                ..Default::default()
             },
             PaintParticipant {
                 role: PageContentRole::MainFlow,
                 supports_phases: true,
+                ..Default::default()
             },
         ];
 

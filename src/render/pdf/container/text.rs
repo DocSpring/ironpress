@@ -186,10 +186,11 @@ pub(super) fn render_text_child(
     // Resolve ordinary flow, relative translation, and sticky scrollport
     // constraints through the shared positioning contract. Sticky insets are
     // constraints from the scrollport edges, not unconditional translations.
-    let normal_inline_offset = match tb_float {
-        Float::Right => width - render_w,
-        _ => 0.0,
-    };
+    let normal_inline_offset = child.flow.float_inline_shift()
+        + match tb_float {
+            Float::Right => width - render_w,
+            _ => 0.0,
+        };
     let used_origin = child.positioning.resolve_in_flow_origin(
         crate::types::Point::new(normal_inline_offset, container_top_y - y),
         crate::types::Size::new(render_w, vertical_column_paint_h),
@@ -261,7 +262,7 @@ pub(super) fn render_text_child(
         // Advance the flow cursor exactly as the normal block path
         // below (the filter does not change layout).
         if is_float {
-            prev_margin_bottom = 0.0;
+            // A float leaves the margins around it to collapse.
         } else if planned_flow_top.is_some() {
             prev_margin_bottom = *margin_bottom;
         } else {
@@ -284,11 +285,8 @@ pub(super) fn render_text_child(
         ctx,
     );
     if is_float {
-        // A float does not advance the flow cursor (its bottom is
-        // already tracked via the simulator for `clear`). It breaks
-        // the margin-collapse chain for the next in-flow sibling.
+        // A float leaves the margins around it to collapse.
         let _ = child_h;
-        prev_margin_bottom = 0.0;
     } else if planned_flow_top.is_some() {
         prev_margin_bottom = *margin_bottom;
     } else {

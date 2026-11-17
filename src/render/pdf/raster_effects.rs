@@ -67,21 +67,23 @@ pub(super) fn paint_simple_text_block(
             return None;
         }
         let first_line_indent = if line_idx == 0 { text_indent } else { 0.0 };
+        let room = content_w - line.float_insets.horizontal();
         let text_x = match text_align {
             TextAlign::Right => {
                 x_pt + border.left.width
                     + padding.left
                     + first_line_indent
-                    + (content_w - first_line_indent - line_width).max(0.0)
+                    + (room - first_line_indent - line_width).max(0.0)
             }
             TextAlign::Center => {
                 x_pt + border.left.width
                     + padding.left
                     + first_line_indent
-                    + (content_w - first_line_indent - line_width).max(0.0) / 2.0
+                    + (room - first_line_indent - line_width).max(0.0) / 2.0
             }
             _ => x_pt + border.left.width + padding.left + first_line_indent,
-        } + line.x_offset;
+        } + line.x_offset
+            + line.float_insets.left;
         let mut run_x = text_x;
         for run in &merged {
             if run.text.is_empty() {
@@ -320,12 +322,14 @@ pub(super) fn blurred_simple_container_group(
                     .iter()
                     .map(|run| estimate_run_width_with_fonts(run, self.fonts))
                     .sum::<f32>();
+                let room = child_width - line.float_insets.horizontal();
                 let text_x = match element.text.alignment {
-                    TextAlign::Right => child_x + (child_width - line_width).max(0.0),
-                    TextAlign::Center => child_x + (child_width - line_width).max(0.0) / 2.0,
+                    TextAlign::Right => child_x + (room - line_width).max(0.0),
+                    TextAlign::Center => child_x + (room - line_width).max(0.0) / 2.0,
                     _ => child_x,
                 } + element.box_model.padding.left
-                    + line.x_offset;
+                    + line.x_offset
+                    + line.float_insets.left;
                 let mut run_x = text_x;
                 for run in &merged {
                     let Some((_, font)) = crate::text::resolve_custom_font(

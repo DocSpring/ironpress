@@ -30,10 +30,7 @@ impl Container {
         Self {
             children,
             paint: BoxPaint::from_style(style, box_model.size),
-            flow: BlockFlow {
-                float: style.float,
-                clear: style.clear,
-            },
+            flow: BlockFlow::from_style(style),
             positioning: Positioning::from_style(style),
             fragmentation: BoxFragmentation::from_style(style),
             overflow: OverflowBehavior {
@@ -133,6 +130,10 @@ impl PositioningOwner for Container {
 impl BlockFlowOwner for Container {
     fn block_flow(&self) -> &BlockFlow {
         &self.flow
+    }
+
+    fn block_flow_mut(&mut self) -> &mut BlockFlow {
+        &mut self.flow
     }
 }
 
@@ -292,6 +293,10 @@ impl LayoutElement for Container {
     }
 
     fn block_flow_owner(&self) -> Option<&dyn BlockFlowOwner> {
+        Some(self)
+    }
+
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
         Some(self)
     }
 

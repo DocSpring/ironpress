@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>text runs in the gap between a left and a right float</title>
+<style>
+  @page { size: 320px 168px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .l { float: left; width: 56px; height: 56px; background: #b5476b; }
+  .r { float: right; width: 56px; height: 56px; background: #3f6fb0; }
+</style>
+</head>
+<body>
+  <div class="l"></div><div class="r"></div>
+  <p>Text between a left and a right float wraps in the gap between them and then below both.</p>
+</body>
+</html>

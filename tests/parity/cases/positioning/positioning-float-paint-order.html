@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats paint over the backgrounds of the blocks beside them and under those blocks' text</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .float { float: left; width: 70px; height: 50px; background: #2e7d5b; }
+  .gray { background: #d4d8de; padding: 4px; }
+  .pull { text-indent: -40px; }
+</style>
+</head>
+<body>
+  <div class="float"></div>
+  <div class="gray">Gray block beside the float has its background under it.</div>
+  <p class="pull">Text pulled over the float paints above it.</p>
+</body>
+</html>

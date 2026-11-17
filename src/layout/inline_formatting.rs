@@ -16,7 +16,7 @@ use super::engine::{
 use super::helpers::{append_pseudo_inline_run, build_pseudo_inline_run};
 use super::text::{
     InlineTextSequence, TextWrapOptions, parent_line_strut, text_run_line_height_factor,
-    used_font_size, wrap_text_runs,
+    used_font_size,
 };
 
 mod flow;
@@ -518,16 +518,41 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
         }
     }
 
-    pub(crate) fn layout_runs(&self, mut runs: Vec<TextRun>) -> Option<LayoutNode> {
+    pub(crate) fn layout_runs(&self, runs: Vec<TextRun>) -> Option<LayoutNode> {
+        self.layout_runs_beside_floats(runs, None)
+    }
+
+    /// [`Self::layout_runs`] for an anonymous block whose lines `floats`
+    /// shorten.
+    pub(crate) fn layout_runs_beside_floats(
+        &self,
+        runs: Vec<TextRun>,
+        floats: Option<&crate::layout::floats::LineFloats>,
+    ) -> Option<LayoutNode> {
+        self.layout_runs_among_floats(runs, floats.cloned(), &[]).0
+    }
+
+    /// [`Self::layout_runs_beside_floats`] for text with floats of its own
+    /// (`super::text::wrap_text_runs_among_floats`), and the line top each of
+    /// them occurs on.
+    pub(crate) fn layout_runs_among_floats(
+        &self,
+        mut runs: Vec<TextRun>,
+        floats: Option<crate::layout::floats::LineFloats>,
+        inline_floats: &[crate::layout::floats::FloatBox],
+    ) -> (Option<LayoutNode>, Vec<f32>) {
         if runs.is_empty() {
-            return None;
+            return (None, Vec::new());
         }
         runs.as_mut_slice()
             .resolve_unclaimed_boundaries(super::text::BoundaryScope::of(
                 self.parent_style,
                 self.fonts,
             ));
-        let lines = wrap_text_runs(
+        let super::text::LinesAmongFloats {
+            lines,
+            inline_float_tops,
+        } = super::text::wrap_text_runs_among_floats(
             runs,
             TextWrapOptions::new(
                 self.available_width,
@@ -541,9 +566,11 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
             .with_bidi_override(self.parent_style.bidi_override)
             .with_bidi_plaintext(self.parent_style.bidi_plaintext),
             self.fonts,
+            floats,
+            inline_floats,
         );
         if lines.is_empty() {
-            return None;
+            return (None, inline_float_tops);
         }
 
         let mut block = TextBlock::from_style(lines, self.parent_style, BoxModel::default());
@@ -552,7 +579,7 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
         block.positioning = Default::default();
         block.fragmentation = Default::default();
         block.clipping = Default::default();
-        Some(block.boxed())
+        (Some(block.boxed()), inline_float_tops)
     }
 }
 

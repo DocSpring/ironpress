@@ -24,6 +24,7 @@ pub(crate) fn upright_lines(lines: &[TextLine]) -> Vec<TextLine> {
                     height: line.height,
                     baseline_ascent: line.baseline_ascent,
                     x_offset: line.x_offset,
+                    float_insets: Default::default(),
                     metadata: line.metadata,
                 });
                 continue;
@@ -97,6 +98,7 @@ fn push_upright_line(
         height: upright_advance(template, source.height),
         baseline_ascent: None,
         x_offset: source.x_offset,
+        float_insets: Default::default(),
         metadata: source.metadata,
     });
 }

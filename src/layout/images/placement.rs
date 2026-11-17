@@ -223,3 +223,41 @@ pub(crate) fn parse_html_image_dimension(raw: Option<&String>) -> Option<f32> {
     let raw = raw.strip_suffix("px").unwrap_or(raw);
     raw.parse::<f32>().ok().map(|px| px * 0.75)
 }
+
+/// A floated replaced element (`<img style="float: left">`) as a float box
+/// around it: floats are block boxes that their formatting context places
+/// (CSS 2.1 §9.5), so the box takes the element's float, clearance, margins
+/// and positioning, and the element sits at its top left.
+pub(crate) fn float_box_around_replaced(
+    mut element: LayoutNode,
+    style: &ComputedStyle,
+) -> LayoutNode {
+    use crate::layout::elements::{
+        BlockFlow, BlockSize, BoxModel, Container, InlineSize, IntoLayoutNode, LayoutSize,
+    };
+    let margins = element
+        .margin_holder_mut()
+        .map(|holder| std::mem::take(holder.margins_mut()))
+        .unwrap_or_default();
+    let positioning = element
+        .positioning_owner_mut()
+        .map(|owner| std::mem::take(owner.positioning_mut()))
+        .unwrap_or_default();
+    let (_, width) = crate::layout::block::child_x_and_width(element.as_ref());
+    let height = crate::layout::paginate::estimate_element_height(element.as_ref());
+    Container {
+        children: vec![element],
+        box_model: BoxModel {
+            size: LayoutSize {
+                width: InlineSize::from_fixed_value(Some(width)),
+                height: BlockSize::from_definite(Some(height)),
+            },
+            margins,
+            ..Default::default()
+        },
+        flow: BlockFlow::from_style(style),
+        positioning,
+        ..Default::default()
+    }
+    .boxed()
+}

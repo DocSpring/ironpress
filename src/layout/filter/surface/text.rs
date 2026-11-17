@@ -61,19 +61,19 @@ impl SourcePainter<'_> {
                 .map(|run| run_width(run, self.fonts))
                 .sum::<Option<f32>>()?;
             let first_indent = if line_index == 0 { indent } else { 0.0 };
+            let room = content.size.width - line.float_insets.horizontal();
             let line_x = match alignment {
                 TextAlign::Right => {
-                    content.origin.x
-                        + first_indent
-                        + (content.size.width - first_indent - line_width).max(0.0)
+                    content.origin.x + first_indent + (room - first_indent - line_width).max(0.0)
                 }
                 TextAlign::Center => {
                     content.origin.x
                         + first_indent
-                        + (content.size.width - first_indent - line_width).max(0.0) / 2.0
+                        + (room - first_indent - line_width).max(0.0) / 2.0
                 }
                 _ => content.origin.x + first_indent,
-            } + line.x_offset;
+            } + line.x_offset
+                + line.float_insets.left;
             self.canvas.include_paint_bounds(SurfaceRect::new(
                 Point::new(line_x, line_top),
                 Size::new(line_width, line.height),

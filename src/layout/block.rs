@@ -8,7 +8,7 @@ use crate::parser::css::{AncestorInfo, CssRule, PseudoElement, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
-    BoxSizing, ComputedStyle, Display, Float, FontFamily, Overflow, Position, TextAlign,
+    BoxSizing, Clear, ComputedStyle, Display, Float, FontFamily, Overflow, Position, TextAlign,
     TextOverflow, WhiteSpace, compute_style_with_context_with_font_metrics,
 };
 use crate::types::EdgeSizes;
@@ -875,6 +875,15 @@ pub(crate) fn layout_block_element(
     // When a math span is encountered, flush accumulated text runs as a
     // TextBlock, emit a MathBlock, then continue collecting.
     let mut runs = Vec::new();
+    // Floats met in the text being collected, which float from its lines.
+    let mut inline_floats = crate::layout::floats::FloatsInText::default();
+    // A box with a principal box of its own collects the text before its
+    // first block child here and lays the children out in its wrapper: the
+    // floats that occur in that text, the element index of each, and the
+    // boxes they lay out, which go just before the text's block.
+    let mut leading_floats = crate::layout::floats::FloatsInText::default();
+    let mut leading_float_elements: Vec<usize> = Vec::new();
+    let mut leading_float_nodes: Vec<LayoutNode> = Vec::new();
     let mut mixed_inline_row_emitted = false;
     // The runs collected before each absolute box in this box's lines, then
     // each one's static position in them.
@@ -882,97 +891,118 @@ pub(crate) fn layout_block_element(
     let mut out_of_flow_static_positions: Vec<crate::types::Point> = Vec::new();
 
     // Helper closure: flush accumulated runs as a TextBlock
-    let flush_runs = |runs: &mut Vec<TextRun>,
-                      inner_width: f32,
-                      style: &ComputedStyle,
-                      available_width: f32,
-                      block_w: f32,
-                      effective_height: Option<f32>,
-                      auto_offset_left: f32,
-                      el: &ElementNode,
-                      output: &mut Vec<LayoutNode>,
-                      fonts: &HashMap<String, TtfFont>| {
-        if runs.is_empty() {
-            return;
-        }
-        runs.as_mut_slice()
-            .resolve_unclaimed_boundaries(crate::layout::text::BoundaryScope::of(style, fonts));
-        let shrink_to_fit = style.width.is_none()
-            && style.percentage_sizing.width.is_none()
-            && (style.display == Display::InlineBlock
-                || style.position.is_absolute()
-                || matches!(style.float, Float::Left | Float::Right));
-        let wrap_width = if style.text_wrap_mode_nowrap || shrink_to_fit {
-            f32::MAX
-        } else {
-            inner_width
-        };
-        let text_indent = style.text_indent.resolve(inner_width);
-        let lines = wrap_text_runs(
-            std::mem::take(runs),
-            TextWrapOptions::new(
-                wrap_width,
-                used_font_size(style, fonts),
-                text_run_line_height_factor(style, fonts),
-                style.overflow_wrap,
-            )
-            .with_white_space(style.white_space)
-            .with_parent_strut(parent_line_strut(style, fonts))
-            .with_rtl(style.direction_rtl)
-            .with_bidi_override(style.bidi_override)
-            .with_bidi_plaintext(style.bidi_plaintext)
-            .with_word_break_keep_all(style.word_break_keep_all)
-            .with_hyphens_manual(style.hyphens_manual)
-            .with_text_indent(text_indent),
-            fonts,
-        );
-        if lines.is_empty() {
-            return;
-        }
-        // For inline-block without explicit width, shrink-to-fit
-        let render_w = if shrink_to_fit {
-            (measure_lines_width(&lines, fonts)
-                + layout_padding.horizontal()
-                + style.border.horizontal_width())
-            .min(block_w)
-        } else {
-            block_w
-        };
+    let flush_runs =
+        |runs: &mut Vec<TextRun>,
+         inner_width: f32,
+         style: &ComputedStyle,
+         available_width: f32,
+         block_w: f32,
+         effective_height: Option<f32>,
+         auto_offset_left: f32,
+         el: &ElementNode,
+         output: &mut Vec<LayoutNode>,
+         fonts: &HashMap<String, TtfFont>,
+         floats: &crate::layout::floats::FloatFrames,
+         inline_floats: &mut crate::layout::floats::FloatsInText| {
+            if runs.is_empty() {
+                inline_floats.emit(&[], output);
+                return;
+            }
+            runs.as_mut_slice()
+                .resolve_unclaimed_boundaries(crate::layout::text::BoundaryScope::of(style, fonts));
+            let shrink_to_fit = style.width.is_none()
+                && style.percentage_sizing.width.is_none()
+                && (style.display == Display::InlineBlock
+                    || style.position.is_absolute()
+                    || matches!(style.float, Float::Left | Float::Right));
+            let wrap_width = if style.text_wrap_mode_nowrap || shrink_to_fit {
+                f32::MAX
+            } else {
+                inner_width
+            };
+            let text_indent = style.text_indent.resolve(inner_width);
+            let lays_out_beside_floats = wrap_width < f32::MAX
+                && style.float == Float::None
+                && !style.position.is_absolute()
+                && !style.writing_mode.is_vertical();
+            // Floats that occur in this text float from the line they occur on;
+            // the floats go first in the flow, each kept from floating above its
+            // line.
+            let inline_float_boxes = inline_floats.boxes();
+            let line_floats = lays_out_beside_floats
+                .then(|| inline_floats.line_floats(floats, output, auto_offset_left, inner_width))
+                .flatten();
+            let super::text::LinesAmongFloats {
+                lines,
+                inline_float_tops,
+            } = super::text::wrap_text_runs_among_floats(
+                std::mem::take(runs),
+                TextWrapOptions::new(
+                    wrap_width,
+                    used_font_size(style, fonts),
+                    text_run_line_height_factor(style, fonts),
+                    style.overflow_wrap,
+                )
+                .with_white_space(style.white_space)
+                .with_parent_strut(parent_line_strut(style, fonts))
+                .with_rtl(style.direction_rtl)
+                .with_bidi_override(style.bidi_override)
+                .with_bidi_plaintext(style.bidi_plaintext)
+                .with_word_break_keep_all(style.word_break_keep_all)
+                .with_hyphens_manual(style.hyphens_manual)
+                .with_text_indent(text_indent),
+                fonts,
+                line_floats,
+                &inline_float_boxes,
+            );
+            inline_floats.emit(&inline_float_tops, output);
+            if lines.is_empty() {
+                return;
+            }
+            // For inline-block without explicit width, shrink-to-fit
+            let render_w = if shrink_to_fit {
+                (measure_lines_width(&lines, fonts)
+                    + layout_padding.horizontal()
+                    + style.border.horizontal_width())
+                .min(block_w)
+            } else {
+                block_w
+            };
 
-        let inline_size = InlineSize::from_used(
-            render_w,
-            available_width,
-            style.width.is_some()
-                || style.percentage_sizing.width.is_some()
-                || style.min_width.is_some()
-                || shrink_to_fit,
-        );
-        let mut block = TextBlock::from_style(
-            lines,
-            style,
-            crate::layout::elements::BoxModel {
-                size: crate::layout::elements::LayoutSize {
-                    width: inline_size,
-                    height: effective_height.map_or(BlockSize::AUTO, |height| {
-                        if has_definite_height {
-                            BlockSize::definite(height)
-                        } else {
-                            BlockSize::minimum(height)
-                        }
-                    }),
+            let inline_size = InlineSize::from_used(
+                render_w,
+                available_width,
+                style.width.is_some()
+                    || style.percentage_sizing.width.is_some()
+                    || style.min_width.is_some()
+                    || shrink_to_fit,
+            );
+            let mut block = TextBlock::from_style(
+                lines,
+                style,
+                crate::layout::elements::BoxModel {
+                    size: crate::layout::elements::LayoutSize {
+                        width: inline_size,
+                        height: effective_height.map_or(BlockSize::AUTO, |height| {
+                            if has_definite_height {
+                                BlockSize::definite(height)
+                            } else {
+                                BlockSize::minimum(height)
+                            }
+                        }),
+                    },
+                    margins: BlockMargins::new(style.margin.top, style.margin.bottom),
+                    padding: layout_padding,
+                    border: LayoutBorder::from_computed(&style.border, style.color),
                 },
-                margins: BlockMargins::new(style.margin.top, style.margin.bottom),
-                padding: layout_padding,
-                border: LayoutBorder::from_computed(&style.border, style.color),
-            },
-        );
-        block.paint.border_radii = border_radii;
-        block.positioning.insets.left += auto_offset_left;
-        block.positioning.containing_block_depth = positioned_depth;
-        block.text.indent = text_indent;
-        block.semantics.heading_level = heading_level(el.tag);
-        output.push(block.boxed());
-    };
+            );
+            block.paint.border_radii = border_radii;
+            block.positioning.insets.left += auto_offset_left;
+            block.positioning.containing_block_depth = positioned_depth;
+            block.text.indent = text_indent;
+            block.semantics.heading_level = heading_level(el.tag);
+            output.push(block.boxed());
+        };
 
     // Check if any child is a math element — if so, split at boundaries
     let has_math_children = el.children.iter().any(|c| {
@@ -1003,6 +1033,8 @@ pub(crate) fn layout_block_element(
                     el,
                     output,
                     env.fonts,
+                    &env.floats,
+                    &mut inline_floats,
                 );
                 let child_classes = child_el.class_list();
                 let is_display = child_classes.contains(&"math-display");
@@ -1041,6 +1073,8 @@ pub(crate) fn layout_block_element(
             el,
             output,
             env.fonts,
+            &env.floats,
+            &mut inline_floats,
         );
     } else {
         let parent_has_visual = has_background_paint(style)
@@ -1146,6 +1180,13 @@ pub(crate) fn layout_block_element(
             } else {
                 output
             };
+            // Laid out into boxes no formatting context tracks (a flex or
+            // grid item's), this box is a formatting context root of its own
+            // and keeps its floats.
+            let own_float_frame = !env.floats.is_innermost(target);
+            if own_float_frame {
+                env.floats.enter(target, inner_width, Default::default());
+            }
             // Atomic inlines need one source-ordered row before a block sibling
             // splits the surrounding formatting context.
             let mut atomic_inline_segments =
@@ -1172,6 +1213,8 @@ pub(crate) fn layout_block_element(
                         el,
                         target,
                         env.fonts,
+                        &env.floats,
+                        &mut inline_floats,
                     );
                     clear_anonymous_block_margins(&mut target[anonymous_start..]);
                     let anonymous_start = target.len();
@@ -1214,21 +1257,38 @@ pub(crate) fn layout_block_element(
                     DomNode::Element(child_el)
                         if inline_children.requires_independent_layout(child_el_idx) =>
                     {
-                        // Flush inline runs before block child
-                        let anonymous_start = target.len();
-                        flush_runs(
-                            &mut runs,
-                            inner_width,
-                            style,
-                            available_width,
-                            block_w,
-                            effective_height,
-                            auto_offset_left,
-                            el,
-                            target,
-                            env.fonts,
-                        );
-                        clear_anonymous_block_margins(&mut target[anonymous_start..]);
+                        // A float after some text floats from the line it
+                        // occurs on, and the text carries on around it
+                        // (CSS 2.1 §9.5); any other block child ends the
+                        // text before it.
+                        let floats_in_text =
+                            inline_children.get(child_el_idx).is_some_and(|child| {
+                                crate::layout::floats::FloatsInText::occurs_in_text(
+                                    &child.style,
+                                    &runs,
+                                    &env.floats,
+                                    target,
+                                )
+                            });
+                        let mut laid_out_float: Vec<LayoutNode> = Vec::new();
+                        if !floats_in_text {
+                            let anonymous_start = target.len();
+                            flush_runs(
+                                &mut runs,
+                                inner_width,
+                                style,
+                                available_width,
+                                block_w,
+                                effective_height,
+                                auto_offset_left,
+                                el,
+                                target,
+                                env.fonts,
+                                &env.floats,
+                                &mut inline_floats,
+                            );
+                            clear_anonymous_block_margins(&mut target[anonymous_start..]);
+                        }
                         // Recurse into block child
                         let child_percent_cb = effective_height.map(|height| ContainingBlock {
                             x: 0.0,
@@ -1261,9 +1321,14 @@ pub(crate) fn layout_block_element(
                                         forward_siblings(&child_sibling_list, child_el_idx),
                                     ),
                             ),
-                            target,
+                            if floats_in_text {
+                                &mut laid_out_float
+                            } else {
+                                &mut *target
+                            },
                             env,
                         );
+                        inline_floats.take(laid_out_float, &mut runs, target);
                     }
                     DomNode::Element(_) => {
                         // Inline element: collect as text runs
@@ -1308,8 +1373,13 @@ pub(crate) fn layout_block_element(
                 el,
                 target,
                 env.fonts,
+                &env.floats,
+                &mut inline_floats,
             );
             clear_anonymous_block_margins(&mut target[anonymous_start..]);
+            if own_float_frame {
+                env.floats.leave(target);
+            }
             // This block has no box of its own here, so its vertical margins
             // collapse with its first and last children's.
             if !parent_has_visual {
@@ -1430,6 +1500,46 @@ pub(crate) fn layout_block_element(
             let mut child_el_idx = 0;
             for (child_index, child) in el.children.iter().enumerate() {
                 match child {
+                    // A float after some text floats from the line it occurs
+                    // on, and the text carries on around it.
+                    DomNode::Element(child_el)
+                        if inline_children.get(child_el_idx).is_some_and(|child| {
+                            child.role == InlineFormattingRole::Outside
+                                && crate::layout::floats::FloatsInText::occurs_in_text(
+                                    &child.style,
+                                    &runs,
+                                    &env.floats,
+                                    output,
+                                )
+                        }) =>
+                    {
+                        let mut laid_out = Vec::new();
+                        flatten_element(
+                            child_el,
+                            LayoutTreeContext::new(
+                                child_parent_style,
+                                &ctx.with_parent(
+                                    inner_width,
+                                    Some(available_height),
+                                    style.font_size,
+                                )
+                                .with_cbs(forward_abs_cb, None),
+                                child_ancestors,
+                            )
+                            .with_positioned_ancestor_depth(positioned_depth)
+                            .for_element(
+                                ElementSiblingContext::new(child_el_idx, child_el_count)
+                                    .with_neighbors(
+                                        &child_sibling_list[..child_el_idx],
+                                        forward_siblings(&child_sibling_list, child_el_idx),
+                                    ),
+                            ),
+                            &mut laid_out,
+                            env,
+                        );
+                        leading_floats.take(laid_out, &mut runs, &mut leading_float_nodes);
+                        leading_float_elements.push(child_el_idx);
+                    }
                     DomNode::Element(_) if inline_children.is_outside(child_el_idx) => break,
                     DomNode::Text(_) => {
                         InlineRunCollector::new(
@@ -1668,11 +1778,46 @@ pub(crate) fn layout_block_element(
             && !style.direction_rtl
             && !style.writing_mode.is_vertical())
         .then(|| runs.clone());
+        // Floats earlier in the formatting context shorten the lines beside
+        // them (CSS 2.1 §9.5). A box that floats or is absolutely positioned
+        // starts a formatting context of its own.
+        let line_floats = (wrap_width.is_finite()
+            && wrap_width < f32::MAX
+            && style.float == Float::None
+            && !style.position.is_absolute()
+            && !style.writing_mode.is_vertical())
+        .then(|| {
+            if leading_floats.is_empty() {
+                env.floats
+                    .beside_next_block(output, style.margin.top, style.clear)
+            } else {
+                env.floats
+                    .around_next_block(output, style.margin.top, style.clear)
+            }
+        })
+        .flatten()
+        .map(|floats| {
+            floats.lines(
+                style.border.top.used_width() + layout_padding.top,
+                style.margin.left + style.border.left.used_width() + layout_padding.left,
+                inner_width,
+            )
+        });
         let mut lines = if let Some(fl) = first_line_style {
             wrap_text_runs_with_first_line_style(runs, wrap_options, fl, env.fonts)
         } else {
-            wrap_text_runs(runs, wrap_options, env.fonts)
+            let wrapped = super::text::wrap_text_runs_among_floats(
+                runs,
+                wrap_options,
+                env.fonts,
+                line_floats,
+                &leading_floats.boxes(),
+            );
+            leading_floats.emit(&wrapped.inline_float_tops, &mut leading_float_nodes);
+            wrapped.lines
         };
+        // Floats a `::first-line` text holds float from its first line.
+        leading_floats.emit(&[], &mut leading_float_nodes);
         if let Some(static_position_runs) = static_position_runs {
             out_of_flow_static_positions = super::inline_formatting::out_of_flow_static_positions(
                 &static_position_runs,
@@ -1875,6 +2020,7 @@ pub(crate) fn layout_block_element(
             // create a Container with the correct block_width.
             saved_inline_element = Some(inline_tb);
         } else {
+            output.append(&mut leading_float_nodes);
             output.push(inline_tb);
         }
     }
@@ -1919,6 +2065,23 @@ pub(crate) fn layout_block_element(
         // block child, so it is laid out inside the wrapper ahead of the
         // element's own inline content (css-content-3 §1).
         let mut child_elements: Vec<LayoutNode> = Vec::new();
+        // The children lay out in this box's content box. Earlier floats reach
+        // into it unless it is a formatting context root of its own.
+        let inherited_floats = if establishes_bfc_with_overflow(style, overflow_axes) {
+            crate::layout::floats::FloatExclusions::default()
+        } else {
+            env.floats
+                .beside_next_block(output, style.margin.top, style.clear)
+                .map(|floats| {
+                    floats.inherited_by_child(
+                        style.border.top.used_width() + layout_padding.top,
+                        style.margin.left + style.border.left.used_width() + layout_padding.left,
+                    )
+                })
+                .unwrap_or_default()
+        };
+        env.floats
+            .enter(&child_elements, inner_width, inherited_floats);
         if has_block_before && !before_is_abs {
             if let Some(ps) = before_style {
                 child_elements.push(build_pseudo_block(
@@ -1942,6 +2105,7 @@ pub(crate) fn layout_block_element(
             .map(|child| crate::layout::engine::estimate_element_height(child.as_ref()))
             .sum();
         if let Some(inline_el) = saved_inline_element.take() {
+            child_elements.append(&mut leading_float_nodes);
             child_elements.push(inline_el);
         }
         // Each absolute box in the lines, direct or in an inline element, is
@@ -2043,7 +2207,10 @@ pub(crate) fn layout_block_element(
                         pending_inline_space = true;
                     }
                 }
-                DomNode::Element(_) if inline_children.is_outside(child_el_idx) => {
+                DomNode::Element(_)
+                    if inline_children.is_outside(child_el_idx)
+                        && !leading_float_elements.contains(&child_el_idx) =>
+                {
                     if !ib_group_wrapper.is_empty() {
                         #[allow(clippy::drain_collect)]
                         let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
@@ -2103,8 +2270,9 @@ pub(crate) fn layout_block_element(
                             );
                         }
                         pending_inline_space = false;
-                        if recurses_as_layout_child(child_el.tag)
-                            || inline_children.requires_independent_layout(child_el_idx)
+                        if (recurses_as_layout_child(child_el.tag)
+                            || inline_children.requires_independent_layout(child_el_idx))
+                            && !leading_float_elements.contains(&child_el_idx)
                         {
                             let first_new = child_elements.len();
                             flatten_element(
@@ -2222,6 +2390,19 @@ pub(crate) fn layout_block_element(
                     after_is_list_item,
                 ));
             }
+        }
+        env.floats.leave(&mut child_elements);
+        // A formatting context root grows to contain its floats (CSS 2.1
+        // §10.6.7): a closing box that clears them extends its flow to their
+        // bottom wherever the flow is measured.
+        if establishes_bfc_with_overflow(style, overflow_axes)
+            && child_elements
+                .iter()
+                .any(|child| crate::layout::paginate::element_float(child.as_ref()) != Float::None)
+        {
+            let mut containment = TextBlock::empty_spacer();
+            containment.flow.clear = Clear::Both;
+            child_elements.push(containment.boxed());
         }
         let child_bounds = child_overflow_bounds(&child_elements);
         // CSS 2.1 § 8.3.1: margins of a block and its first/last in-flow
@@ -2495,10 +2676,7 @@ pub(crate) fn layout_block_element(
                     border: LayoutBorder::from_computed(&style.border, style.color),
                 },
                 paint,
-                flow: crate::layout::elements::BlockFlow {
-                    float: style.float,
-                    clear: style.clear,
-                },
+                flow: crate::layout::elements::BlockFlow::from_style(style),
                 positioning: crate::layout::elements::Positioning::from_style(style)
                     .with_resolved_insets(EdgeSizes::new(
                         wrapper_top,
@@ -2648,7 +2826,11 @@ pub(crate) fn layout_block_element(
         && !overflow_axes.clips_any()
         && !style.position.is_absolute()
         && style.float == Float::None;
-    if self_collapsing && (style.margin.top != 0.0 || style.margin.bottom != 0.0) {
+    // An empty box still clears floats (CSS 2.1 §9.5.2), moving what follows
+    // below them, so it keeps a zero-height placeholder too.
+    if self_collapsing
+        && (style.margin.top != 0.0 || style.margin.bottom != 0.0 || style.clear != Clear::None)
+    {
         // The box's own top and bottom margins collapse together first.
         let collapsed = if style.margin.top >= 0.0 && style.margin.bottom >= 0.0 {
             style.margin.top.max(style.margin.bottom)
@@ -2663,6 +2845,7 @@ pub(crate) fn layout_block_element(
         // yielding a single collapsed gap rather than the sum of both.
         let mut spacer = TextBlock::empty_spacer();
         spacer.box_model.margins.start = collapsed;
+        spacer.flow.clear = style.clear;
         output.push(spacer.boxed());
     }
 
@@ -2790,7 +2973,7 @@ fn layout_element_is_absolute(element: &dyn LayoutElement) -> bool {
         .is_some_and(|owner| owner.positioning().scheme.is_absolute())
 }
 
-fn child_x_and_width(child: &dyn LayoutElement) -> (f32, f32) {
+pub(crate) fn child_x_and_width(child: &dyn LayoutElement) -> (f32, f32) {
     #[derive(Default)]
     struct InlineGeometry {
         x: f32,

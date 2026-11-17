@@ -446,6 +446,7 @@ pub(super) fn render_flex_child(
                     ctx,
                     ContainerRenderOptions {
                         paint_phase: cell_phase,
+                        defer_child_decorations: false,
                         stacking_scope: if cell.establishes_stacking_context() {
                             StackingScope::Local
                         } else {

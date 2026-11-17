@@ -1682,10 +1682,7 @@ pub(crate) fn build_pseudo_block(
             border,
         },
         paint,
-        flow: BlockFlow {
-            float: pseudo_style.float,
-            clear: pseudo_style.clear,
-        },
+        flow: BlockFlow::from_style(pseudo_style),
         positioning: Positioning::from_style(pseudo_style)
             .with_resolved_insets(EdgeSizes::new(
                 resolved_top,

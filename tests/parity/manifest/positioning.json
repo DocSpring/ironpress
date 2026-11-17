@@ -224,6 +224,246 @@
     ]
   },
   {
+    "id": "positioning-float-text-wrap",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "text-wrap",
+    "description": "Lines beside a float are shortened by its margin box and return to full width below it (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-wrap.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-side-by-side",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "side-by-side",
+    "description": "Floats on one side sit beside each other while they fit and the lines beside them are shortened by both (CSS 2.1 section 9.5.1).",
+    "file": "cases/positioning/positioning-float-text-side-by-side.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-both-sides",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "both-sides",
+    "description": "Lines between a left and a right float are shortened from both sides (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-both-sides.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-drops-below",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "drops-below",
+    "description": "A float that doesn't fit beside earlier floats goes below them, and the lines follow the space each float leaves (CSS 2.1 section 9.5.1 rules 2, 3 and 7).",
+    "file": "cases/positioning/positioning-float-text-drops-below.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-narrow-gap",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "narrow-gap",
+    "description": "A line whose content doesn't fit in the space beside the floats moves down to where a float ends (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-narrow-gap.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-align",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "align",
+    "description": "Centred, right-aligned and justified lines align within the space the float leaves them (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-align.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-paragraphs",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "paragraphs",
+    "description": "A float reaches into the paragraphs after it, each wrapping beside it (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-paragraphs.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-nested",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "nested",
+    "description": "A float shortens the lines of blocks nested inside later siblings, and a float inside a block stays in its parent's formatting context (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-text-nested.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-inline",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "inline",
+    "description": "A float inside a paragraph's text floats from the line it occurs on and the text stays one paragraph (CSS 2.1 section 9.5.1 rule 8).",
+    "file": "cases/positioning/positioning-float-text-inline.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-bfc",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "bfc",
+    "description": "A block that starts a formatting context sits beside a float, and contains its own floats (CSS 2.1 sections 9.5 and 10.6.7).",
+    "file": "cases/positioning/positioning-float-text-bfc.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-text-deferred",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "deferred",
+    "description": "A float that doesn't fit beside its line's text floats from the next line, and one in a decorated paragraph keeps the text one paragraph (CSS 2.1 section 9.5.1).",
+    "file": "cases/positioning/positioning-float-text-deferred.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-margins",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "margins",
+    "description": "A float's margins collapse with nothing, and the margins of the blocks around it still collapse with each other (CSS 2.1 section 8.3.1).",
+    "file": "cases/positioning/positioning-float-margins.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-list",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "list",
+    "description": "List items' lines go beside a float and their outside markers paint over it (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-list.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-formatting-roots",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "formatting-roots",
+    "description": "Tables and flex containers sit beside a float when they fit and below it when they don't; one without a width takes the space beside it (CSS 2.1 section 9.5).",
+    "file": "cases/positioning/positioning-float-formatting-roots.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-in-cell-and-flex-item",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "cell-and-flex-item",
+    "description": "A table cell and a flex item each keep their floats, and their text wraps beside them (CSS 2.1 section 9.4.1).",
+    "file": "cases/positioning/positioning-float-in-cell-and-flex-item.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "positioning-float-paint-order",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "paint-order",
+    "description": "Floats paint over the backgrounds of the blocks beside them and under those blocks' text (CSS 2.1 Appendix E).",
+    "file": "cases/positioning/positioning-float-paint-order.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
     "id": "positioning-clear-both",
     "category": "positioning",
     "feature": "clear",

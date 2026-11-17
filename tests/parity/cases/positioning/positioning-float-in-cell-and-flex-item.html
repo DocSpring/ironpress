@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a table cell and a flex item each keep their floats, and their text wraps beside them</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .float { float: left; width: 50px; height: 40px; background: #b05a8a; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  td { border: 1px solid #333333; }
+  .flex { display: flex; }
+  .flex > div { width: 200px; }
+</style>
+</head>
+<body>
+  <table><tr><td><div class="float"></div>Text in a cell wraps beside the float in that cell.</td></tr></table>
+  <div class="flex"><div><div class="float"></div>Text in a flex item wraps beside the float.</div></div>
+</body>
+</html>

@@ -12,6 +12,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }]);
         cell_skip.span.rows = 0;
@@ -20,6 +21,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }]);
         let element = test_table_row(vec![cell_skip, cell_visible], vec![100.0, 100.0]).boxed();
@@ -71,6 +73,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }]);
         cell.layout.paint.background.color = Some(Color::rgb(255, 0, 0));
@@ -151,6 +154,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             TextAlign::Right,
@@ -174,6 +178,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             TextAlign::Center,
@@ -245,6 +250,7 @@
                     height: 14.0,
                     baseline_ascent: None,
                     x_offset: 0.0,
+                    float_insets: Default::default(),
                     metadata: Default::default(),
                 },
                 TextLine {
@@ -252,6 +258,7 @@
                     height: 14.0,
                     baseline_ascent: None,
                     x_offset: 0.0,
+                    float_insets: Default::default(),
                     metadata: Default::default(),
                 },
             ],
@@ -318,6 +325,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             TextAlign::Left,
@@ -380,6 +388,7 @@
                 height: 14.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }],
             TextAlign::Left,

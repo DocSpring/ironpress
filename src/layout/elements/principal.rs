@@ -64,6 +64,10 @@ impl<T: PrincipalBox> BlockFlowOwner for T {
     fn block_flow(&self) -> &BlockFlow {
         &self.principal().flow
     }
+
+    fn block_flow_mut(&mut self) -> &mut BlockFlow {
+        &mut self.principal_mut().flow
+    }
 }
 
 impl<T: PrincipalBox> BoxPaintOwner for T {
@@ -189,6 +193,10 @@ macro_rules! impl_principal_layout_element {
             }
 
             fn block_flow_owner(&self) -> Option<&dyn super::BlockFlowOwner> {
+                Some(self)
+            }
+
+            fn block_flow_owner_mut(&mut self) -> Option<&mut dyn super::BlockFlowOwner> {
                 Some(self)
             }
 

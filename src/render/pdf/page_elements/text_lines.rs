@@ -158,7 +158,10 @@ pub(super) fn render_text_block_lines(
         // Calculate word spacing for justified text
         let justify_ws = if *text_align == TextAlign::Justify && !is_last_line {
             let first_line_indent = if line_idx == 0 { *text_indent } else { 0.0 };
-            let content_width = padding_box_w - padding.horizontal() - first_line_indent;
+            let content_width = padding_box_w
+                - padding.horizontal()
+                - first_line_indent
+                - line.float_insets.horizontal();
             let remaining = content_width - line_width;
             let space_count = line_text.matches(' ').count();
             if space_count > 0 && remaining > 0.0 {
@@ -178,7 +181,8 @@ pub(super) fn render_text_block_lines(
         // Drop-cap float exclusion: the line is shifted right so
         // its inline content wraps beside the floated
         // `::first-letter` (css-pseudo-4 §2.2 + css2 §9.5).
-        let line_inset = line.x_offset;
+        let line_inset = line.x_offset + line.float_insets.left;
+        let floats = line.float_insets;
         let text_x = match text_align {
             TextAlign::Left | TextAlign::Justify => {
                 if upright_vertical {
@@ -196,9 +200,12 @@ pub(super) fn render_text_block_lines(
             TextAlign::Center => {
                 padding_box_x
                     + first_line_indent
-                    + (padding_box_w - first_line_indent - line_width) / 2.0
+                    + floats.left
+                    + (padding_box_w - first_line_indent - floats.horizontal() - line_width) / 2.0
             }
-            TextAlign::Right => padding_box_x + padding_box_w - padding.right - line_width,
+            TextAlign::Right => {
+                padding_box_x + padding_box_w - padding.right - floats.right - line_width
+            }
         };
         // Merge consecutive runs with the same style so
         // spaces between words stay in a single PDF text

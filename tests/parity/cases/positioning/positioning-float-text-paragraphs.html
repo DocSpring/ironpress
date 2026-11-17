@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a tall float shortens lines across paragraphs until clear moves below it</title>
+<style>
+  @page { size: 320px 248px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .box { float: left; width: 64px; height: 96px; margin-right: 8px; background: #b5476b; }
+  .clear { clear: left; background: #eef1f8; }
+</style>
+</head>
+<body>
+  <div class="box"></div>
+  <p>First paragraph beside it.</p>
+  <p>Second paragraph still beside the float and then wrapping under it at full width.</p>
+  <p class="clear">This paragraph clears the float.</p>
+</body>
+</html>

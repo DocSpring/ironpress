@@ -11,6 +11,7 @@
                         height: 14.0,
                         baseline_ascent: None,
                         x_offset: 0.0,
+                        float_insets: Default::default(),
                         metadata: Default::default(),
                     },
                     TextLine {
@@ -18,6 +19,7 @@
                         height: 14.0,
                         baseline_ascent: None,
                         x_offset: 0.0,
+                        float_insets: Default::default(),
                         metadata: Default::default(),
                     },
                 ],

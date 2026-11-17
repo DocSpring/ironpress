@@ -329,10 +329,13 @@ pub(super) fn paint_text_box(
         // Drop-cap float exclusion: shift the line right so its text
         // wraps beside the floated `::first-letter` (css2 §9.5).
         let line_inset = line.x_offset;
+        // Floats beside the line take room from either side (css2 §9.5).
+        let floats = line.float_insets;
+        let room = content_w - floats.horizontal();
         let text_x = match text_align {
-            TextAlign::Right => content_x + (content_w - line_width).max(0.0),
-            TextAlign::Center => content_x + (content_w - line_width).max(0.0) / 2.0,
-            _ => content_x + first_line_indent + line_inset,
+            TextAlign::Right => content_x + floats.left + (room - line_width).max(0.0),
+            TextAlign::Center => content_x + floats.left + (room - line_width).max(0.0) / 2.0,
+            _ => content_x + first_line_indent + floats.left + line_inset,
         };
         let line_top_y = text_y + metrics.ascender + metrics.half_leading;
         let line_bottom_y = text_y - metrics.descender - metrics.half_leading;

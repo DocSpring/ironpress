@@ -48,10 +48,7 @@ impl TextBlock {
             lines,
             box_model,
             paint,
-            flow: super::BlockFlow {
-                float: style.float,
-                clear: style.clear,
-            },
+            flow: super::BlockFlow::from_style(style),
             positioning: super::Positioning::from_style(style),
             fragmentation: super::TextFragmentation {
                 box_fragmentation: super::BoxFragmentation::from_style(style),
@@ -187,6 +184,10 @@ impl BlockFlowOwner for TextBlock {
     fn block_flow(&self) -> &BlockFlow {
         &self.flow
     }
+
+    fn block_flow_mut(&mut self) -> &mut BlockFlow {
+        &mut self.flow
+    }
 }
 
 impl BoxPaintOwner for TextBlock {
@@ -272,6 +273,10 @@ impl LayoutElement for TextBlock {
     }
 
     fn block_flow_owner(&self) -> Option<&dyn BlockFlowOwner> {
+        Some(self)
+    }
+
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
         Some(self)
     }
 

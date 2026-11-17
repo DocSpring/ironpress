@@ -31,6 +31,7 @@ use super::inline_formatting::{
 use super::list_markers::format_counter_value;
 use super::text_emphasis::TextEmphasisMetrics;
 
+mod line_room;
 mod nested_inline;
 mod run_boundaries;
 use nested_inline::{CollectedAs, CollectorState, NestedBlock};
@@ -1728,6 +1729,7 @@ fn resolved_text_line(
         height: metrics.map_or(height, |(used_height, _)| used_height),
         baseline_ascent: metrics.map(|(_, baseline)| baseline),
         x_offset: 0.0,
+        float_insets: Default::default(),
         metadata: Default::default(),
     }
 }
@@ -2186,6 +2188,20 @@ fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledW
         let first_word_joins = !prev_run_ends_ws && !run_starts_ws;
         let run_ends_ws = run.text.chars().last().is_some_and(is_collapsible_space);
 
+        if run.metadata.float_anchor.is_some() {
+            // A float takes no room in the line and leaves the spacing around
+            // it as it was.
+            styled_words.push(StyledWord {
+                text: String::new(),
+                run_index,
+                preserve_spacing: false,
+                joins_prev: true,
+                break_before: false,
+                has_internal_predecessor: false,
+                ends_run: true,
+            });
+            continue;
+        }
         if run.inline_box.is_some() {
             // Atomic inline box (`display: inline-block`): a single, unbreakable
             // token that takes part in inline spacing like a word.
@@ -2633,6 +2649,37 @@ pub(crate) fn wrap_text_runs(
     options: TextWrapOptions,
     fonts: &HashMap<String, TtfFont>,
 ) -> Vec<TextLine> {
+    wrap_text_runs_beside_floats(runs, options, fonts, None)
+}
+
+/// [`wrap_text_runs`] for a block whose line boxes are shortened by `floats`.
+pub(crate) fn wrap_text_runs_beside_floats(
+    runs: Vec<TextRun>,
+    options: TextWrapOptions,
+    fonts: &HashMap<String, TtfFont>,
+    floats: Option<&crate::layout::floats::LineFloats>,
+) -> Vec<TextLine> {
+    wrap_text_runs_among_floats(runs, options, fonts, floats.cloned(), &[]).lines
+}
+
+/// Lines wrapped among floats, and where the floats in their own text went.
+pub(crate) struct LinesAmongFloats {
+    pub(crate) lines: Vec<TextLine>,
+    /// The line top, below the content-box top, that each float occurring in
+    /// the text (an anchor run, `TextRunMetadata::float_anchor`) was placed at.
+    pub(crate) inline_float_tops: Vec<f32>,
+}
+
+/// [`wrap_text_runs_beside_floats`] for text that has floats of its own: each
+/// `inline_floats[i]` occurs where the run anchored to `i` is, and floats from
+/// the line it occurs on (CSS 2.1 §9.5.1).
+pub(crate) fn wrap_text_runs_among_floats(
+    runs: Vec<TextRun>,
+    options: TextWrapOptions,
+    fonts: &HashMap<String, TtfFont>,
+    floats: Option<crate::layout::floats::LineFloats>,
+    inline_floats: &[crate::layout::floats::FloatBox],
+) -> LinesAmongFloats {
     let PreparedTextRuns {
         mut runs,
         line_bidi,
@@ -2671,7 +2718,10 @@ pub(crate) fn wrap_text_runs(
     if styled_words.is_empty() && !runs.is_empty() {
         let mut lines = vec![resolved_text_line(runs, line_height, options, fonts)];
         resolve_inline_fragment_decorations(&mut lines);
-        return lines;
+        return LinesAmongFloats {
+            lines,
+            inline_float_tops: vec![0.0; inline_floats.len()],
+        };
     }
 
     // Use a VecDeque so hyphenation remainders can be re-queued for processing.
@@ -2698,15 +2748,7 @@ pub(crate) fn wrap_text_runs(
     // A dropped initial reduces the room on later overlapping lines. Its
     // originating line carries the initial glyph directly; subsequent lines use
     // the same kerned exclusion width used to place their inline origin.
-    let drop_cap_offset = |emitted: usize| options.drop_cap_exclusion_width(emitted);
-    let line_max_width = |emitted: usize| {
-        let dc = drop_cap_offset(emitted);
-        if emitted == 0 {
-            (options.max_width - options.text_indent - dc).max(0.0)
-        } else {
-            (options.max_width - dc).max(0.0)
-        }
-    };
+    let mut room = line_room::LineRoom::new(options, floats, inline_floats);
 
     while let Some(token) = queue.pop_front() {
         let template = &runs[token.run_index];
@@ -2722,6 +2764,11 @@ pub(crate) fn wrap_text_runs(
             ends_run,
         } = token;
         let template = &runs[run_index];
+        room.place_deferred(&lines, line_height, false);
+        if let Some(anchor) = template.metadata.float_anchor {
+            room.float_occurs(anchor, &lines, line_height, current_width);
+            continue;
+        }
         let space_owner = collapsed_space_owner(&runs, previous_token_run, run_index);
         // A space that ends the previous token's text joins its fragment.
         let space_joins_fragment =
@@ -2764,7 +2811,7 @@ pub(crate) fn wrap_text_runs(
                 if current_width > 0.0
                     && width_exceeds_limit(
                         current_width + tracking + single_sp,
-                        line_max_width(lines.len()),
+                        room.max_width(&lines, line_height, lines.len()),
                     )
                 {
                     // This space overflows. Spaces do not hang under break-spaces,
@@ -2833,7 +2880,10 @@ pub(crate) fn wrap_text_runs(
             let sp_width = estimate_text_width_for_run(&word, template, fonts);
             let total_width = leading_tracking + sp_width;
             if current_width > 0.0
-                && width_exceeds_limit(current_width + total_width, line_max_width(lines.len()))
+                && width_exceeds_limit(
+                    current_width + total_width,
+                    room.max_width(&lines, line_height, lines.len()),
+                )
             {
                 // The spaces hang past the line edge: keep them on the current
                 // line, then break. The next token starts a fresh line with no
@@ -2886,7 +2936,7 @@ pub(crate) fn wrap_text_runs(
                 current_runs.iter().any(|run| !run.is_opening_inline_edge());
             if has_preceding_content
                 && (break_before || template.is_opening_inline_edge())
-                && width_exceeds_limit(end_width, line_max_width(lines.len()))
+                && width_exceeds_limit(end_width, room.max_width(&lines, line_height, lines.len()))
             {
                 push_wrapped_line(&mut lines, &mut current_runs, line_height, options, fonts);
                 current_width = 0.0;
@@ -3030,7 +3080,10 @@ pub(crate) fn wrap_text_runs(
             },
             fonts,
         );
-        let effective_max_width = line_max_width(lines.len());
+        if current_width == 0.0 {
+            room.make_room(&lines, line_height, measurement.end_width(0.0));
+        }
+        let effective_max_width = room.max_width(&lines, line_height, lines.len());
         let overflows =
             width_exceeds_limit(measurement.end_width(current_width), effective_max_width);
 
@@ -3042,7 +3095,7 @@ pub(crate) fn wrap_text_runs(
         // next line (handled below) rather than break it mid-line. The emergency
         // split only applies when the word overflows a fresh, empty line.
         let fresh_line_width = if current_width > 0.0 {
-            line_max_width(lines.len() + 1)
+            room.max_width(&lines, line_height, lines.len() + 1)
         } else {
             effective_max_width
         };
@@ -3075,7 +3128,7 @@ pub(crate) fn wrap_text_runs(
                     fonts,
                 );
             }
-            let available_width = line_max_width(lines.len());
+            let available_width = room.max_width(&lines, line_height, lines.len());
             if let Some((prefix, remainder)) = split_word_to_fit(
                 &paint_word,
                 available_width,
@@ -3126,6 +3179,7 @@ pub(crate) fn wrap_text_runs(
                 },
                 fonts,
             );
+            room.make_room(&lines, line_height, measurement.end_width(0.0));
         }
 
         // When transitioning between runs with different backgrounds,
@@ -3182,6 +3236,9 @@ pub(crate) fn wrap_text_runs(
         ));
     }
 
+    room.place_deferred(&lines, line_height, true);
+    room.finish(&mut lines);
+
     // Apply the initial letter's shared margin-box geometry to every impacted
     // line, including the negatively kerned originating line.
     if options.drop_cap.is_some() {
@@ -3215,7 +3272,10 @@ pub(crate) fn wrap_text_runs(
 
     resolve_inline_fragment_decorations(&mut lines);
 
-    lines
+    LinesAmongFloats {
+        lines,
+        inline_float_tops: room.inline_float_tops(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3301,6 +3361,7 @@ pub(crate) fn apply_text_overflow_ellipsis(
         height: line.height,
         baseline_ascent: line.baseline_ascent,
         x_offset: line.x_offset,
+        float_insets: Default::default(),
         metadata: line.metadata,
     };
 

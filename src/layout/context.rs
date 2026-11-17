@@ -36,6 +36,8 @@ pub(crate) struct LayoutEnv<'a> {
     pub depth: &'a DepthLimit,
     /// Auto-height grid items' natural heights, measured once per layout.
     pub grid_item_heights: &'a mut GridItemHeightMemo,
+    /// The floats of the block formatting contexts being laid out.
+    pub floats: crate::layout::floats::FloatFrames,
 }
 
 /// How many elements nested in each other the layout traverses (each level takes stack), counting the element
@@ -107,6 +109,7 @@ impl<'a> LayoutEnv<'a> {
             table_cell_sizing: self.table_cell_sizing.source_descendants(source_path),
             depth: self.depth,
             grid_item_heights: &mut *self.grid_item_heights,
+            floats: crate::layout::floats::FloatFrames::default(),
         }
     }
 }

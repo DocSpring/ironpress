@@ -200,6 +200,10 @@ pub(crate) trait LayoutElement: Debug {
         None
     }
 
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
+        None
+    }
+
     fn paint_group_owner(&self) -> Option<&dyn PaintGroupOwner> {
         None
     }
@@ -483,6 +487,10 @@ impl LayoutElement for LayoutNode {
 
     fn block_flow_owner(&self) -> Option<&dyn BlockFlowOwner> {
         self.as_ref().block_flow_owner()
+    }
+
+    fn block_flow_owner_mut(&mut self) -> Option<&mut dyn BlockFlowOwner> {
+        self.as_mut().block_flow_owner_mut()
     }
 
     fn paint_group_owner(&self) -> Option<&dyn PaintGroupOwner> {
@@ -888,6 +896,7 @@ impl FragmentBreakQuery {
 /// Access to float and clearance behavior on ordinary block boxes.
 pub(crate) trait BlockFlowOwner {
     fn block_flow(&self) -> &BlockFlow;
+    fn block_flow_mut(&mut self) -> &mut BlockFlow;
 }
 
 /// A node's two independent pagination responsibilities.

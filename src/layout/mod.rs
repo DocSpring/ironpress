@@ -6,6 +6,7 @@ pub(crate) mod elements;
 pub mod engine;
 pub(crate) mod filter;
 pub(crate) mod flex;
+pub(crate) mod floats;
 pub(crate) mod flow_metrics;
 pub(crate) mod fragmentation;
 pub(crate) mod grid;

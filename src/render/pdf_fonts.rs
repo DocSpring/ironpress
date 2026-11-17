@@ -794,6 +794,7 @@ mod tests {
             height: 12.0,
             baseline_ascent: None,
             x_offset: 0.0,
+            float_insets: Default::default(),
             metadata: Default::default(),
         }
     }
@@ -1436,6 +1437,7 @@ mod tests {
             height: 12.0,
             baseline_ascent: None,
             x_offset: 0.0,
+            float_insets: Default::default(),
             metadata: Default::default(),
         };
         let element = text_block_element(vec![line]);
@@ -1471,6 +1473,7 @@ mod tests {
             height: 12.0,
             baseline_ascent: None,
             x_offset: 0.0,
+            float_insets: Default::default(),
             metadata: Default::default(),
         };
         let pages = vec![Page {
@@ -1494,6 +1497,7 @@ mod tests {
                     height: 12.0,
                     baseline_ascent: None,
                     x_offset: 0.0,
+                    float_insets: Default::default(),
                     metadata: Default::default(),
                 }]),
             )],
@@ -1506,6 +1510,7 @@ mod tests {
                 height: 12.0,
                 baseline_ascent: None,
                 x_offset: 0.0,
+                float_insets: Default::default(),
                 metadata: Default::default(),
             }]),
         ));
@@ -1517,6 +1522,7 @@ mod tests {
                     height: 12.0,
                     baseline_ascent: None,
                     x_offset: 0.0,
+                    float_insets: Default::default(),
                     metadata: Default::default(),
                 }]),
             )],

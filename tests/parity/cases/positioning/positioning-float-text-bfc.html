@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>a formatting context root grows to contain its floats</title>
+<style>
+  @page { size: 320px 152px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; }
+  .media { overflow: hidden; background: #eef1f8; margin-bottom: 8px; }
+  .box { float: left; width: 56px; height: 56px; margin-right: 8px; background: #b5476b; }
+</style>
+</head>
+<body>
+  <div class="media"><div class="box"></div>Short caption</div>
+  <p>The next paragraph starts below the float.</p>
+</body>
+</html>

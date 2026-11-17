@@ -55,10 +55,13 @@ pub(in crate::render::pdf) fn render_container(
         Position::Absolute | Position::Fixed => {
             frame.positioned_x(&element.positioning, ctx.initial_fixed_origin.x)
         }
-        _ => match c_float {
-            Float::Right => margin.left + available_width - container_w,
-            _ => margin.left + c_offset_left,
-        },
+        _ => {
+            element.flow.float_inline_shift()
+                + match c_float {
+                    Float::Right => margin.left + available_width - container_w,
+                    _ => margin.left + c_offset_left,
+                }
+        }
     };
     let container_y_top = page_size.height - margin.top - y_pos;
 
@@ -364,6 +367,7 @@ pub(in crate::render::pdf) fn render_container(
                 device_space_available: c_transform.is_none(),
                 paint_phase: ElementPaintPhase::All,
                 stacking_scope: StackingScope::for_element(element),
+                defer_child_decorations: phase == ElementPaintPhase::Contents,
             },
         );
     }
