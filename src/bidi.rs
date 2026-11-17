@@ -4,6 +4,9 @@ use crate::layout::engine::{ShapingDirection, TextRun};
 use unicode_bidi::{BidiInfo, Level};
 use unicode_script::{Script, UnicodeScript};
 
+mod frames;
+pub(crate) use frames::BidiFrame;
+
 const OBJECT_REPLACEMENT_CHARACTER: char = '\u{fffc}';
 
 /// Reorder text runs according to the Unicode Bidirectional Algorithm.
@@ -19,19 +22,11 @@ pub(crate) fn reorder_runs_bidi(
     paragraph_rtl: bool,
     bidi_override: bool,
 ) -> Vec<TextRun> {
-    if runs.is_empty() {
-        return Vec::new();
-    }
-
-    let mut full_text = String::new();
-    for run in runs {
-        if run.text.is_empty() && run.inline_box.is_some() {
-            full_text.push(OBJECT_REPLACEMENT_CHARACTER);
-        } else {
-            full_text.push_str(&run.text);
-        }
-    }
-    if full_text.is_empty() {
+    if runs.is_empty()
+        || runs
+            .iter()
+            .all(|run| run.text.is_empty() && run.inline_box.is_none())
+    {
         return runs.to_vec();
     }
 
@@ -39,10 +34,63 @@ pub(crate) fn reorder_runs_bidi(
     // ignored and the content is laid out strictly in sequence according to
     // `direction` (css-writing-modes-4 §2.4): every character is at the
     // override's level, so each run is shaped in that direction with its text
-    // in logical order, and for `rtl` the runs are in reverse order.
-    if bidi_override {
+    // in logical order, and for `rtl` the runs are in reverse order. Inline
+    // boxes with brackets of their own go through the algorithm instead, with
+    // the override as their outermost bracket.
+    let has_frames = runs.iter().any(|run| !run.bidi_frames.is_empty());
+    if bidi_override && !has_frames {
         return override_runs(runs, paragraph_rtl);
     }
+
+    // The paragraph's text with each inline box's bracket around its text
+    // (`BidiFrame`), and each character's run. Atomic inline boxes take part
+    // in UAX #9 as an object replacement character but keep their empty
+    // authored text.
+    struct CharInfo {
+        ch: char,
+        byte_offset: usize,
+        run_idx: usize,
+        object: bool,
+        /// The run's last character: its piece owns the run's boundary advance.
+        ends_run: bool,
+    }
+    let mut full_text = String::new();
+    let mut char_info: Vec<CharInfo> = Vec::new();
+    if bidi_override {
+        full_text.push(if paragraph_rtl {
+            '\u{202e}'
+        } else {
+            '\u{202d}'
+        });
+    }
+    let mut open_frames: &[BidiFrame] = &[];
+    for (run_idx, run) in runs.iter().enumerate() {
+        frames::push_transition(&mut full_text, open_frames, &run.bidi_frames);
+        open_frames = &run.bidi_frames;
+        if run.text.is_empty() && run.inline_box.is_some() {
+            char_info.push(CharInfo {
+                ch: OBJECT_REPLACEMENT_CHARACTER,
+                byte_offset: full_text.len(),
+                run_idx,
+                object: true,
+                ends_run: true,
+            });
+            full_text.push(OBJECT_REPLACEMENT_CHARACTER);
+            continue;
+        }
+        let count = run.text.chars().count();
+        for (index, ch) in run.text.chars().enumerate() {
+            char_info.push(CharInfo {
+                ch,
+                byte_offset: full_text.len(),
+                run_idx,
+                object: false,
+                ends_run: index + 1 == count,
+            });
+            full_text.push(ch);
+        }
+    }
+    frames::push_transition(&mut full_text, open_frames, &[]);
 
     let default_level = if paragraph_rtl {
         Level::rtl()
@@ -63,49 +111,15 @@ pub(crate) fn reorder_runs_bidi(
     // run's level via its starting byte.
     let (vis_levels, vis_ranges) = bidi_info.visual_runs(para, line);
 
-    // Check if purely LTR — return unchanged
-    if vis_ranges.len() == 1
+    // Purely left to right: the runs are already in visual order. Inside an
+    // inline box's bracket, right-to-left text at a left-to-right level (a
+    // left-to-right `<bdo>`) still has to be shaped left to right.
+    if !has_frames
+        && vis_ranges.len() == 1
         && vis_ranges[0].start < vis_levels.len()
         && vis_levels[vis_ranges[0].start].is_ltr()
     {
         return runs.to_vec();
-    }
-
-    // Build per-char mapping. Atomic inline boxes participate in UAX #9 as an
-    // object replacement character, but retain their empty authored text.
-    struct CharInfo {
-        ch: char,
-        byte_offset: usize,
-        run_idx: usize,
-        object: bool,
-        /// The run's last character: its piece owns the run's boundary advance.
-        ends_run: bool,
-    }
-    let mut char_info: Vec<CharInfo> = Vec::new();
-    let mut byte_offset = 0;
-    for (run_idx, run) in runs.iter().enumerate() {
-        if run.text.is_empty() && run.inline_box.is_some() {
-            char_info.push(CharInfo {
-                ch: OBJECT_REPLACEMENT_CHARACTER,
-                byte_offset,
-                run_idx,
-                object: true,
-                ends_run: true,
-            });
-            byte_offset += OBJECT_REPLACEMENT_CHARACTER.len_utf8();
-            continue;
-        }
-        let count = run.text.chars().count();
-        for (index, ch) in run.text.chars().enumerate() {
-            char_info.push(CharInfo {
-                ch,
-                byte_offset,
-                run_idx,
-                object: false,
-                ends_run: index + 1 == count,
-            });
-            byte_offset += ch.len_utf8();
-        }
     }
 
     let scripts = resolved_scripts(char_info.iter().map(|info| info.ch));
@@ -257,6 +271,16 @@ fn move_boundaries_to_visual_right(pieces: &mut [TextRun]) {
 }
 
 /// Returns true if the text contains any RTL characters (Arabic, Hebrew, etc.)
+/// Whether a paragraph's runs need the bidi algorithm because of the inline
+/// boxes around them, though their text has no right-to-left characters.
+pub(crate) fn inline_brackets_reorder(runs: &[TextRun]) -> bool {
+    runs.iter().any(|run| {
+        run.bidi_frames
+            .iter()
+            .any(|frame| frame.reorders_left_to_right_text())
+    })
+}
+
 pub(crate) fn has_rtl_chars(text: &str) -> bool {
     text.chars().any(|ch| {
         let c = ch as u32;

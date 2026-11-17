@@ -1524,7 +1524,7 @@ pub(crate) fn build_pseudo_block(
             .with_parent_strut(parent_line_strut(pseudo_style, fonts))
             .with_text_indent(text_indent)
             .with_rtl(pseudo_style.direction_rtl)
-            .with_bidi_override(pseudo_style.bidi_override),
+            .with_bidi_override(pseudo_style.unicode_bidi.overrides()),
             fonts,
         );
     }

@@ -3262,6 +3262,50 @@ impl BreakValue {
     }
 }
 
+/// CSS `unicode-bidi` (css-writing-modes-4 §2.4): how a box's content takes
+/// part in the bidi algorithm (UAX #9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UnicodeBidi {
+    #[default]
+    Normal,
+    /// An embedding at the box's `direction` (LRE or RLE ... PDF).
+    Embed,
+    /// An isolated sequence at the box's `direction` (LRI or RLI ... PDI).
+    Isolate,
+    /// Every character at the box's `direction`, ignoring its own bidi class
+    /// (LRO or RLO ... PDF).
+    BidiOverride,
+    /// An isolate whose content is an override (LRI or RLI, LRO or RLO ...
+    /// PDF, PDI).
+    IsolateOverride,
+    /// An isolate whose direction is its first strong character's (FSI ...
+    /// PDI); on a block, each paragraph takes its own direction that way.
+    Plaintext,
+}
+
+impl UnicodeBidi {
+    fn from_keyword(keyword: &str) -> Option<Self> {
+        Some(match keyword.to_ascii_lowercase().as_str() {
+            "normal" => Self::Normal,
+            "embed" => Self::Embed,
+            "isolate" | "-webkit-isolate" => Self::Isolate,
+            "bidi-override" => Self::BidiOverride,
+            "isolate-override" | "-webkit-isolate-override" => Self::IsolateOverride,
+            "plaintext" | "-webkit-plaintext" => Self::Plaintext,
+            _ => return None,
+        })
+    }
+
+    /// Whether the content is laid out strictly in the box's direction.
+    pub const fn overrides(self) -> bool {
+        matches!(self, Self::BidiOverride | Self::IsolateOverride)
+    }
+
+    pub const fn is_plaintext(self) -> bool {
+        matches!(self, Self::Plaintext)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ComputedStyle {
     /// Conversion-owned raster policy, propagated with the style-resolution
@@ -3306,14 +3350,8 @@ pub struct ComputedStyle {
     pub text_orientation_upright: bool,
     /// CSS `text-combine-upright` (css-writing-modes-4 §9.1). Inherited.
     pub text_combine_upright: TextCombineUpright,
-    /// CSS `unicode-bidi: bidi-override` (or `isolate-override`). When set, the
-    /// element's inline content is reordered strictly in sequence according to
-    /// `direction`, overriding the characters' intrinsic bidi classes
-    /// (css-writing-modes-4 §2.4). Not inherited; initial is `normal` (false).
-    pub bidi_override: bool,
-    /// CSS `unicode-bidi: plaintext`: each forced line break resolves its own
-    /// paragraph base direction from its first strong character.
-    pub bidi_plaintext: bool,
+    /// CSS `unicode-bidi` (css-writing-modes-4 §2.4). Not inherited.
+    pub unicode_bidi: UnicodeBidi,
     pub text_decorations: TextDecorations,
     pub line_height: f32,
     pub line_height_absolute: Option<f32>,
@@ -3732,8 +3770,7 @@ impl Default for ComputedStyle {
             writing_mode: WritingMode::HorizontalTb,
             text_orientation_upright: false,
             text_combine_upright: TextCombineUpright::None,
-            bidi_override: false,
-            bidi_plaintext: false,
+            unicode_bidi: UnicodeBidi::Normal,
             text_decorations: TextDecorations::default(),
             line_height: f32::NAN,
             line_height_absolute: None,
@@ -4203,8 +4240,7 @@ fn compute_style_with_context_and_percentage_basis_impl(
     style.opacity = 1.0;
     style.isolation = Isolation::Auto;
     // `unicode-bidi` is not inherited; initial is `normal`.
-    style.bidi_override = false;
-    style.bidi_plaintext = false;
+    style.unicode_bidi = UnicodeBidi::Normal;
     style.float = Float::None;
     style.footnote = FootnoteFormatting::default();
     style.clear = Clear::None;
@@ -4577,8 +4613,7 @@ pub(crate) fn compute_pseudo_element_style_with_font_metrics(
     style.margin_bottom_auto = false;
     style.opacity = 1.0;
     // `unicode-bidi` is not inherited; initial is `normal`.
-    style.bidi_override = false;
-    style.bidi_plaintext = false;
+    style.unicode_bidi = UnicodeBidi::Normal;
     style.float = Float::None;
     style.footnote = FootnoteFormatting::default();
     style.clear = Clear::None;
@@ -5054,8 +5089,7 @@ fn reset_all_to_initial(style: &mut ComputedStyle) {
     let viewport_width = style.viewport_width;
     let viewport_height = style.viewport_height;
     let direction_rtl = style.direction_rtl;
-    let bidi_override = style.bidi_override;
-    let bidi_plaintext = style.bidi_plaintext;
+    let unicode_bidi = style.unicode_bidi;
     let custom_properties = style.custom_properties.clone();
 
     *style = ComputedStyle::default();
@@ -5066,8 +5100,7 @@ fn reset_all_to_initial(style: &mut ComputedStyle) {
     style.viewport_width = viewport_width;
     style.viewport_height = viewport_height;
     style.direction_rtl = direction_rtl;
-    style.bidi_override = bidi_override;
-    style.bidi_plaintext = bidi_plaintext;
+    style.unicode_bidi = unicode_bidi;
     style.custom_properties = custom_properties;
     style.text_decorations = text_decorations;
 }
@@ -5713,8 +5746,7 @@ fn apply_all_keyword(style: &mut ComputedStyle, keyword: &str, parent: &Computed
             // properties. Preserve those fields while inheriting every other
             // longhand in one operation.
             let direction_rtl = style.direction_rtl;
-            let bidi_override = style.bidi_override;
-            let bidi_plaintext = style.bidi_plaintext;
+            let unicode_bidi = style.unicode_bidi;
             let custom_properties = std::mem::take(&mut style.custom_properties);
             let mut text_decorations = std::mem::take(&mut style.text_decorations);
             *style = parent.clone();
@@ -5723,8 +5755,7 @@ fn apply_all_keyword(style: &mut ComputedStyle, keyword: &str, parent: &Computed
                 .current
                 .with_resolved_color(parent.color);
             style.direction_rtl = direction_rtl;
-            style.bidi_override = bidi_override;
-            style.bidi_plaintext = bidi_plaintext;
+            style.unicode_bidi = unicode_bidi;
             style.custom_properties = custom_properties;
             style.text_decorations = text_decorations;
         }
@@ -7389,13 +7420,11 @@ fn apply_style_map_with_percentage_basis(
     // order after writing mode, color, and font sizing are final.
     borders::apply(style, map, parent, length_context, font_metrics);
 
-    // CSS `unicode-bidi` property. Not inherited. `bidi-override` (and the
-    // isolating `isolate-override`) force the box's inline content to be
-    // reordered strictly in sequence according to `direction`, overriding the
-    // characters' intrinsic bidi classes (css-writing-modes-4 §2.4).
-    if let Some(CssValue::Keyword(k)) = get_non_special(map, "unicode-bidi") {
-        style.bidi_override = matches!(k.as_str(), "bidi-override" | "isolate-override");
-        style.bidi_plaintext = k == "plaintext";
+    // CSS `unicode-bidi` property (css-writing-modes-4 §2.4). Not inherited.
+    if let Some(CssValue::Keyword(k)) = get_non_special(map, "unicode-bidi")
+        && let Some(value) = UnicodeBidi::from_keyword(k)
+    {
+        style.unicode_bidi = value;
     }
 
     // Text-transform

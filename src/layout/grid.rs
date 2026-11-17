@@ -1545,8 +1545,8 @@ fn grid_item_intrinsic_widths(
         .with_white_space(cs.white_space)
         .with_parent_strut(parent_line_strut(cs, env.fonts))
         .with_rtl(cs.direction_rtl)
-        .with_bidi_override(cs.bidi_override)
-        .with_bidi_plaintext(cs.bidi_plaintext)
+        .with_bidi_override(cs.unicode_bidi.overrides())
+        .with_bidi_plaintext(cs.unicode_bidi.is_plaintext())
         .with_word_break_keep_all(cs.word_break_keep_all)
         .with_hyphens_manual(cs.hyphens_manual),
         !matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre),
@@ -2029,7 +2029,7 @@ fn layout_grid_item_content_inner(
         .with_white_space(item_style.white_space)
         .with_parent_strut(parent_line_strut(item_style, env.fonts))
         .with_rtl(item_style.direction_rtl)
-        .with_bidi_override(item_style.bidi_override),
+        .with_bidi_override(item_style.unicode_bidi.overrides()),
         env.fonts,
     );
     let mut element_index = 0;

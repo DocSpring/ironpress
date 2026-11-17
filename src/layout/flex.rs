@@ -1818,7 +1818,7 @@ pub(crate) fn layout_flex_container(
                 .with_white_space(generated_style.white_space)
                 .with_parent_strut(parent_line_strut(generated_style, env.fonts))
                 .with_rtl(generated_style.direction_rtl)
-                .with_bidi_override(generated_style.bidi_override),
+                .with_bidi_override(generated_style.unicode_bidi.overrides()),
                 !matches!(
                     generated_style.white_space,
                     WhiteSpace::NoWrap | WhiteSpace::Pre
@@ -2505,7 +2505,7 @@ pub(crate) fn layout_flex_container(
                 .with_white_space(child_style.white_space)
                 .with_parent_strut(parent_line_strut(&child_style, env.fonts))
                 .with_rtl(child_style.direction_rtl)
-                .with_bidi_override(child_style.bidi_override),
+                .with_bidi_override(child_style.unicode_bidi.overrides()),
                 !matches!(
                     child_style.white_space,
                     WhiteSpace::NoWrap | WhiteSpace::Pre
@@ -2619,7 +2619,7 @@ pub(crate) fn layout_flex_container(
                 .with_parent_strut(parent_line_strut(&child_style, env.fonts))
                 .with_text_indent(text_indent)
                 .with_rtl(child_style.direction_rtl)
-                .with_bidi_override(child_style.bidi_override),
+                .with_bidi_override(child_style.unicode_bidi.overrides()),
                 env.fonts,
             )
         } else {

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>bdi and dir isolate an inline element's text from the text around it</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 6px; background: #eef1f8; }
+
+</style>
+</head>
+<body>
+  <p>User <bdi>שלום</bdi>: 3 posts.</p>
+  <p>User <span>שלום</span>: 3 posts.</p>
+  <p>User <span dir="rtl">שלום</span>: 3 posts.</p>
+  <p>User <bdi>Ann</bdi>: 3 posts.</p>
+  <p dir="rtl">עברית <span dir="ltr">C++</span> עוד מילים</p>
+</body>
+</html>

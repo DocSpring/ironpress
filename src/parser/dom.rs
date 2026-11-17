@@ -73,6 +73,21 @@ pub enum HtmlTag {
     Audio,
     Progress,
     Meter,
+    /// `<bdi>`: its text is isolated from the text around it (HTML §4.5.24).
+    Bdi,
+    /// `<bdo>`: its text is laid out strictly in its `dir` (HTML §4.5.25).
+    Bdo,
+    /// An element Chrome's UA stylesheet makes a block that has no variant of
+    /// its own (`<center>`, `<form>`, `<fieldset>`, `<menu>`...).
+    OtherBlock,
+    /// An element Chrome's UA stylesheet doesn't render (`display: none`):
+    /// `<noscript>`, `<template>`, `<datalist>`, `<rp>`...
+    NotRendered,
+    /// Any other element, including custom elements: inline, the initial
+    /// `display` (`<kbd>`, `<time>`, `<label>`, `<my-widget>`).
+    OtherInline,
+    /// An element the layout makes itself (anonymous table boxes, SVG
+    /// content), never one parsed from HTML.
     Unknown,
 }
 
@@ -149,7 +164,20 @@ impl HtmlTag {
             "audio" => Self::Audio,
             "progress" => Self::Progress,
             "meter" => Self::Meter,
-            _ => Self::Unknown,
+            "bdi" => Self::Bdi,
+            "bdo" => Self::Bdo,
+            // Chrome's UA stylesheet: monospace like `<code>`, italic like `<i>`.
+            "kbd" | "samp" | "tt" => Self::Code,
+            "var" | "dfn" => Self::I,
+            "center" | "form" | "fieldset" | "legend" | "hgroup" | "menu" | "dir" | "search"
+            | "listing" | "plaintext" | "xmp" | "optgroup" | "frameset" | "frame" => {
+                Self::OtherBlock
+            }
+            "area" | "base" | "basefont" | "datalist" | "link" | "meta" | "noembed"
+            | "noframes" | "noscript" | "param" | "rp" | "script" | "template" | "title" => {
+                Self::NotRendered
+            }
+            _ => Self::OtherInline,
         }
     }
 
@@ -195,6 +223,7 @@ impl HtmlTag {
                 | Self::Summary
                 | Self::Video
                 | Self::Textarea
+                | Self::OtherBlock
         )
     }
 
@@ -233,6 +262,9 @@ impl HtmlTag {
                 | Self::Audio
                 | Self::Progress
                 | Self::Meter
+                | Self::Bdi
+                | Self::Bdo
+                | Self::OtherInline
         )
     }
 }
@@ -265,7 +297,7 @@ impl ElementNode {
             attributes: HashMap::new(),
             children: Vec::new(),
         };
-        let raw = tmp.tag_name().to_string();
+        let raw = tmp.canonical_tag_name().to_string();
         Self {
             tag,
             raw_tag_name: raw,
@@ -289,7 +321,16 @@ impl ElementNode {
         self.attributes.get("id").map(|s| s.as_str())
     }
 
-    pub fn tag_name(&self) -> &'static str {
+    /// The element's name as written (lowercase), for selectors.
+    pub fn tag_name(&self) -> &str {
+        if self.raw_tag_name.is_empty() {
+            self.canonical_tag_name()
+        } else {
+            &self.raw_tag_name
+        }
+    }
+
+    fn canonical_tag_name(&self) -> &'static str {
         match self.tag {
             HtmlTag::Html => "html",
             HtmlTag::Head => "head",
@@ -361,6 +402,11 @@ impl ElementNode {
             HtmlTag::Audio => "audio",
             HtmlTag::Progress => "progress",
             HtmlTag::Meter => "meter",
+            HtmlTag::Bdi => "bdi",
+            HtmlTag::Bdo => "bdo",
+            HtmlTag::OtherBlock => "#other-block",
+            HtmlTag::NotRendered => "#not-rendered",
+            HtmlTag::OtherInline => "#other-inline",
             HtmlTag::Unknown => "unknown",
         }
     }
@@ -416,7 +462,13 @@ mod tests {
         assert_eq!(HtmlTag::from_tag_name("audio"), HtmlTag::Audio);
         assert_eq!(HtmlTag::from_tag_name("progress"), HtmlTag::Progress);
         assert_eq!(HtmlTag::from_tag_name("meter"), HtmlTag::Meter);
-        assert_eq!(HtmlTag::from_tag_name("nonsense"), HtmlTag::Unknown);
+        assert_eq!(HtmlTag::from_tag_name("bdi"), HtmlTag::Bdi);
+        assert_eq!(HtmlTag::from_tag_name("bdo"), HtmlTag::Bdo);
+        assert_eq!(HtmlTag::from_tag_name("kbd"), HtmlTag::Code);
+        assert_eq!(HtmlTag::from_tag_name("center"), HtmlTag::OtherBlock);
+        assert_eq!(HtmlTag::from_tag_name("noscript"), HtmlTag::NotRendered);
+        assert_eq!(HtmlTag::from_tag_name("nonsense"), HtmlTag::OtherInline);
+        assert_eq!(HtmlTag::from_tag_name("my-widget"), HtmlTag::OtherInline);
     }
 
     #[test]
@@ -552,6 +604,8 @@ mod tests {
             (HtmlTag::Audio, "audio"),
             (HtmlTag::Progress, "progress"),
             (HtmlTag::Meter, "meter"),
+            (HtmlTag::Bdi, "bdi"),
+            (HtmlTag::Bdo, "bdo"),
             (HtmlTag::Unknown, "unknown"),
         ];
         for (tag, expected_name) in cases {

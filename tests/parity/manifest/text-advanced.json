@@ -785,5 +785,65 @@
       "probe-border-box",
       "probe-color-swatch"
     ]
+  },
+  {
+    "id": "text-advanced-bdi-isolate",
+    "category": "text-advanced",
+    "feature": "unicode-bidi",
+    "subfeature": "isolate",
+    "description": "`<bdi>` and an inline element's `dir` isolate its text from the text around it, so a number after a right-to-left name stays after it (HTML sections 4.5.24 and 15.3.5, UAX #9 isolates).",
+    "file": "cases/text-advanced/text-advanced-bdi-isolate.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
+  },
+  {
+    "id": "text-advanced-bdo-override",
+    "category": "text-advanced",
+    "feature": "unicode-bidi",
+    "subfeature": "bdo",
+    "description": "`<bdo>` lays its text out strictly in its `dir`, each element reversed on its own and nested ones inside it (HTML section 4.5.25, `unicode-bidi: isolate-override`).",
+    "file": "cases/text-advanced/text-advanced-bdo-override.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
+  },
+  {
+    "id": "text-advanced-unicode-bidi-inline",
+    "category": "text-advanced",
+    "feature": "unicode-bidi",
+    "subfeature": "inline",
+    "description": "Each `unicode-bidi` value on an inline element (embed, isolate, bidi-override, isolate-override, plaintext) brackets its text in the bidi algorithm, `dir=\"auto\"` takes its first strong character's direction, and `direction` alone changes nothing (CSS Writing Modes 4 section 2.4).",
+    "file": "cases/text-advanced/text-advanced-unicode-bidi-inline.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
+  },
+  {
+    "id": "text-advanced-bidi-isolate-wrap",
+    "category": "text-advanced",
+    "feature": "unicode-bidi",
+    "subfeature": "isolate-wrap",
+    "description": "An isolate that wraps across lines keeps each line in visual order, in left-to-right and right-to-left paragraphs (UAX #9 section 3.4).",
+    "file": "cases/text-advanced/text-advanced-bidi-isolate-wrap.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

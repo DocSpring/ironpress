@@ -563,8 +563,8 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
             .with_white_space(self.parent_style.white_space)
             .with_parent_strut(parent_line_strut(self.parent_style, self.fonts))
             .with_rtl(self.parent_style.direction_rtl)
-            .with_bidi_override(self.parent_style.bidi_override)
-            .with_bidi_plaintext(self.parent_style.bidi_plaintext),
+            .with_bidi_override(self.parent_style.unicode_bidi.overrides())
+            .with_bidi_plaintext(self.parent_style.unicode_bidi.is_plaintext()),
             self.fonts,
             floats,
             inline_floats,

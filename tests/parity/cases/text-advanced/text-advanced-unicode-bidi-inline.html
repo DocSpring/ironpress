@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>each unicode-bidi value brackets an inline element's text in the bidi algorithm</title>
+<style>
+  @page { size: 320px 200px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 6px; background: #eef1f8; }
+  .o { unicode-bidi: bidi-override; direction: rtl; }
+  .io { unicode-bidi: isolate-override; direction: rtl; }
+  .e { unicode-bidi: embed; direction: rtl; }
+  .i { unicode-bidi: isolate; direction: rtl; }
+  .pt { unicode-bidi: plaintext; }
+  .d { direction: rtl; }
+</style>
+</head>
+<body>
+  <p>X <span class="o">abc, def!</span> Y</p>
+  <p>X <span class="io">abc 123</span> Y</p>
+  <p>X <span class="e">abc, def!</span> Y</p>
+  <p>X <span class="i">abc, def!</span> Y</p>
+  <p>X <span class="pt">שלום, abc!</span> Y</p>
+  <p>X <span class="d">abc, def!</span> Y</p>
+  <p>X <span dir="auto">שלום, abc!</span> Y</p>
+</body>
+</html>

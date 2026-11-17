@@ -946,8 +946,8 @@ pub(crate) fn layout_block_element(
                 .with_white_space(style.white_space)
                 .with_parent_strut(parent_line_strut(style, fonts))
                 .with_rtl(style.direction_rtl)
-                .with_bidi_override(style.bidi_override)
-                .with_bidi_plaintext(style.bidi_plaintext)
+                .with_bidi_override(style.unicode_bidi.overrides())
+                .with_bidi_plaintext(style.unicode_bidi.is_plaintext())
                 .with_word_break_keep_all(style.word_break_keep_all)
                 .with_hyphens_manual(style.hyphens_manual)
                 .with_text_indent(text_indent),
@@ -1755,8 +1755,8 @@ pub(crate) fn layout_block_element(
             style.overflow_wrap,
         )
         .with_rtl(style.direction_rtl)
-        .with_bidi_override(style.bidi_override)
-        .with_bidi_plaintext(style.bidi_plaintext)
+        .with_bidi_override(style.unicode_bidi.overrides())
+        .with_bidi_plaintext(style.unicode_bidi.is_plaintext())
         .with_word_break_keep_all(style.word_break_keep_all)
         .with_hyphens_manual(style.hyphens_manual)
         .with_white_space(style.white_space)

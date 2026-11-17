@@ -76,6 +76,8 @@ pub(crate) fn text_runs_share_shaping_buffer(previous: &TextRun, next: &TextRun)
         && shadows_match(&previous.text_shadow, &next.text_shadow)
         && metadata_matches(previous.metadata, next.metadata)
         && inside_the_same_bordered_boxes(previous, next)
+        // Chromium shapes each inline bidi bracket's text on its own.
+        && previous.bidi_frames == next.bidi_frames
         // The bidi pass deliberately retained this visual-order boundary.
         && crate::bidi::has_rtl_chars(&previous.text) == crate::bidi::has_rtl_chars(&next.text)
 }

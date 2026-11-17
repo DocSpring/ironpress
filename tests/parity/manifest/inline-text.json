@@ -787,5 +787,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "inline-text-unknown-elements",
+    "category": "inline-text",
+    "feature": "display",
+    "subfeature": "unknown-elements",
+    "description": "Elements with no display of their own in the UA stylesheet (`<time>`, `<var>`, `<label>`, `<output>`, custom and unknown elements) are inline, the initial `display`, and `[hidden]`, `<noscript>` and `<datalist>` take no room (CSS Display 3 section 2, HTML section 15.3.1).",
+    "file": "cases/inline-text/inline-text-unknown-elements.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

@@ -1028,6 +1028,9 @@ pub struct TextRun {
     /// The borders of the bordered inline boxes around the run, innermost
     /// first.
     pub(crate) inline_borders: Vec<InlineBorder>,
+    /// The bidi brackets of the inline boxes around the run, outermost first
+    /// (`reorder_runs_bidi`).
+    pub(crate) bidi_frames: Vec<crate::bidi::BidiFrame>,
 }
 
 impl TextRun {
@@ -1069,6 +1072,7 @@ impl Default for TextRun {
             text_shadow: Vec::new(),
             metadata: TextRunMetadata::default(),
             inline_borders: Vec::new(),
+            bidi_frames: Vec::new(),
         }
     }
 }
@@ -3577,7 +3581,7 @@ pub(crate) fn flatten_nodes(
                         .with_white_space(parent_style.white_space)
                         .with_parent_strut(parent_line_strut(parent_style, env.fonts))
                         .with_rtl(parent_style.direction_rtl)
-                        .with_bidi_override(parent_style.bidi_override),
+                        .with_bidi_override(parent_style.unicode_bidi.overrides()),
                         env.fonts,
                     );
                     if !lines.is_empty() {
@@ -4070,7 +4074,7 @@ fn flatten_element_with_running_mode(
                     .with_white_space(style.white_space)
                     .with_parent_strut(parent_line_strut(&style, env.fonts))
                     .with_rtl(style.direction_rtl)
-                    .with_bidi_override(style.bidi_override),
+                    .with_bidi_override(style.unicode_bidi.overrides()),
                     env.fonts,
                 );
             }
@@ -4170,7 +4174,7 @@ fn flatten_element_with_running_mode(
                 .with_white_space(style.white_space)
                 .with_parent_strut(parent_line_strut(&style, env.fonts))
                 .with_rtl(style.direction_rtl)
-                .with_bidi_override(style.bidi_override),
+                .with_bidi_override(style.unicode_bidi.overrides()),
                 env.fonts,
             );
             let padding_vertical = if el.tag == HtmlTag::Video {
@@ -4674,7 +4678,7 @@ fn flatten_element_with_running_mode(
                     .with_white_space(style.white_space)
                     .with_parent_strut(parent_line_strut(&style, env.fonts))
                     .with_rtl(style.direction_rtl)
-                    .with_bidi_override(style.bidi_override)
+                    .with_bidi_override(style.unicode_bidi.overrides())
                     // An `outside` marker hangs into the negative text-indent band, so
                     // it must NOT consume the first line's text capacity. Mirror the
                     // rendered `text_indent` (which includes `-marker_hang`) here so
@@ -5472,7 +5476,7 @@ fn route_element(
                 .with_white_space(style.white_space)
                 .with_parent_strut(parent_line_strut(style, env.fonts))
                 .with_rtl(style.direction_rtl)
-                .with_bidi_override(style.bidi_override),
+                .with_bidi_override(style.unicode_bidi.overrides()),
                 env.fonts,
             );
             if !lines.is_empty() {

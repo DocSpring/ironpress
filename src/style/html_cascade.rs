@@ -114,6 +114,29 @@ pub(crate) fn html_cascade_layers(
 ) -> HtmlCascadeLayers {
     let mut layers = HtmlCascadeLayers::default();
 
+    // `[hidden]:not([hidden=until-found i]) { display: none }` (HTML §15.3.1).
+    if attributes
+        .get("hidden")
+        .is_some_and(|value| !value.eq_ignore_ascii_case("until-found"))
+    {
+        layers.ua.set("display", CssValue::Keyword("none".into()));
+    }
+
+    // An element with a valid `dir` isolates its text from the text around it
+    // (HTML §15.3.5); Chromium leaves `<bdi>` and `<bdo>` their own
+    // `unicode-bidi`.
+    if !matches!(tag, HtmlTag::Bdi | HtmlTag::Bdo)
+        && attributes.get("dir").is_some_and(|dir| {
+            ["ltr", "rtl", "auto"]
+                .iter()
+                .any(|valid| dir.eq_ignore_ascii_case(valid))
+        })
+    {
+        layers
+            .presentational_hints
+            .set("unicode-bidi", CssValue::Keyword("isolate".into()));
+    }
+
     if tag == HtmlTag::Table {
         if let Some(border) = legacy_table_border(attributes) {
             set_physical_edges(

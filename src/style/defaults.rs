@@ -279,6 +279,9 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             style.set("margin-top", CssValue::Length(2.0));
             style.set("margin-bottom", CssValue::Length(2.0));
         }
+        HtmlTag::Bdi => style.set("unicode-bidi", CssValue::Keyword("isolate".into())),
+        HtmlTag::Bdo => style.set("unicode-bidi", CssValue::Keyword("isolate-override".into())),
+        HtmlTag::NotRendered => style.set("display", CssValue::Keyword("none".into())),
         _ => {}
     }
 

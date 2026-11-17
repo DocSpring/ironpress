@@ -78,7 +78,7 @@ pub(super) fn relayout_direct_text_item(
             .with_white_space(relayout_child_style.white_space)
             .with_parent_strut(parent_line_strut(&relayout_child_style, env.fonts))
             .with_rtl(relayout_child_style.direction_rtl)
-            .with_bidi_override(relayout_child_style.bidi_override),
+            .with_bidi_override(relayout_child_style.unicode_bidi.overrides()),
             env.fonts,
         )
     };

@@ -2166,7 +2166,8 @@ fn prepare_text_runs(
     let line_bidi = (!options.bidi_plaintext
         && (options.bidi_override
             || options.paragraph_rtl
-            || crate::bidi::has_rtl_chars(&full_text)))
+            || crate::bidi::has_rtl_chars(&full_text)
+            || crate::bidi::inline_brackets_reorder(&runs)))
     .then_some(LineBidi {
         rtl: options.paragraph_rtl,
         bidi_override: options.bidi_override,
@@ -3260,7 +3261,10 @@ pub(crate) fn wrap_text_runs_among_floats(
                 continue;
             }
             let line_rtl = crate::bidi::first_strong_is_rtl(&line_text);
-            if line_rtl || crate::bidi::has_rtl_chars(&line_text) {
+            if line_rtl
+                || crate::bidi::has_rtl_chars(&line_text)
+                || crate::bidi::inline_brackets_reorder(&line.runs)
+            {
                 line.runs = crate::bidi::reorder_runs_bidi(&line.runs, line_rtl, false);
             }
             if line_rtl && options.max_width.is_finite() {
@@ -3604,8 +3608,8 @@ fn build_inline_box(
             .with_white_space(style.white_space)
             .with_parent_strut(parent_line_strut(style, fonts))
             .with_rtl(style.direction_rtl)
-            .with_bidi_override(style.bidi_override)
-            .with_bidi_plaintext(style.bidi_plaintext)
+            .with_bidi_override(style.unicode_bidi.overrides())
+            .with_bidi_plaintext(style.unicode_bidi.is_plaintext())
             .with_word_break_keep_all(style.word_break_keep_all)
             .with_hyphens_manual(style.hyphens_manual),
             fonts,
@@ -3852,6 +3856,16 @@ impl<'a> InlineRunCollector<'a> {
             link_url,
             ancestors,
         );
+    }
+}
+
+/// Whether an element's direction comes from its text: `dir="auto"`, or a
+/// `<bdi>` without a valid `dir` (HTML §3.2.6.4).
+fn has_auto_direction(el: &ElementNode) -> bool {
+    match el.attributes.get("dir") {
+        Some(dir) if dir.eq_ignore_ascii_case("auto") => true,
+        Some(dir) if dir.eq_ignore_ascii_case("ltr") || dir.eq_ignore_ascii_case("rtl") => false,
+        _ => el.tag == HtmlTag::Bdi,
     }
 }
 
@@ -4287,9 +4301,9 @@ fn collect_text_runs_inner(
                             fonts,
                         );
                         let element_start = runs.len();
-                        let decoration_id = crate::layout::engine::InlineDecorationId::from_index(
-                            collection.next_inline_decoration,
-                        );
+                        let element_index = collection.next_inline_decoration;
+                        let decoration_id =
+                            crate::layout::engine::InlineDecorationId::from_index(element_index);
                         collection.next_inline_decoration += 1;
                         collect_text_runs_inner(
                             InlineContentSequence::with_generated(
@@ -4318,6 +4332,15 @@ fn collect_text_runs_inner(
                         apply_inline_parent_background(runs, element_start, &style, decoration_id);
                         apply_inline_border(runs, element_start, &style, decoration_id, fonts);
                         resolve_target_attrs(&mut runs[element_start..], el);
+                        if let Some(frame) = crate::bidi::BidiFrame::of(
+                            &style,
+                            has_auto_direction(el),
+                            element_index,
+                        ) {
+                            for run in &mut runs[element_start..] {
+                                run.bidi_frames.insert(0, frame);
+                            }
+                        }
                         runs[element_start..]
                             .resolve_unclaimed_boundaries(BoundaryScope::of(&style, fonts));
                         counter_state.leave_element(counter_scope);

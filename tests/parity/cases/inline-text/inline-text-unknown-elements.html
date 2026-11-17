@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>elements without a display of their own are inline, and hidden ones take no room</title>
+<style>
+  @page { size: 320px 144px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 6px; background: #eef1f8; }
+
+</style>
+</head>
+<body>
+  <p>Press <time>Ctrl</time> and <time>today</time> or <var>x</var> <my-widget>custom</my-widget> <data value="1">data</data> end.</p>
+  <p>a<span hidden>HIDDEN</span>b<noscript>NOSCRIPT</noscript>c<datalist><option>DL</option></datalist>d</p>
+  <p>Label: <label>name</label> <output>out</output> <foo>foo</foo>.</p>
+</body>
+</html>

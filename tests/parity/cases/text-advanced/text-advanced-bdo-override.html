@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>bdo lays its text out in its direction, each one on its own</title>
+<style>
+  @page { size: 320px 160px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 6px; background: #eef1f8; }
+
+</style>
+</head>
+<body>
+  <p>Say <bdo dir="rtl">Hello world</bdo> now.</p>
+  <p><bdo dir="rtl">ab</bdo><bdo dir="rtl">cd</bdo> and <bdo dir="ltr">שלום עולם</bdo>.</p>
+  <p>A <bdo dir="rtl">xy <b>bold</b> <bdo dir="ltr">kept</bdo> end</bdo> Z.</p>
+  <p dir="rtl">מילים <bdo dir="rtl">Total 123</bdo> עוד</p>
+</body>
+</html>
