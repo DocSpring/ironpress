@@ -8442,6 +8442,20 @@
       "reference_file": "cases/inline-text/inline-text-unicode-spaces.html",
       "reference_html_sha256": "ddb1ff9761441715ffcd40141c4b30e93705d8a0c976a21a7f893e33a5d2438b"
     },
+    "inline-text-unknown-elements": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-unknown-elements.html",
+      "html_sha256": "c37f7502feb9f4b8c8e7fce60f535806e255ed503079ad37cc4789c100cf6aae",
+      "manifest_sha256": "f50f81b60319c086be0c1f52b25abd6f3f561d0e275952fbbd172b080053ba05",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-unknown-elements.pdf",
+        "sha256": "02524615eab3bba5ccad9d426d149280e52b27187821f9a73585a54d2286aa21"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-unknown-elements.html",
+      "reference_html_sha256": "c37f7502feb9f4b8c8e7fce60f535806e255ed503079ad37cc4789c100cf6aae"
+    },
     "inline-text-vertical-align-baseline": {
       "category": "inline-text",
       "file": "cases/inline-text/inline-text-vertical-align-baseline.html",
@@ -16744,6 +16758,34 @@
       "reference_file": "cases/positioning/positioning-fixed-top-left.html",
       "reference_html_sha256": "353fbffcaee3e8b4f50e3e53e82e321df11f7ac7ac2dfb3ea3bef69bcf9d269e"
     },
+    "positioning-float-formatting-roots": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-formatting-roots.html",
+      "html_sha256": "4abe00159c965be7ea40a7a06f64039aaffdd3ee7240db8d8e85421dfdf3a488",
+      "manifest_sha256": "cab8104c41a630d9357c90a4ed1c045a2206f2d4c2fe4e95e1365c6b31478247",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-formatting-roots.pdf",
+        "sha256": "5bce31c9941d6a02fdc2c2a239128adf47972623dad604bd81aef90ae59f7d90"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-formatting-roots.html",
+      "reference_html_sha256": "4abe00159c965be7ea40a7a06f64039aaffdd3ee7240db8d8e85421dfdf3a488"
+    },
+    "positioning-float-in-cell-and-flex-item": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-in-cell-and-flex-item.html",
+      "html_sha256": "7e14ece86a98626520257e6b20cc51b8f7414a159224513f7832791a7abfdedc",
+      "manifest_sha256": "7ff7a4cd3095e8835915937bc24cbbbedd4c7465fe6e48b14d00eaeee0da7889",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-in-cell-and-flex-item.pdf",
+        "sha256": "3916a6ff632917dd2ddcaca41963d7e7b54651f20f59196fbe1cbd0ddd2d887a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-in-cell-and-flex-item.html",
+      "reference_html_sha256": "7e14ece86a98626520257e6b20cc51b8f7414a159224513f7832791a7abfdedc"
+    },
     "positioning-float-left": {
       "category": "positioning",
       "file": "cases/positioning/positioning-float-left.html",
@@ -16757,6 +16799,202 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/positioning/positioning-float-left.html",
       "reference_html_sha256": "c0ba96c888f55d1cfcfabdbbcc7f45e9fb135a249d9d87ba40e38c0ca8aa4cef"
+    },
+    "positioning-float-list": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-list.html",
+      "html_sha256": "d2a6b7b1453923f896217132f93370e96001d50b5312aebc1793588c7d3fd251",
+      "manifest_sha256": "c81454fd316edae6f967ebce390f575ab3d8cb93fcc09c1e1fae0eae24b00a0b",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-list.pdf",
+        "sha256": "297d9faa8ccf8774fd21539df1958f592d2943ee394e9f1d5cab35b9198005d8"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-list.html",
+      "reference_html_sha256": "d2a6b7b1453923f896217132f93370e96001d50b5312aebc1793588c7d3fd251"
+    },
+    "positioning-float-margins": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-margins.html",
+      "html_sha256": "9fc5ce2e4af92cf128b1c20b1d87c5e15f87dc82ec323a97713b40531b1448da",
+      "manifest_sha256": "ee51372f2dc681fdf50bd12823eddcae588b2359e80f1e46d3c9f4b564d3108d",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-margins.pdf",
+        "sha256": "d4c8dcabf9fd8d522156b5134c57e68ad642a98997352e830850ef98a149d786"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-margins.html",
+      "reference_html_sha256": "9fc5ce2e4af92cf128b1c20b1d87c5e15f87dc82ec323a97713b40531b1448da"
+    },
+    "positioning-float-paint-order": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-paint-order.html",
+      "html_sha256": "daa4e41158012361c8cad57b82979482f750532373d1a43f90c0b1e64c801d06",
+      "manifest_sha256": "c19133b3c8f50a423f3e04703ede22a91422d9a229e2d83402a5f47fb323c95d",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-paint-order.pdf",
+        "sha256": "0a7d8bb223ef05026608ba8ee0a24e3cd8da75078c37d69a96de9cbed28ee8b7"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-paint-order.html",
+      "reference_html_sha256": "daa4e41158012361c8cad57b82979482f750532373d1a43f90c0b1e64c801d06"
+    },
+    "positioning-float-text-align": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-align.html",
+      "html_sha256": "156c401e5408f1bed5d5db989bfd1addfff2f36ed47624555467a6ab9f5f5009",
+      "manifest_sha256": "2924c9e4fec6d0e63fb88f645ae396b441bb294f0f66e302cb42cb0723b45fd0",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-align.pdf",
+        "sha256": "95b510482cbf6ba30658b9d925910d318c452cd9f03388e590915a2cf60388de"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-align.html",
+      "reference_html_sha256": "156c401e5408f1bed5d5db989bfd1addfff2f36ed47624555467a6ab9f5f5009"
+    },
+    "positioning-float-text-bfc": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-bfc.html",
+      "html_sha256": "43435df07d66ce23d3d71f653a03926e10eeed1ebf22819c1aa46b0d369ca0cf",
+      "manifest_sha256": "4a68fe50c359a9ca5de920270cff091022014116612beed102ab8211b15787c5",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-bfc.pdf",
+        "sha256": "b5dc9d48e171e167a983a162cd9238a8f5768a773b8f05ca8bc21d29ce48b44a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-bfc.html",
+      "reference_html_sha256": "43435df07d66ce23d3d71f653a03926e10eeed1ebf22819c1aa46b0d369ca0cf"
+    },
+    "positioning-float-text-both-sides": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-both-sides.html",
+      "html_sha256": "869fdd3f5f0c6d956295fadfa2b97bb6427b4a7d0036c6457bffa1dfcadb179b",
+      "manifest_sha256": "32fe3bf9d75b66c4a2a922e09c4bd773657e386805943cc421a9ba37cb53384a",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-both-sides.pdf",
+        "sha256": "3cfe4d25608cc993b9395743c23dab9fc5d2ef86f92f92f72fe6ff0d91394eb4"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-both-sides.html",
+      "reference_html_sha256": "869fdd3f5f0c6d956295fadfa2b97bb6427b4a7d0036c6457bffa1dfcadb179b"
+    },
+    "positioning-float-text-deferred": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-deferred.html",
+      "html_sha256": "0657c3d596a9c0c167ea5b3e9e6b2058367dc08d1f5ae6a48438cd98397cfbc1",
+      "manifest_sha256": "505ad200c3b3409f07d24f908b643739225a0434a911105f03ce6747a0c2064a",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-deferred.pdf",
+        "sha256": "6130aeea139faa9e40b70e3d219f2f30a8819a9abd1f1698b64b3861b61d53d1"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-deferred.html",
+      "reference_html_sha256": "0657c3d596a9c0c167ea5b3e9e6b2058367dc08d1f5ae6a48438cd98397cfbc1"
+    },
+    "positioning-float-text-drops-below": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-drops-below.html",
+      "html_sha256": "48f21e468c9979d03d0cb0244917a116949ce73fcb040f833aa78c9e1aea3531",
+      "manifest_sha256": "c3f717b19ab331a1aa04728c082c1f26d710f0364e0236c28649eac4ba54b5ef",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-drops-below.pdf",
+        "sha256": "ba975082bd36560e3907cf60a4a264e9d48865b437d32933b7b948a1432e30c0"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-drops-below.html",
+      "reference_html_sha256": "48f21e468c9979d03d0cb0244917a116949ce73fcb040f833aa78c9e1aea3531"
+    },
+    "positioning-float-text-inline": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-inline.html",
+      "html_sha256": "75c98206dc8456e0438d0bcceff9d12d053fecfe38b933fd8894700cd35ce006",
+      "manifest_sha256": "ae9b3248418eb2fdf18f6cd237e9219936f6704c294000b7b27434a159970516",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-inline.pdf",
+        "sha256": "d580b67564cf956544eaec7ed6119246ded53b3a6ceab9506b16116ad67af913"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-inline.html",
+      "reference_html_sha256": "75c98206dc8456e0438d0bcceff9d12d053fecfe38b933fd8894700cd35ce006"
+    },
+    "positioning-float-text-narrow-gap": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-narrow-gap.html",
+      "html_sha256": "6a6d3d1981fbe37b2766e13f3e255bdd515bf9fb9d4154118b91613aa55f2300",
+      "manifest_sha256": "0b0898939a94e22872f498cb59949f401fa7d2023baf5d80f942766efa4a12da",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-narrow-gap.pdf",
+        "sha256": "4fa2147590a2516f54ad9b508efbbedd62d5596fe1e6d73c3ddd3aff4478325a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-narrow-gap.html",
+      "reference_html_sha256": "6a6d3d1981fbe37b2766e13f3e255bdd515bf9fb9d4154118b91613aa55f2300"
+    },
+    "positioning-float-text-nested": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-nested.html",
+      "html_sha256": "564350a576eec1bd6c4c9ae759553240a1c59c19c54d3237310600167d2227e5",
+      "manifest_sha256": "78104b5fdd1b968ec50f135cb2510211f59a3f938587f659080cd3095ceddd79",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-nested.pdf",
+        "sha256": "7cc57f8bec29660926b4cc8998c0d433ffa24fb3c478be22ff839db239b45b5e"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-nested.html",
+      "reference_html_sha256": "564350a576eec1bd6c4c9ae759553240a1c59c19c54d3237310600167d2227e5"
+    },
+    "positioning-float-text-paragraphs": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-paragraphs.html",
+      "html_sha256": "72b6c5b05d2bd172263276fec858b93599733ce513e6756855e1c6903cf86c86",
+      "manifest_sha256": "370b50baa9bfec580365f3e98b657c33bd2280bfe236fe6a7db9f21a3f5a0650",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-paragraphs.pdf",
+        "sha256": "30e1e7f48940176c6c7d724fd1dedb9d140e2d8c08760dcf287829206a558246"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-paragraphs.html",
+      "reference_html_sha256": "72b6c5b05d2bd172263276fec858b93599733ce513e6756855e1c6903cf86c86"
+    },
+    "positioning-float-text-side-by-side": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-side-by-side.html",
+      "html_sha256": "51be7e57d81ccb62211c34d8db6dba38368307f5e9d8d75e0ef468bb397badf1",
+      "manifest_sha256": "c0da12d140d22dcf7a571c0f32dfd25006b4cb5c3cbacb0e9b3f7d798b3d1397",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-side-by-side.pdf",
+        "sha256": "b815a24e53dd1ab1fa9ed084dcafd6f4fe10ef7800489278cc7a8d717798827a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-side-by-side.html",
+      "reference_html_sha256": "51be7e57d81ccb62211c34d8db6dba38368307f5e9d8d75e0ef468bb397badf1"
+    },
+    "positioning-float-text-wrap": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-text-wrap.html",
+      "html_sha256": "6b96d16785f13903fa909ec158ef2928e36695b5f7eb75843f8af66fafd96dec",
+      "manifest_sha256": "fff51582649b0c3bfb7512cbb62a78d3a90ec8a9dd7de6caeea985706fc4ec24",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-text-wrap.pdf",
+        "sha256": "5aaffdff23268a8d211d16603c520529c6e12b309ee01a8f5ecd48169f18dd7c"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-text-wrap.html",
+      "reference_html_sha256": "6b96d16785f13903fa909ec158ef2928e36695b5f7eb75843f8af66fafd96dec"
     },
     "positioning-inset-negative-offset": {
       "category": "positioning",
@@ -21420,6 +21658,48 @@
       "reference_file": "cases/interactions/tables-x-typography-bold.html",
       "reference_html_sha256": "741f73d19a4bc23820df66e93184a116cba9e7534f1f66bd984a6dbc3b2f7e5e"
     },
+    "text-advanced-bdi-isolate": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-bdi-isolate.html",
+      "html_sha256": "0206368a029d010239bb72b36957456cf6666427903b9a3b2d5e1abe33f2607e",
+      "manifest_sha256": "2634aeb7b08d70fc856223861f6323686954fa1bc950ea7dacfefd4f3f5abf83",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-bdi-isolate.pdf",
+        "sha256": "5b7a239e0084811f54fd122ea1a6250b7ac53079676c801c6be1e8d1124a8628"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-bdi-isolate.html",
+      "reference_html_sha256": "0206368a029d010239bb72b36957456cf6666427903b9a3b2d5e1abe33f2607e"
+    },
+    "text-advanced-bdo-override": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-bdo-override.html",
+      "html_sha256": "15b2ae85ac3f4dd4cbc3b52569635e1b97c836f3ca4bced67e37b653d8ba3705",
+      "manifest_sha256": "7144511981a42ffce4303c57ccf52919ef02505083fb3bb4658140b4022768df",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-bdo-override.pdf",
+        "sha256": "e06f2a84c08c5bdf277c43fe9c58838b8eb7523ff2a88dc55297aeed33b70637"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-bdo-override.html",
+      "reference_html_sha256": "15b2ae85ac3f4dd4cbc3b52569635e1b97c836f3ca4bced67e37b653d8ba3705"
+    },
+    "text-advanced-bidi-isolate-wrap": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-bidi-isolate-wrap.html",
+      "html_sha256": "a457fdd45a6214a546f87a97b0df4a20ad911d7e842eb9ebdbb6e0afd8738bbb",
+      "manifest_sha256": "0d28e8a0168a5338546620e490f6875b985a5688eef28ab1fcdf983342ef6ae1",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-bidi-isolate-wrap.pdf",
+        "sha256": "c2d7d324f15eb25e15178c6f232bccc4b0a066bcf893efbe43db717e7da89828"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-bidi-isolate-wrap.html",
+      "reference_html_sha256": "a457fdd45a6214a546f87a97b0df4a20ad911d7e842eb9ebdbb6e0afd8738bbb"
+    },
     "text-advanced-bidi-mixed-lines": {
       "category": "text-advanced",
       "file": "cases/text-advanced/text-advanced-bidi-mixed-lines.html",
@@ -21881,6 +22161,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/text-advanced/text-advanced-text-wrap-pretty.html",
       "reference_html_sha256": "2099497e486feb829842ed8362d1cc888e2dc4f17bee0966e4dee670240e4463"
+    },
+    "text-advanced-unicode-bidi-inline": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-unicode-bidi-inline.html",
+      "html_sha256": "1db8231a757143ca5393617a0d276e1ff8674f404f98a1c7a3e33081de537881",
+      "manifest_sha256": "547b4ffbd0117ffb466b42bff7b6cc3860d3b2f3490a2b693c71f68b8e577269",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-unicode-bidi-inline.pdf",
+        "sha256": "a8fb0d17751b1d95df69475638e98673dfca37aa2dbd3cddc880d14478f55ff9"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-unicode-bidi-inline.html",
+      "reference_html_sha256": "1db8231a757143ca5393617a0d276e1ff8674f404f98a1c7a3e33081de537881"
     },
     "text-advanced-unicode-bidi-override": {
       "category": "text-advanced",
