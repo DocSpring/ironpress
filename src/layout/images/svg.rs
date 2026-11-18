@@ -230,7 +230,9 @@ pub(crate) fn resolve_svg_dimension(
     let raw = raw?;
     let raw = raw.trim();
     if let Some(pct) = raw.strip_suffix('%') {
-        if allow_percent {
+        // A percentage of a size that isn't known yet (inline content
+        // collected before its block is laid out, intrinsic sizing) is `auto`
+        if allow_percent && available_space.is_finite() {
             if let Ok(value) = pct.trim().parse::<f32>() {
                 if value >= 0.0 {
                     return Some(available_space * (value / 100.0));

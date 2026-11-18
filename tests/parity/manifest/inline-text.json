@@ -753,6 +753,21 @@
     "depends_on": ["probe-text-baseline", "probe-fill-box"]
   },
   {
+    "id": "inline-text-replaced-in-inline-elements",
+    "category": "inline-text",
+    "feature": "inline-replaced",
+    "subfeature": "inside-inline-elements",
+    "description": "Images and SVGs inside spans and links: object-fit contain, cover and fill on an img in a span and in an inline-block span, a wide image with max-width:100% in a link inside a 200px column, and percentage-width SVGs in a span and a link, each sized against its block as it would be outside the inline element. Catches: images stretched whatever their object-fit, sized against an infinite width, or percentage SVGs that write inf into the PDF.",
+    "file": "cases/inline-text/inline-text-replaced-in-inline-elements.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
+  },
+  {
     "id": "inline-text-collapsed-space-owner",
     "category": "inline-text",
     "feature": "white-space-collapsing",

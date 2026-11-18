@@ -32,7 +32,7 @@ use super::list_markers::format_counter_value;
 use super::text_emphasis::TextEmphasisMetrics;
 
 mod line_room;
-mod nested_inline;
+pub(crate) mod nested_inline;
 mod run_boundaries;
 use nested_inline::{CollectedAs, CollectorState, NestedBlock};
 pub(crate) use run_boundaries::{BoundaryScope, InlineTextSequence};
@@ -2158,7 +2158,12 @@ fn prepare_text_runs(
     options: TextWrapOptions,
     fonts: &HashMap<String, TtfFont>,
 ) -> PreparedTextRuns {
-    let runs = expand_leader_placeholders(runs, options.max_width, fonts);
+    let mut runs = expand_leader_placeholders(runs, options.max_width, fonts);
+    for run in &mut runs {
+        if let Some(inline_box) = run.inline_box.as_mut() {
+            inline_box.size_replaced_within(options.max_width);
+        }
+    }
     let full_text: String = runs.iter().map(|run| run.text.as_str()).collect();
     // The paragraph's direction is its `direction` (with `dir="auto"` already
     // resolved from its text), never inferred from the text: Chrome lays a
@@ -3688,7 +3693,9 @@ fn build_inline_box(
         baseline_ascent,
         lines,
         image: None,
+        image_sampling: Default::default(),
         svg: None,
+        replaced_sizing: None,
         // CSS `position: relative` shifts the painted box without changing its
         // in-flow inline slot. `left`/`top` win over `right`/`bottom`.
         rel_offset_x: if style.position.is_relative() {

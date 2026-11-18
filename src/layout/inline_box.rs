@@ -83,8 +83,13 @@ pub struct InlineBox {
     pub lines: Vec<TextLine>,
     /// Replaced content painted into the content box.
     pub image: Option<RasterImageAsset>,
+    /// How `image` is fitted into the content box (`object-fit`, `object-position`, `image-rendering`).
+    pub(crate) image_sampling: crate::layout::elements::ImageSampling,
     /// An inline `<svg>` drawn into the content box.
     pub(crate) svg: Option<Box<InlineSvg>>,
+    /// A replaced element inside an inline element, sized again against its block's width when its line is wrapped.
+    pub(crate) replaced_sizing:
+        Option<Box<crate::layout::text::nested_inline::InlineReplacedSizing>>,
     /// A built-in list bullet: Chromium lays it out as text in the marker's
     /// font, so the run's font and line-height count in its line box as a
     /// text run's do, whatever the size of the painted shape.

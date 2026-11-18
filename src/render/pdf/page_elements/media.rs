@@ -157,6 +157,44 @@ pub(in crate::render::pdf) fn render_image(
     paint_image_box(content, element, image_box, ctx);
 }
 
+/// Draw a raster image into `content_box` as a replaced element does, whether a box of its own or an atomic box in a
+/// line: fitted as `sampling`'s `object-fit` and `object-position` say, clipped to the box when it overflows it.
+pub(in crate::render::pdf) fn paint_replaced_raster(
+    content: &mut String,
+    image: &crate::layout::engine::RasterImageAsset,
+    content_box: PdfRect,
+    sampling: crate::layout::elements::ImageSampling,
+    pdf_writer: &mut PdfWriter,
+    page_images: &mut Vec<ImageRef>,
+) {
+    let paint = ReplacedRasterPaint::resolve(image, content_box, sampling);
+    let image_id = pdf_writer.add_layout_image_object(
+        paint.source.as_ref(),
+        paint.bounds.width,
+        paint.bounds.height,
+        sampling.rendering,
+    );
+    let image_name = format!("Im{image_id}");
+    if paint.clip {
+        content.push_str("q\n");
+        content.push_str(&format!("{}W n\n", content_box.rect_path()));
+    }
+    push_raster_xobject(
+        content,
+        &image_name,
+        paint.bounds,
+        paint.source.as_ref(),
+        pdf_writer,
+    );
+    if paint.clip {
+        content.push_str("Q\n");
+    }
+    page_images.push(ImageRef {
+        name: image_name,
+        obj_id: image_id,
+    });
+}
+
 /// Paint one replaced raster box using the complete shared effects contract.
 pub(in crate::render::pdf) fn paint_image_box(
     content: &mut String,
@@ -221,33 +259,14 @@ pub(in crate::render::pdf) fn paint_image_box(
         );
     }
 
-    let image_content = paint_geometry.padding_box();
-    let paint = ReplacedRasterPaint::resolve(image, image_content, element.sampling);
-    let image_id = ctx.text.pdf_writer.add_layout_image_object(
-        paint.source.as_ref(),
-        paint.bounds.width,
-        paint.bounds.height,
-        element.sampling.rendering,
-    );
-    let image_name = format!("Im{image_id}");
-    if paint.clip {
-        content.push_str("q\n");
-        content.push_str(&format!("{}W n\n", image_content.rect_path()));
-    }
-    push_raster_xobject(
+    paint_replaced_raster(
         content,
-        &image_name,
-        paint.bounds,
-        paint.source.as_ref(),
+        image,
+        paint_geometry.padding_box(),
+        element.sampling,
         ctx.text.pdf_writer,
+        ctx.text.page_images,
     );
-    if paint.clip {
-        content.push_str("Q\n");
-    }
-    ctx.text.page_images.push(ImageRef {
-        name: image_name,
-        obj_id: image_id,
-    });
     paint_box_decoration(
         content,
         fragment_geometry,

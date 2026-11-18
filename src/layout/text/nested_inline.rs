@@ -144,32 +144,104 @@ pub(super) fn collect_block_lines(
     }
 }
 
-/// An `<img>` or an inline `<svg>` in inline content as an atomic box, sized as the block path sizes it.
+/// An `<img>` or an inline `<svg>` in inline content as an atomic box, sized as the block path sizes it. Runs are
+/// collected before the block's width is known, so the box is sized here as if the width were unknown (a percentage
+/// is `auto`) and keeps what it needs to be sized again ([`InlineReplacedSizing`]) when its line is wrapped.
 pub(super) fn image_box(
     element: &ElementNode,
     style: &ComputedStyle,
     resources: &mut crate::security::resources::ResourceLoader,
 ) -> Option<InlineBox> {
-    if element.tag == HtmlTag::Svg {
+    let mut boxed = if element.tag == HtmlTag::Svg {
         let svg =
             crate::layout::images::svg_element_box(element, style, f32::INFINITY, f32::INFINITY)?;
-        return Some(svg_box(svg, style));
-    }
-    let image = match decode_element_image(resources, element)? {
-        ElementImage::Raster(image) => image,
-        ElementImage::Svg(tree) => {
-            let svg = crate::layout::images::svg_image_box(
-                *tree,
-                element,
-                f32::INFINITY,
-                f32::INFINITY,
+        svg_box(svg, style)
+    } else {
+        match decode_element_image(resources, element)? {
+            ElementImage::Raster(image) => raster_box(image, element, style, f32::INFINITY),
+            ElementImage::Svg(tree) => svg_box(
+                crate::layout::images::svg_image_box(
+                    *tree,
+                    element,
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    style,
+                ),
                 style,
-            );
-            return Some(svg_box(svg, style));
+            ),
         }
     };
-    let size = raster_image_size(&image, element, f32::INFINITY, style);
-    Some(InlineBox {
+    boxed.replaced_sizing = Some(Box::new(InlineReplacedSizing {
+        element: element.clone(),
+        style: style.clone(),
+    }));
+    Some(boxed)
+}
+
+/// What an `<img>` or `<svg>` inside an inline element needs to be sized against the width of the block it's in, as
+/// one directly in the block is: its element and its style.
+#[derive(Debug, Clone)]
+pub(crate) struct InlineReplacedSizing {
+    element: ElementNode,
+    style: ComputedStyle,
+}
+
+impl InlineBox {
+    /// Size this box again against `available_width`, the width of the block its line is in, when it's a replaced
+    /// element collected from inside an inline element. Each wrap sizes it from its element and style, so a
+    /// measuring pass at another width doesn't stick.
+    pub(crate) fn size_replaced_within(&mut self, available_width: f32) {
+        let Some(sizing) = self.replaced_sizing.take() else {
+            return;
+        };
+        let InlineReplacedSizing { element, style } = &*sizing;
+        if let Some(image) = self.image.take() {
+            let resized = raster_box(image, element, style, available_width);
+            self.width = resized.width;
+            self.height = resized.height;
+            self.paint.border_radii = resized.paint.border_radii;
+            self.image = resized.image;
+        } else if let Some(svg) = self.svg.take() {
+            let resized = if element.tag == HtmlTag::Svg {
+                crate::layout::images::svg_element_box(
+                    element,
+                    style,
+                    available_width,
+                    f32::INFINITY,
+                )
+            } else {
+                Some(crate::layout::images::svg_image_box(
+                    svg.tree.clone(),
+                    element,
+                    available_width,
+                    f32::INFINITY,
+                    style,
+                ))
+            };
+            match resized.map(|resized| svg_box(resized, style)) {
+                Some(resized) => {
+                    self.width = resized.width;
+                    self.height = resized.height;
+                    self.paint.border_radii = resized.paint.border_radii;
+                    self.svg = resized.svg;
+                }
+                None => self.svg = Some(svg),
+            }
+        }
+        self.replaced_sizing = Some(sizing);
+    }
+}
+
+/// A raster `<img>` as an atomic box `available_width` can constrain, fitted into its content box as `object-fit`
+/// says.
+fn raster_box(
+    image: crate::layout::engine::RasterImageAsset,
+    element: &ElementNode,
+    style: &ComputedStyle,
+    available_width: f32,
+) -> InlineBox {
+    let size = raster_image_size(&image, element, available_width, style);
+    InlineBox {
         width: size.width,
         height: size.height,
         margin_left: style.margin.left.max(0.0),
@@ -186,8 +258,16 @@ pub(super) fn image_box(
         padding: EdgeSizes::ZERO,
         vertical_align: style.vertical_align,
         image: Some(image),
+        image_sampling: crate::layout::elements::ImageSampling {
+            replaced: crate::layout::elements::ReplacedContent {
+                object_fit: style.object_fit,
+                object_position: style.object_position,
+                fragment: None,
+            },
+            rendering: style.image_rendering,
+        },
         ..InlineBox::default()
-    })
+    }
 }
 
 /// An SVG replaced box (an inline `<svg>`, or an `<img>` showing an SVG document) as an atomic box whose content box

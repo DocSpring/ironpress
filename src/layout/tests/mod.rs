@@ -16,6 +16,7 @@ mod grid_red_team;
 mod inline_bidi;
 mod inline_block_vertical;
 mod inline_border;
+mod inline_images;
 mod inline_row_height;
 mod inline_selectors;
 mod inline_svg;

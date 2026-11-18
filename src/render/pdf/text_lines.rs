@@ -223,29 +223,17 @@ pub(super) fn render_inline_box(
         );
     }
 
-    // Replaced-element image (pseudo `content: url(...)`): fill the content box
-    // (inside the border) with the decoded raster, scaled to the box size.
+    // A replaced image: an `<img>` in a line, or a pseudo-element's
+    // `content: url(...)`
     if let Some(image) = &inline.image {
-        let content_box = paint_geometry.content_box();
-        let img_obj_id = pdf_writer.add_image_object(
-            &image.data,
-            image.source_width,
-            image.source_height,
-            image.format,
-            image.png_metadata.as_ref(),
+        super::page_elements::paint_replaced_raster(
+            content,
+            image,
+            paint_geometry.content_box(),
+            inline.image_sampling,
+            pdf_writer,
+            page_images,
         );
-        let img_name = format!("Im{img_obj_id}");
-        content.push_str(&format!(
-            "q\n{width} 0 0 {height} {left} {bottom} cm\n/{img_name} Do\nQ\n",
-            width = content_box.width,
-            height = content_box.height,
-            left = content_box.left,
-            bottom = content_box.bottom,
-        ));
-        page_images.push(ImageRef {
-            name: img_name,
-            obj_id: img_obj_id,
-        });
     }
 
     if let Some(svg) = &inline.svg {

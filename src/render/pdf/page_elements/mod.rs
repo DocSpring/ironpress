@@ -11,7 +11,9 @@ mod text_lines;
 
 pub(super) use container::render_container;
 pub(super) use flex::render_flex_row;
-pub(super) use media::{paint_image_box, paint_svg_box, render_image, render_svg};
+pub(super) use media::{
+    paint_image_box, paint_replaced_raster, paint_svg_box, render_image, render_svg,
+};
 pub(super) use misc::{paint_math_block, paint_progress_bar};
 pub(super) use tables::{render_grid_row, render_table_row};
 pub(super) use text::render_text_block;
