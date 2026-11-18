@@ -23,10 +23,31 @@ pub fn parse_html(html: &str) -> Result<Vec<DomNode>, IronpressError> {
 
 /// Parse an HTML string, returning both DOM nodes and embedded stylesheets.
 pub fn parse_html_with_styles(html: &str) -> Result<ParseResult, IronpressError> {
+    parse(html, None)
+}
+
+/// [`parse_html_with_styles`] for a document whose elements may nest no deeper than `limit`: a deeper one fails
+/// before anything walks its tree recursively.
+pub(crate) fn parse_html_within(
+    html: &str,
+    limit: super::nesting::NestingLimit,
+) -> Result<ParseResult, IronpressError> {
+    parse(html, Some(limit))
+}
+
+fn parse(
+    html: &str,
+    limit: Option<super::nesting::NestingLimit>,
+) -> Result<ParseResult, IronpressError> {
     let dom = parse_document(RcDom::default(), Default::default())
         .from_utf8()
         .read_from(&mut html.as_bytes())
         .map_err(|e| IronpressError::ParseError(e.to_string()))?;
+    if let Some(limit) = limit {
+        limit
+            .check(&dom.document)
+            .map_err(|too_deep| IronpressError::LayoutError(too_deep.to_string()))?;
+    }
 
     let mut stylesheets = Vec::new();
     let font_locale =

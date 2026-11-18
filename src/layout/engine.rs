@@ -2223,7 +2223,6 @@ pub fn layout_with_rules_and_fonts(
         ),
         crate::style::raster_quality::RasterQuality::default(),
         &mut resources,
-        &super::context::DepthLimit::default(),
     )
 }
 
@@ -2244,7 +2243,6 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
-    depth: &super::context::DepthLimit,
 ) -> Vec<Page> {
     let pages = layout_document_passes(
         nodes,
@@ -2256,7 +2254,6 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
         pagination_context.clone(),
         raster_quality,
         resources,
-        depth,
         None,
     );
     // Chromium prints a document wider than its pages by laying it out again
@@ -2276,7 +2273,6 @@ pub(crate) fn layout_with_rules_and_fonts_raster_quality(
         pagination_context.with_page_area_scale(widening.factor()),
         raster_quality,
         resources,
-        depth,
         Some(widening),
     )
 }
@@ -2293,7 +2289,6 @@ fn layout_document_passes(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
-    depth: &super::context::DepthLimit,
     widening: Option<super::print_scale::PrintFitWidening>,
 ) -> Vec<Page> {
     let pages = layout_document_pass(
@@ -2306,7 +2301,6 @@ fn layout_document_passes(
         pagination_context.clone(),
         raster_quality,
         resources,
-        depth,
         None,
         widening,
     );
@@ -2321,7 +2315,6 @@ fn layout_document_passes(
             pagination_context,
             raster_quality,
             resources,
-            depth,
             Some(page_count),
             widening,
         ),
@@ -2340,7 +2333,6 @@ fn layout_document_pass(
     pagination_context: super::paginate::PaginationContext,
     raster_quality: crate::style::raster_quality::RasterQuality,
     resources: &mut crate::security::resources::ResourceLoader,
-    depth: &super::context::DepthLimit,
     page_count: Option<usize>,
     widening: Option<super::print_scale::PrintFitWidening>,
 ) -> Vec<Page> {
@@ -2503,7 +2495,6 @@ fn layout_document_pass(
         filter_defs: &filter_defs,
         filter_dpi: raster_quality.filter_dpi,
         table_cell_sizing: super::table::TableCellSizingContext::root(&mut table_cell_sizing),
-        depth,
         grid_item_heights: &mut grid_item_heights,
         floats: crate::layout::floats::FloatFrames::default(),
     };
@@ -3869,11 +3860,6 @@ fn flatten_element_with_running_mode(
     // fixed-position metadata, counter cleanup, and trailing page breaks from
     // depending on which element kind happened to produce the layout nodes.
     (|| {
-        // Each level takes stack: an element nested deeper than the limit isn't laid out, and the conversion fails
-        if !env.depth.allows(ancestors.len()) {
-            return;
-        }
-
         let available_height = style.height.unwrap_or(available_height);
         // Update context when element narrows the available height.
         let layout_ctx = if style.height.is_some() {

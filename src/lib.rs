@@ -284,7 +284,7 @@ impl HtmlConverter {
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
             pdf_forms: false,
-            max_nesting_depth: layout::context::DepthLimit::DEFAULT_MAX,
+            max_nesting_depth: parser::nesting::NestingLimit::DEFAULT_MAX,
         }
     }
 
@@ -371,9 +371,9 @@ impl HtmlConverter {
         self
     }
 
-    /// How many elements nested in each other are laid out, counting the element itself but not `html` and `body`
-    /// (default 31). A document that nests deeper fails with [`IronpressError::LayoutError`], rather than leaving out
-    /// the deeper content. Each level takes stack: about 60 KB for a flex container in a release build and four times
+    /// How deeply elements may nest, counting the element itself but not `html` and `body` (default 31). A document
+    /// that nests deeper fails with [`IronpressError::LayoutError`] before layout, rather than leaving out the deeper
+    /// content. Each level takes stack: about 60 KB for a flex container in a release build and four times
     /// that in a debug one, so the default suits a thread's 2 MiB stack in a release build. Raise it only with a larger
     /// stack.
     pub fn max_nesting_depth(mut self, levels: usize) -> Self {
@@ -606,11 +606,15 @@ impl HtmlConverter {
         let html = sanitized_html.as_deref().unwrap_or(html);
 
         // Step 2: Parse HTML and extract stylesheets
-        let mut result = parser::html::parse_html_with_styles(html)?;
+        // Converting the tree, layout, measurement and paint recurse with the element nesting: a deeper document
+        // fails as it's parsed, rather than running off the stack or coming out without its deepest content
+        let nesting = parser::nesting::NestingLimit::new(self.max_nesting_depth);
+        let mut result = parser::html::parse_html_within(html, nesting)?;
         self.page_margins.enrich_document(
             &mut result,
             self.sanitize,
             resource_loader.resources(),
+            nesting,
         )?;
         security::sanitizer::sanitize_dom_resources(&mut result.nodes, resource_loader.resources());
         #[cfg(feature = "remote")]
@@ -803,7 +807,6 @@ impl HtmlConverter {
         );
 
         // Step 5: Layout
-        let depth = layout::context::DepthLimit::new(self.max_nesting_depth);
         let mut pages = layout::engine::layout_with_rules_and_fonts_raster_quality(
             &result.nodes,
             layout::engine::DocumentGeometry::new(effective_page_size, effective_margin)
@@ -815,14 +818,7 @@ impl HtmlConverter {
             layout::paginate::PaginationContext::new(page_geometry, footnote_area, 0.0),
             self.raster_quality,
             &mut resource_loader,
-            &depth,
         );
-        if depth.exceeded() {
-            return Err(IronpressError::LayoutError(format!(
-                "elements are nested more than {} deep",
-                depth.max()
-            )));
-        }
         let mut footnote_area_for_overflow = footnote_area;
         footnote_area_for_overflow.content_width =
             effective_page_size.width - default_page_area_margin.horizontal();

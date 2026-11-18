@@ -4,6 +4,7 @@ pub mod html;
 pub mod jpeg;
 pub mod markdown;
 pub mod math;
+pub(crate) mod nesting;
 pub mod png;
 #[allow(dead_code)]
 pub mod svg;

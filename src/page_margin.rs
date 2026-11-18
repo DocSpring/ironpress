@@ -1,6 +1,7 @@
 use crate::error::IronpressError;
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::html::ParseResult;
+use crate::parser::nesting::NestingLimit;
 use crate::security::resources::DocumentResources;
 
 const HEADER_RUNNING_NAME: &str = "-ironpress-api-header";
@@ -47,11 +48,12 @@ impl PageMargins {
         result: &mut ParseResult,
         sanitize: bool,
         resources: &DocumentResources,
+        nesting: NestingLimit,
     ) -> Result<(), IronpressError> {
         self.header
-            .append_rich_fragment(result, sanitize, resources, PageBand::Header)?;
+            .append_rich_fragment(result, sanitize, resources, nesting, PageBand::Header)?;
         self.footer
-            .append_rich_fragment(result, sanitize, resources, PageBand::Footer)?;
+            .append_rich_fragment(result, sanitize, resources, nesting, PageBand::Footer)?;
         Ok(())
     }
 }
@@ -77,12 +79,13 @@ impl PageMarginContent {
         result: &mut ParseResult,
         sanitize: bool,
         resources: &DocumentResources,
+        nesting: NestingLimit,
         band: PageBand,
     ) -> Result<(), IronpressError> {
         let Self::Html(fragment) = self else {
             return Ok(());
         };
-        let parsed = fragment.parse(sanitize, resources, band)?;
+        let parsed = fragment.parse(sanitize, resources, nesting, band)?;
         result.nodes.insert(0, parsed.running_element);
         result.stylesheets.extend(parsed.stylesheets);
         result.stylesheets.push(band.page_rule().to_string());
@@ -121,13 +124,14 @@ impl PageMarginHtml {
         &self,
         sanitize: bool,
         resources: &DocumentResources,
+        nesting: NestingLimit,
         band: PageBand,
     ) -> Result<ParsedPageMarginHtml, IronpressError> {
         let sanitized = sanitize
             .then(|| crate::security::sanitizer::sanitize_html_with_resources(&self.0, resources))
             .transpose()?;
         let html = sanitized.as_deref().unwrap_or(&self.0);
-        let mut parsed = crate::parser::html::parse_html_with_styles(html)?;
+        let mut parsed = crate::parser::html::parse_html_within(html, nesting)?;
         crate::security::sanitizer::sanitize_dom_resources(&mut parsed.nodes, resources);
 
         let mut running_element = ElementNode::new(HtmlTag::Div);
@@ -203,7 +207,7 @@ mod tests {
             "<script>bad()</script><strong onclick='bad()'>safe</strong>".to_string(),
         );
         let parsed = fragment
-            .parse(true, &resources, PageBand::Header)
+            .parse(true, &resources, NestingLimit::default(), PageBand::Header)
             .expect("sanitized rich header");
         let DomNode::Element(wrapper) = parsed.running_element else {
             panic!("running wrapper");
@@ -223,7 +227,7 @@ mod tests {
                 .to_string(),
         );
         let parsed = fragment
-            .parse(false, &resources, PageBand::Header)
+            .parse(false, &resources, NestingLimit::default(), PageBand::Header)
             .expect("resource-filtered rich header");
         let DomNode::Element(wrapper) = parsed.running_element else {
             panic!("running wrapper");

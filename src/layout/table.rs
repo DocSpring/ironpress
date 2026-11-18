@@ -1837,7 +1837,6 @@ pub(crate) fn flatten_table(
     let fonts = env.fonts;
     let filter_defs = env.filter_defs;
     let filter_dpi = env.filter_dpi;
-    let depth = env.depth;
     let grid_item_heights = &mut *env.grid_item_heights;
     let counter_state = &mut *env.counter_state;
     let resources = &mut *env.resources;
@@ -2072,7 +2071,6 @@ pub(crate) fn flatten_table(
                 resources: &mut *resources,
                 filter_defs,
                 filter_dpi,
-                depth,
                 grid_item_heights: &mut *grid_item_heights,
                 floats: crate::layout::floats::FloatFrames::default(),
                 table_cell_sizing: table_cell_sizing.descendants(&table_grid),
@@ -2538,7 +2536,6 @@ pub(crate) fn flatten_table(
                                     resources: &mut *resources,
                                     filter_defs,
                                     filter_dpi,
-                                    depth,
                                     grid_item_heights: &mut *grid_item_heights,
                                     floats: crate::layout::floats::FloatFrames::default(),
                                     table_cell_sizing: table_cell_sizing
@@ -3248,7 +3245,6 @@ pub(crate) fn flatten_table(
                     resources: &mut *resources,
                     filter_defs,
                     filter_dpi,
-                    depth,
                     grid_item_heights: &mut *grid_item_heights,
                     floats: crate::layout::floats::FloatFrames::default(),
                     table_cell_sizing: table_cell_sizing.cell_descendants(
@@ -3684,7 +3680,6 @@ pub(crate) fn flatten_table(
                 resources: &mut *resources,
                 filter_defs,
                 filter_dpi,
-                depth,
                 grid_item_heights: &mut *grid_item_heights,
                 floats: crate::layout::floats::FloatFrames::default(),
                 table_cell_sizing: table_cell_sizing.descendants(&table_grid),

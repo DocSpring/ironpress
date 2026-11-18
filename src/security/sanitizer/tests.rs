@@ -76,14 +76,63 @@ fn nesting_depth_check() {
 
 #[test]
 fn nesting_depth_counts_only_elements_that_hold_content() {
-    // Void elements, self-closing tags, comments, the doctype and processing instructions hold nothing, so they add
-    // no depth however many there are
+    // Void elements, comments, the doctype, processing instructions and self-closing SVG elements hold nothing, so
+    // they add no depth however many there are
     let flat = "<!DOCTYPE html><p>".to_string()
         + &"a<br>b<hr><input type=checkbox><img src=x.png><wbr><!-- note --><col><meta charset=utf-8>".repeat(600)
-        + "<span/><?xml version=\"1.0\"?></p>";
-    assert_eq!(check_nesting_depth(&flat), 1);
+        + "<svg><path d=\"M0 0\"/><rect/></svg><?xml version=\"1.0\"?></p>";
+    assert_eq!(check_nesting_depth(&flat), 2);
     assert!(sanitize_html(&flat).is_ok());
     assert_eq!(check_nesting_depth("<BR><Img SRC=x><DIV></DIV>"), 1);
+}
+
+#[test]
+fn nesting_depth_counts_what_the_parser_builds() {
+    // html5ever ignores a `/` on an HTML element, so `<div/>` stays open
+    assert_eq!(check_nesting_depth(&"<div/>".repeat(5)), 5);
+    // An end tag of an element that isn't open is ignored, not counted as closing one
+    assert_eq!(
+        check_nesting_depth("<div></x></y></div><div><div></div></div>"),
+        2
+    );
+    assert_eq!(
+        check_nesting_depth(&("</x>".repeat(5) + &"<div>".repeat(3))),
+        3
+    );
+    // A misnested formatting end tag can leave the elements inside it open (the adoption agency algorithm)
+    assert_eq!(check_nesting_depth(&"<b><div></b>".repeat(4)), 8);
+    // The parser adds a <tbody> to a table and a <tr> to a cell outside one
+    assert_eq!(check_nesting_depth("<table><tr><td>x</td></tr></table>"), 4);
+    assert_eq!(check_nesting_depth("<table><td>x</table>"), 4);
+}
+
+#[test]
+fn nesting_depth_ends_comments_and_tags_where_the_tokenizer_does() {
+    let deep = "<div>".repeat(600);
+    // `<!-->` and `<!--->` are whole comments, and `--!>` ends one
+    for comment in ["<!-->", "<!--->", "<!-- a --!>"] {
+        assert_eq!(
+            check_nesting_depth(&format!("{comment}{deep}")),
+            600,
+            "{comment}"
+        );
+    }
+    // A quote that doesn't follow `=` doesn't start a quoted value
+    assert_eq!(check_nesting_depth(&format!("<span a\"b>{deep}")), 601);
+    assert_eq!(check_nesting_depth(&format!("<span a=b\"c>{deep}")), 601);
+    // A `/` in an unquoted value doesn't make the tag self-closing
+    assert_eq!(check_nesting_depth("<svg><a href=/><g></g></a></svg>"), 3);
+    // In SVG, <title> and <style> hold markup, not raw text
+    assert_eq!(check_nesting_depth(&format!("<svg><title>{deep}")), 602);
+    assert_eq!(check_nesting_depth(&format!("<svg><style>{deep}")), 602);
+    for html in [
+        format!("<!-->{deep}"),
+        format!("<span a\"x>{deep}"),
+        format!("<svg><title>{deep}"),
+        "<div/>".repeat(600),
+    ] {
+        assert!(sanitize_html(&html).is_err());
+    }
 }
 
 #[test]
@@ -103,7 +152,8 @@ fn nesting_depth_skips_the_text_of_scripts_styles_and_comments() {
     let html = "<style>a > b { color: red } /* <div><div> */</style>\
                 <script>if (a<b && c>d) { x = '<div>'; }</script>\
                 <!-- <div><div><div> -->\
-                <textarea><div><div></textarea><title><div></title><p>x</p>";
+                <textarea><div><div></textarea><title><div></title><p>x</p>\
+                <plaintext><div><div><div>";
     assert_eq!(check_nesting_depth(html), 1);
 }
 

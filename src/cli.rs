@@ -39,7 +39,7 @@ pub struct CliOptions {
     pub occlusion_cull: bool,
     /// Turn form controls into fillable AcroForm fields.
     pub pdf_forms: bool,
-    /// How many elements nested in each other are laid out.
+    /// How deeply elements may nest; a deeper document fails.
     pub max_nesting_depth: usize,
     /// Read from stdin instead of a file.
     pub from_stdin: bool,
@@ -72,7 +72,7 @@ impl Default for CliOptions {
             raster_quality: RasterQuality::default(),
             occlusion_cull: false,
             pdf_forms: false,
-            max_nesting_depth: crate::layout::context::DepthLimit::DEFAULT_MAX,
+            max_nesting_depth: crate::parser::nesting::NestingLimit::DEFAULT_MAX,
             from_stdin: false,
             positional: Vec::new(),
             help: false,
@@ -356,7 +356,7 @@ OPTIONS:
                             Rasterization DPI for flattened backgrounds (default: 192)
     --occlusion-cull <BOOL> Skip raster images fully covered by a later opaque element (default: false)
     --pdf-forms <BOOL>      Turn form controls into fillable PDF form fields (default: false)
-    --max-nesting-depth <N> Elements nested in each other that are laid out; a deeper document fails
+    --max-nesting-depth <N> How deeply elements may nest; a deeper document fails
                             (default: 31; each level takes stack)
     --base-path <DIR>       Base dir for relative @import / @font-face URLs
     --stdin                 Read HTML from stdin instead of a file
