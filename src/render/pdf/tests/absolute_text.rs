@@ -27,9 +27,9 @@ const PAGE_LEFT: f32 = 72.0;
 #[test]
 fn its_line_starts_inside_its_left_border_and_padding() {
     let x = text_x(
-        r#"<div style="position:relative;height:40pt"><div style="position:absolute;left:0;top:0;padding-left:8pt;border-left:2pt solid #f00;font:12pt Helvetica">Box</div></div>"#,
+        r#"<div style="position:relative;height:40pt"><div style="position:absolute;left:0;top:0;padding-left:8pt;border-left:1.5pt solid #f00;font:12pt Helvetica">Box</div></div>"#,
     );
-    assert_eq!(x, PAGE_LEFT + 2.0 + 8.0);
+    assert_eq!(x, PAGE_LEFT + 1.5 + 8.0);
 }
 
 #[test]

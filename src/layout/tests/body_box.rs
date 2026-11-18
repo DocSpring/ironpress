@@ -59,9 +59,10 @@ fn the_top_border_is_on_the_first_page_and_the_bottom_on_the_last() {
     assert_eq!(
         borders,
         vec![
-            [2.0, 2.0, 0.0, 2.0],
-            [0.0, 2.0, 0.0, 2.0],
-            [0.0, 2.0, 2.0, 2.0]
+            // `2pt` is 2.67px, a 2px border (1.5pt)
+            [1.5, 1.5, 0.0, 1.5],
+            [0.0, 1.5, 0.0, 1.5],
+            [0.0, 1.5, 1.5, 1.5]
         ]
     );
 }
@@ -82,7 +83,7 @@ fn the_last_slice_ends_after_the_last_margin_and_the_bottom_padding() {
     // bottom margin (the padding keeps it inside the body), padding, border.
     let bottom = top + border[0] + padding_box + border[2];
     assert!(
-        (bottom - (6.0 + 2.0 + 5.0 + 12.0 + 4.0 + 5.0 + 2.0)).abs() < 0.01,
+        (bottom - (6.0 + 1.5 + 5.0 + 12.0 + 4.0 + 5.0 + 1.5)).abs() < 0.01,
         "bottom {bottom}"
     );
 }
@@ -109,8 +110,8 @@ fn a_body_without_a_border_or_its_own_background_has_no_box() {
 
 #[test]
 fn a_set_height_sizes_the_box_whatever_its_content() {
-    // `height` is the content box: 30pt, then 5pt padding and a 2pt border on
-    // each side. The 12pt line inside doesn't change it.
+    // `height` is the content box: 30pt, then 5pt padding and a 2pt border,
+    // which is 2px (1.5pt), on each side. The 12pt line inside doesn't change it.
     let pages = slices(&page(
         &format!("{BODY};height:30pt"),
         "<p style=\"margin:0\">One</p>",
@@ -118,7 +119,7 @@ fn a_set_height_sizes_the_box_whatever_its_content() {
     let (top, padding_box, border, _) = pages[0].expect("a body slice");
     assert_eq!(top, 6.0);
     assert!(
-        (border[0] + padding_box + border[2] - 44.0).abs() < 0.01,
+        (border[0] + padding_box + border[2] - 43.0).abs() < 0.01,
         "border box {}",
         border[0] + padding_box + border[2]
     );

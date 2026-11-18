@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>border widths snapped to whole pixels</title>
+<style>
+  @page { size: 360px 220px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 0; }
+  .box { display: inline-block; width: 60px; height: 30px; margin: 0 10px 10px 0; vertical-align: top; }
+  .pt1 { border: 1pt solid #283593; }
+  .pt2 { border: 2pt solid #283593; }
+  .px25 { border: 2.5px solid #283593; }
+  .half { border: 0.5px solid #283593; }
+  .em { font-size: 16px; border: 0.15em solid #283593; }
+  .dashed { border: 2pt dashed #c62828; }
+  .dotted { border: 2.5px dotted #c62828; }
+  .outline { outline: 2pt solid #2e7d32; outline-offset: 2px; margin-left: 4px; }
+  .rule { column-count: 2; column-gap: 12px; column-rule: 2.5px solid #2e7d32; width: 300px; }
+</style>
+</head>
+<body>
+  <div class="box pt1"></div><div class="box pt2"></div><div class="box px25"></div><div class="box half"></div>
+  <div class="box em"></div><div class="box dashed"></div><div class="box dotted"></div><div class="box outline"></div>
+  <div class="rule">Two columns of text with a rule between them that is two and a half pixels wide.</div>
+</body>
+</html>

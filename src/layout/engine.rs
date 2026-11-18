@@ -12990,7 +12990,7 @@ line 3</pre>
             .nowrap {
                 width: 50pt;
                 padding: 3pt;
-                border: 4pt solid black;
+                border: 3.75pt solid black;
                 font-size: 20pt;
                 white-space: nowrap;
                 overflow: visible;
@@ -13013,8 +13013,8 @@ line 3</pre>
             .expect("nowrap block");
         assert_eq!(block.box_model.padding.top, 3.0);
         assert_eq!(block.box_model.padding.left, 3.0);
-        assert_eq!(block.box_model.border.top.width, 4.0);
-        assert_eq!(block.box_model.border.left.width, 4.0);
+        assert_eq!(block.box_model.border.top.width, 3.75);
+        assert_eq!(block.box_model.border.left.width, 3.75);
         assert_eq!(block.lines[0].runs[0].font_size, 20.0);
     }
 

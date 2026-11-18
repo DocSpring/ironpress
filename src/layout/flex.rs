@@ -5239,15 +5239,15 @@ mod cutoff_tests {
     #[test]
     fn calc_percent_flex_basis_uses_the_inner_main_size() {
         let width = single_flex_cell_width(
-            r#"<div style="display:flex;box-sizing:border-box;width:200pt;border:2pt solid #222">
+            r#"<div style="display:flex;box-sizing:border-box;width:200pt;border:3pt solid #222">
                 <div style="flex:0 0 calc(25% - 10pt);height:1pt"></div>
             </div>"#,
         );
 
-        // 25% resolves against the 196pt content box, not the 200pt border box:
-        // 196 * .25 - 10 = 39pt.
+        // 25% resolves against the 194pt content box, not the 200pt border box:
+        // 194 * .25 - 10 = 38.5pt.
         assert!(
-            (width - 39.0).abs() < 0.000_1,
+            (width - 38.5).abs() < 0.000_1,
             "calc percentage flex basis used the wrong box: {width}pt"
         );
     }

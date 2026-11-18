@@ -3808,10 +3808,10 @@ mod tests {
         let style = ComputedStyle {
             height: Some(68.0),
             max_height: Some(58.0),
-            padding: EdgeSizes::uniform(7.0),
+            padding: EdgeSizes::uniform(6.0),
             border: crate::style::computed::BorderSides::uniform(
                 crate::style::computed::BorderSide::solid(
-                    2.0,
+                    3.0,
                     crate::parser::css::SpecifiedColor::CurrentColor,
                 ),
             ),
@@ -3934,10 +3934,10 @@ mod tests {
             width: Some(58.0),
             min_width: Some(92.0),
             height: Some(48.0),
-            padding: EdgeSizes::uniform(5.0),
+            padding: EdgeSizes::uniform(4.0),
             border: crate::style::computed::BorderSides::uniform(
                 crate::style::computed::BorderSide::solid(
-                    2.0,
+                    3.0,
                     crate::parser::css::SpecifiedColor::CurrentColor,
                 ),
             ),

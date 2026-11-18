@@ -3153,16 +3153,34 @@ impl BorderSide {
         Self::new(width, color, BorderStyle::Solid)
     }
 
-    pub const fn used_width(self) -> f32 {
+    pub fn used_width(self) -> f32 {
         if self.style.paints() {
-            self.specified_width
+            Self::snap_width(self.specified_width)
         } else {
             0.0
         }
     }
 
-    pub const fn paints(self) -> bool {
+    pub fn paints(self) -> bool {
         self.used_width() > 0.0
+    }
+
+    /// A border, outline or column rule width in pt, snapped as CSS Values 4 §7.7 ("snap as a border width") says
+    /// and Blink does when it computes one (`StyleBuilderConverter::ConvertBorderWidth`): a width under a CSS pixel
+    /// is one pixel, and a wider one is cut to whole pixels, so `2pt` (2.67px) is a 2px border. Printing has one
+    /// device pixel per CSS pixel.
+    pub fn snap_width(width: f32) -> f32 {
+        // Float error in a width converted to pt mustn't drop a whole pixel
+        const SNAP: f32 = 1e-3;
+        let px = crate::fonts::PT_PER_CSS_PX;
+        let pixels = width / px;
+        if pixels <= 0.0 {
+            0.0
+        } else if pixels < 1.0 {
+            px
+        } else {
+            (pixels + SNAP).floor() * px
+        }
     }
 }
 
@@ -22778,14 +22796,15 @@ mod tests {
     fn border_sides_max_and_widths() {
         // Lines 353-358: BorderSides max_width, horizontal_width, vertical_width
         let b = BorderSides {
+            // 4px, 6px, 2px and 5px
             top: BorderSide::solid(3.0, SpecifiedColor::CurrentColor),
-            right: BorderSide::solid(5.0, SpecifiedColor::CurrentColor),
-            bottom: BorderSide::solid(2.0, SpecifiedColor::CurrentColor),
-            left: BorderSide::solid(4.0, SpecifiedColor::CurrentColor),
+            right: BorderSide::solid(4.5, SpecifiedColor::CurrentColor),
+            bottom: BorderSide::solid(1.5, SpecifiedColor::CurrentColor),
+            left: BorderSide::solid(3.75, SpecifiedColor::CurrentColor),
         };
-        assert!((b.max_width() - 5.0).abs() < 0.01);
-        assert!((b.horizontal_width() - 9.0).abs() < 0.01); // left + right = 4 + 5
-        assert!((b.vertical_width() - 5.0).abs() < 0.01); // top + bottom = 3 + 2
+        assert!((b.max_width() - 4.5).abs() < 0.01);
+        assert!((b.horizontal_width() - 8.25).abs() < 0.01); // left + right
+        assert!((b.vertical_width() - 4.5).abs() < 0.01); // top + bottom
     }
 
     #[test]

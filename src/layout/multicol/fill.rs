@@ -173,8 +173,8 @@ mod tests {
 
     fn bordered_style() -> ComputedStyle {
         ComputedStyle {
-            padding: EdgeSizes::uniform(7.0),
-            border: BorderSides::uniform(BorderSide::solid(2.0, SpecifiedColor::CurrentColor)),
+            padding: EdgeSizes::uniform(6.0),
+            border: BorderSides::uniform(BorderSide::solid(3.0, SpecifiedColor::CurrentColor)),
             box_sizing: BoxSizing::BorderBox,
             ..Default::default()
         }

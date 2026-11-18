@@ -1657,11 +1657,7 @@ pub(crate) fn build_pseudo_block(
         },
         border_radii: pseudo_style.resolve_corner_radii(border_box_width, border_box_height),
         shadows: pseudo_style.box_shadow.clone(),
-        outline: OutlinePaint {
-            width: pseudo_style.outline_width,
-            color: pseudo_style.outline_color,
-            offset: pseudo_style.outline_offset,
-        },
+        outline: OutlinePaint::from_style(pseudo_style),
         group: crate::layout::elements::PaintGroup::from_style(pseudo_style),
         visible: pseudo_style.visibility == Visibility::Visible,
         ..BoxPaint::default()

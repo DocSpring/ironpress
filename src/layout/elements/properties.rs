@@ -331,7 +331,7 @@ pub(crate) struct OutlinePaint {
 impl OutlinePaint {
     pub(crate) fn from_style(style: &crate::style::computed::ComputedStyle) -> Self {
         Self {
-            width: style.outline_width,
+            width: crate::style::computed::BorderSide::snap_width(style.outline_width),
             color: style.outline_color,
             offset: style.outline_offset,
         }

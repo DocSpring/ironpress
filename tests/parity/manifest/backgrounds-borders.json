@@ -1241,6 +1241,18 @@
     "depends_on": ["probe-fill-box", "probe-border-box"]
   },
   {
+    "id": "border-width-snapped-to-pixels",
+    "category": "backgrounds-borders",
+    "feature": "border-width",
+    "subfeature": "snapped-to-pixels",
+    "description": "Border, outline and column rule widths that aren't whole pixels (1pt, 2pt, 2.5px, 0.5px, 0.15em, and dashed and dotted 2pt and 2.5px): Chromium snaps each as CSS Values 4 says, under a pixel to one pixel and wider ones down to whole pixels, before layout, so box sizes and dash lengths follow. Catches: fractional borders drawn and laid out at their authored width.",
+    "file": "cases/backgrounds-borders/border-width-snapped-to-pixels.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-border-box"]
+  },
+  {
     "id": "border-style-3d-colors",
     "category": "backgrounds-borders",
     "feature": "border-style",

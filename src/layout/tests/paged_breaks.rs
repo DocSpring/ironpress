@@ -376,8 +376,10 @@ fn descendant_break_fills_each_auto_sized_ancestor_fragment() {
         "page 1: {first_page:#?}"
     );
     assert!(
+        // Below the stage's 1pt top border, a 1px border (0.75pt), and the
+        // 24.75pt margin
         first_page.0.iter().any(|fragment| fragment.width == 94.5
-            && fragment.height == Some(124.25)
+            && fragment.height == Some(124.5)
             && fragment.bottom_border == 0.0
             && fragment.child_count == 1),
         "page 1: {first_page:#?}"

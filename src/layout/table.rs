@@ -4821,9 +4821,9 @@ mod subpoint_width_tests {
     fn collapsed_table_carries_its_outer_border_extent_once_after_the_last_row() {
         let nodes = parse_html(
             r#"<table style="border-collapse:collapse;margin-bottom:4pt">
-                <tr><td style="border:1pt solid">a</td></tr>
-                <tr><td style="border:1pt solid">b</td></tr>
-                <tr><td style="border:1pt solid">c</td></tr>
+                <tr><td style="border:1.5pt solid">a</td></tr>
+                <tr><td style="border:1.5pt solid">b</td></tr>
+                <tr><td style="border:1.5pt solid">c</td></tr>
             </table>"#,
         )
         .expect("valid collapsed table fixture");
@@ -4844,9 +4844,9 @@ mod subpoint_width_tests {
         assert_eq!(
             row_flow,
             vec![
-                (0.5, 0.0, 0.0, 0.0),
+                (0.75, 0.0, 0.0, 0.0),
                 (0.0, 0.0, 0.0, 0.0),
-                (0.0, 0.0, 0.0, 0.5),
+                (0.0, 0.0, 0.0, 0.75),
             ]
         );
 

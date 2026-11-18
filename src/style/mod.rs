@@ -8,4 +8,6 @@ pub(crate) mod raster_quality;
 pub mod resolve;
 
 #[cfg(test)]
+mod border_width_tests;
+#[cfg(test)]
 mod transform_tests;

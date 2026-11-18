@@ -72,9 +72,10 @@ mod tests {
         let style = ComputedStyle {
             width: Some(126.0),
             height: Some(68.0),
-            padding: EdgeSizes::uniform(7.0),
+            padding: EdgeSizes::uniform(6.0),
+            // 4px: border widths are whole pixels
             border: BorderSides::uniform(crate::style::computed::BorderSide::solid(
-                2.0,
+                3.0,
                 crate::parser::css::SpecifiedColor::CurrentColor,
             )),
             box_sizing: BoxSizing::BorderBox,
@@ -91,9 +92,10 @@ mod tests {
         let style = ComputedStyle {
             width: Some(108.0),
             height: Some(50.0),
-            padding: EdgeSizes::uniform(7.0),
+            padding: EdgeSizes::uniform(6.0),
+            // 4px: border widths are whole pixels
             border: BorderSides::uniform(crate::style::computed::BorderSide::solid(
-                2.0,
+                3.0,
                 crate::parser::css::SpecifiedColor::CurrentColor,
             )),
             ..Default::default()
