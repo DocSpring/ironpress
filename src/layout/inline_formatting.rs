@@ -552,6 +552,7 @@ impl<'a> AnonymousInlineFormattingContext<'a> {
         let super::text::LinesAmongFloats {
             lines,
             inline_float_tops,
+            ..
         } = super::text::wrap_text_runs_among_floats(
             runs,
             TextWrapOptions::new(

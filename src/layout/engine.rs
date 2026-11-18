@@ -874,9 +874,9 @@ pub struct TextRunMetadata {
     /// only on the resulting single-glyph composition.
     pub text_combine_upright: crate::style::computed::TextCombineUpright,
     pub is_drop_cap: bool,
-    /// Where a float inside the paragraph's text occurs: the index of the
-    /// float among the paragraph's floats. The run itself takes no room.
-    pub(crate) float_anchor: Option<usize>,
+    /// A place in the paragraph's text where a float or an absolutely
+    /// positioned box occurs. The run itself takes no room.
+    pub(crate) anchor: Option<RunAnchor>,
     /// An `outside` list marker: it can push its line down but doesn't make
     /// it taller below the baseline (`resolve_line_box_metrics`).
     pub(crate) is_outside_marker: bool,
@@ -1033,17 +1033,37 @@ pub struct TextRun {
     pub(crate) bidi_frames: Vec<crate::bidi::BidiFrame>,
 }
 
+/// What occurs at an anchor run (`TextRunMetadata::anchor`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RunAnchor {
+    /// The float with this index among the paragraph's floats.
+    Float(usize),
+    /// The absolutely positioned box with this index among the paragraph's,
+    /// whose static position is where its anchor falls in the lines.
+    OutOfFlow(usize),
+}
+
 impl TextRun {
     /// The place in a paragraph's text where its float number `index` occurs.
     pub(crate) fn float_anchor(index: usize) -> Self {
         Self {
             inline_box: Some(Box::default()),
             metadata: TextRunMetadata {
-                float_anchor: Some(index),
+                anchor: Some(RunAnchor::Float(index)),
                 ..Default::default()
             },
             ..Default::default()
         }
+    }
+
+    /// The place in a paragraph's text where its absolutely positioned box
+    /// number `index` occurs, after this run: an anchor with this run's font,
+    /// which measures the space before the box.
+    pub(crate) fn out_of_flow_anchor_after(&self, index: usize) -> Self {
+        let mut anchor = self.text_fragment(String::new(), true);
+        anchor.inline_box = Some(Box::default());
+        anchor.metadata.anchor = Some(RunAnchor::OutOfFlow(index));
+        anchor
     }
 }
 

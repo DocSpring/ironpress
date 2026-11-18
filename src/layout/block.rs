@@ -935,6 +935,7 @@ pub(crate) fn layout_block_element(
             let super::text::LinesAmongFloats {
                 lines,
                 inline_float_tops,
+                ..
             } = super::text::wrap_text_runs_among_floats(
                 std::mem::take(runs),
                 TextWrapOptions::new(
@@ -1820,7 +1821,7 @@ pub(crate) fn layout_block_element(
         leading_floats.emit(&[], &mut leading_float_nodes);
         if let Some(static_position_runs) = static_position_runs {
             out_of_flow_static_positions = super::inline_formatting::out_of_flow_static_positions(
-                &static_position_runs,
+                static_position_runs,
                 &out_of_flow_boundaries,
                 &lines,
                 super::inline_formatting::LineGeometry {

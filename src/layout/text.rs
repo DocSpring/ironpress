@@ -21,8 +21,8 @@ use std::collections::HashMap;
 
 use super::engine::{
     CounterState, FootnoteBodyStyle, FootnoteLinkData, InlineBox, InlineBoxPaint, LayoutBorder,
-    RunWhitespace, SyntheticFontWeight, TextLine, TextRun, TextShaping, decode_footnote_link,
-    encode_footnote_link_data,
+    RunAnchor, RunWhitespace, SyntheticFontWeight, TextLine, TextRun, TextShaping,
+    decode_footnote_link, encode_footnote_link_data,
 };
 use super::helpers::DropCap;
 use super::inline_formatting::{
@@ -2187,15 +2187,20 @@ fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledW
         let first_word_joins = !prev_run_ends_ws && !run_starts_ws;
         let run_ends_ws = run.text.chars().last().is_some_and(is_collapsible_space);
 
-        if run.metadata.float_anchor.is_some() {
-            // A float takes no room in the line and leaves the spacing around
-            // it as it was.
+        if let Some(anchor) = run.metadata.anchor {
+            // A float or an absolute box takes no room in the line and leaves
+            // the spacing around it as it was. An absolute box's anchor notes
+            // whether a space is before it, as a box there would.
+            let (joins_prev, break_before) = match anchor {
+                RunAnchor::Float(_) => (true, false),
+                RunAnchor::OutOfFlow(_) => (!prev_run_ends_ws, prev_run_ends_ws),
+            };
             styled_words.push(StyledWord {
                 text: String::new(),
                 run_index,
                 preserve_spacing: false,
-                joins_prev: true,
-                break_before: false,
+                joins_prev,
+                break_before,
                 has_internal_predecessor: false,
                 ends_run: true,
             });
@@ -2665,8 +2670,11 @@ pub(crate) fn wrap_text_runs_beside_floats(
 pub(crate) struct LinesAmongFloats {
     pub(crate) lines: Vec<TextLine>,
     /// The line top, below the content-box top, that each float occurring in
-    /// the text (an anchor run, `TextRunMetadata::float_anchor`) was placed at.
+    /// the text (an anchor run, `RunAnchor::Float`) was placed at.
     pub(crate) inline_float_tops: Vec<f32>,
+    /// Where each absolute box's anchor (`RunAnchor::OutOfFlow`) fell, with
+    /// the box's index.
+    pub(crate) out_of_flow_places: Vec<(usize, OutOfFlowPlace)>,
 }
 
 /// [`wrap_text_runs_beside_floats`] for text that has floats of its own: each
@@ -2687,6 +2695,7 @@ pub(crate) fn wrap_text_runs_among_floats(
     let line_height_factor = options.line_height_factor.max(0.0);
     let mut lines: Vec<TextLine> = Vec::new();
     let mut bidi_paragraphs = BidiParagraphs::default();
+    let mut out_of_flow_places: Vec<(usize, OutOfFlowPlace)> = Vec::new();
     let mut current_runs: Vec<TextRun> = Vec::new();
     let mut current_width: f32 = 0.0;
     // The baseline-shift of a `vertical-align: super`/`sub` run is a fraction of
@@ -2721,6 +2730,7 @@ pub(crate) fn wrap_text_runs_among_floats(
         return LinesAmongFloats {
             lines,
             inline_float_tops: vec![0.0; inline_floats.len()],
+            out_of_flow_places: Vec::new(),
         };
     }
 
@@ -2765,9 +2775,51 @@ pub(crate) fn wrap_text_runs_among_floats(
         } = token;
         let template = &runs[run_index];
         room.place_deferred(&lines, line_height, false);
-        if let Some(anchor) = template.metadata.float_anchor {
-            room.float_occurs(anchor, &lines, line_height, current_width);
-            continue;
+        match template.metadata.anchor {
+            Some(RunAnchor::Float(anchor)) => {
+                room.float_occurs(anchor, &lines, line_height, current_width);
+                continue;
+            }
+            Some(RunAnchor::OutOfFlow(anchor)) => {
+                // Where a zero-width box would go: after the space before it,
+                // or at the start of the next line if that space doesn't fit.
+                let space_owner = collapsed_space_owner(&runs, previous_token_run, run_index);
+                let previous_ends_whitespace = current_runs
+                    .last()
+                    .and_then(|run: &TextRun| run.text.chars().last())
+                    .is_some_and(is_collapsible_space);
+                let advance = measure_inline_token(
+                    template,
+                    InlineTokenContext {
+                        preceding_runs: &current_runs,
+                        line_has_content: current_width > 0.0,
+                        previous_ends_whitespace,
+                        joins_prev,
+                        space_owner: space_owner.map(|owner| &runs[owner]),
+                    },
+                    fonts,
+                )
+                .end_width(current_width);
+                let has_preceding_content =
+                    current_runs.iter().any(|run| !run.is_opening_inline_edge());
+                let wraps = has_preceding_content
+                    && break_before
+                    && width_exceeds_limit(
+                        advance,
+                        room.max_width(&lines, line_height, lines.len()),
+                    );
+                out_of_flow_places.push((
+                    anchor,
+                    OutOfFlowPlace {
+                        line: lines.len(),
+                        advance,
+                        wraps,
+                        line_has_content: current_width > 0.0,
+                    },
+                ));
+                continue;
+            }
+            None => {}
         }
         let space_owner = collapsed_space_owner(&runs, previous_token_run, run_index);
         // A space that ends the previous token's text joins its fragment.
@@ -3260,6 +3312,7 @@ pub(crate) fn wrap_text_runs_among_floats(
     LinesAmongFloats {
         lines,
         inline_float_tops: room.inline_float_tops(),
+        out_of_flow_places,
     }
 }
 
@@ -3721,6 +3774,21 @@ pub(crate) struct OutOfFlowBoundary {
     /// Whether it was block-level before it was positioned: such a box
     /// starts below a line that has content before it.
     pub(crate) block_level: bool,
+}
+
+/// Where an absolute box's anchor fell in the wrapped lines.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct OutOfFlowPlace {
+    /// The line it fell on.
+    pub(crate) line: usize,
+    /// Its distance from the line's start: the content before it and the
+    /// space between them.
+    pub(crate) advance: f32,
+    /// A zero-width box there would start the next line: the space before it
+    /// doesn't fit.
+    pub(crate) wraps: bool,
+    /// The line has content before it.
+    pub(crate) line_has_content: bool,
 }
 
 impl CollectionState {

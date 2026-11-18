@@ -117,3 +117,49 @@ fn a_flex_items_static_position_is_applied_once() {
         "the flex container's static position is final"
     );
 }
+
+#[test]
+fn many_boxes_in_one_paragraph_each_sit_after_their_own_word() {
+    // The paragraph is wrapped once for all of them: each box is where a zero-width box would be among the words,
+    // whatever the boxes after it.
+    let words = ["Alpha", "beta", "gamma", "delta"];
+    let markup: String = (0..200)
+        .map(|index| {
+            format!(
+                "{} <i style=\"position:absolute;width:4pt;height:4pt\"></i> ",
+                words[index % words.len()]
+            )
+        })
+        .collect();
+    let boxes = absolute_boxes(&format!(
+        r#"<p style="{PARAGRAPH};width:200pt">{markup}</p>"#
+    ));
+    assert_eq!(boxes.len(), 200);
+    let positions: Vec<Point> = boxes
+        .iter()
+        .map(|positioning| positioning.static_position.expect("a static position"))
+        .collect();
+    assert!(
+        (positions[0].x - width("Alpha ")).abs() < 0.01,
+        "the first box is after the first word and its space: {:?}",
+        positions[0]
+    );
+    assert!(
+        (positions[1].x - width("Alpha beta ")).abs() < 0.01,
+        "the second is after the second word: {:?}",
+        positions[1]
+    );
+    for pair in positions.windows(2) {
+        let (before, after) = (pair[0], pair[1]);
+        assert!(
+            after.y > before.y || (after.y == before.y && after.x > before.x),
+            "each box is after the one before it in the text: {before:?} then {after:?}"
+        );
+        assert!(after.x <= 200.0 + 0.01, "within the line: {after:?}");
+    }
+    assert!(
+        positions[199].y > 15.0 * 20.0,
+        "the boxes run over many lines: {:?}",
+        positions[199]
+    );
+}
