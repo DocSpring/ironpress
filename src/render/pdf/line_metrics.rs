@@ -1,5 +1,6 @@
 use super::*;
 use crate::layout::elements::{LayoutNode, LayoutVisitor, TextBlock};
+use crate::layout::vertical_align::{AlignedBox, AlignmentBasis, LineExtents};
 
 /// Glyph baseline shift (PDF points, up positive) for a text run.
 ///
@@ -248,7 +249,7 @@ fn line_box_metrics_with_resolved_baseline(
     let has_text_shift = line.runs.iter().any(|run| {
         run.inline_box.is_none() && run_line_box_baseline_shift(run, parent_font_size) != 0.0
     });
-    let (mut above, mut below) = if has_text_shift {
+    let (above, mut below) = if has_text_shift {
         line_shifted_text_extents(line, parent_font_size, custom_fonts)
     } else {
         let authored = line_authored_text_extents(line, custom_fonts);
@@ -271,53 +272,25 @@ fn line_box_metrics_with_resolved_baseline(
     // the line's ascent/descent ONLY when it extends past the strut's edges; a box
     // that fits inside the existing leading leaves the baseline put. A box without
     // a content baseline sits entirely above the baseline (its bottom edge rests
-    // on it). Top/middle/bottom boxes don't move the baseline; they only widen the
-    // line box, which `line.height` already reflects from the wrap pass.
-    // x-height of the parent text (pt), for a `vertical-align: middle` box whose
-    // centre sits at `baseline + x-height/2`.
+    // on it). Top and bottom boxes don't move the baseline; they only widen the
+    // line box, which `line.height` already reflects from the wrap pass. A
+    // `middle` box centres on `baseline + x-height/2` of the parent text.
     let line_x_height = line_primary_x_height_ratio(&line.runs, custom_fonts) * parent_font_size;
+    let mut extents = LineExtents { above, below };
     for run in &line.runs {
-        if let Some(inline) = run.inline_box.as_deref()
-            && matches!(
-                inline.vertical_align,
-                VerticalAlign::Baseline
-                    | VerticalAlign::Sub
-                    | VerticalAlign::Super
-                    | VerticalAlign::Length(_)
-                    | VerticalAlign::Percent(_)
-                    | VerticalAlign::Middle
-            )
-        {
-            // Box ascent above its own baseline and descent below it.
-            let box_ascent = inline.outer_baseline_ascent();
-            let box_descent = (inline.outer_height() - box_ascent).max(0.0);
-            // Sub/super shift the box's baseline relative to the line baseline,
-            // moving its extents by a fraction of the run font size; middle centres
-            // the box on `baseline + x-height/2`.
-            let (box_above, box_below) = match inline.vertical_align {
-                VerticalAlign::Sub => (
-                    box_ascent - parent_font_size * SUB_SHIFT_RATIO,
-                    box_descent + parent_font_size * SUB_SHIFT_RATIO,
-                ),
-                VerticalAlign::Super => (
-                    box_ascent + parent_font_size * SUPER_SHIFT_RATIO,
-                    box_descent - parent_font_size * SUPER_SHIFT_RATIO,
-                ),
-                VerticalAlign::Length(v) => (box_ascent + v, box_descent - v),
-                VerticalAlign::Percent(p) => {
-                    let shift = run_line_height_for_vertical_align(run) * p;
-                    (box_ascent + shift, box_descent - shift)
-                }
-                VerticalAlign::Middle => (
-                    inline.outer_height() / 2.0 + line_x_height / 2.0,
-                    inline.outer_height() / 2.0 - line_x_height / 2.0,
-                ),
-                _ => (box_ascent, box_descent),
-            };
-            above = above.max(box_above.max(0.0));
-            below = below.max(box_below.max(0.0));
+        let Some(inline) = run.inline_box.as_deref() else {
+            continue;
+        };
+        let basis = AlignmentBasis {
+            parent_font_size,
+            parent_x_height: line_x_height,
+            line_height: run_line_height_for_vertical_align(run),
+        };
+        if let Some(box_extents) = AlignedBox::of(inline).baseline_extents(basis) {
+            extents.include(box_extents);
         }
     }
+    let LineExtents { above, below } = extents;
 
     LineBoxMetrics {
         ascender: above,

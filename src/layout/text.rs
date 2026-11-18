@@ -1,3 +1,4 @@
+use crate::layout::vertical_align::{AlignedBox, AlignmentBasis, LineExtents};
 #[cfg(test)]
 use crate::parser::css::SelectorContext;
 use crate::parser::css::{AncestorInfo, CssRule, PseudoElement};
@@ -1120,18 +1121,21 @@ fn resolve_line_box_metrics(
     // taller below the baseline for it, as Chrome lays it out. Its extent
     // below is used only when nothing else gives one.
     let mut marker_below = f32::NEG_INFINITY;
-    let text_extents = |run: &TextRun| {
+    let own_line_height = |run: &TextRun| {
         let factor = if run.line_height_factor.is_finite() {
             run.line_height_factor.max(0.0)
         } else {
             fallback_line_height_factor.max(0.0)
         };
+        run.line_height_font_size() * factor
+    };
+    let text_extents = |run: &TextRun| {
         line_extents(
             run.css_font_family(),
             run.line_height_font_size(),
             run.bold,
             run.font_style.is_slanted(),
-            run.line_height_font_size() * factor,
+            own_line_height(run),
             fonts,
         )
     };
@@ -1147,38 +1151,16 @@ fn resolve_line_box_metrics(
                 above = above.max(extents.above);
                 *below = below.max(extents.below);
             }
-            let box_ascent = inline.outer_baseline_ascent();
-            let box_descent = (inline.outer_height() - box_ascent).max(0.0);
-            let (box_above, box_below) = match inline.vertical_align {
-                VerticalAlign::Sub => (
-                    box_ascent - shift_basis * crate::render::pdf::SUB_SHIFT_RATIO,
-                    box_descent + shift_basis * crate::render::pdf::SUB_SHIFT_RATIO,
-                ),
-                VerticalAlign::Super => (
-                    box_ascent + shift_basis * crate::render::pdf::SUPER_SHIFT_RATIO,
-                    box_descent - shift_basis * crate::render::pdf::SUPER_SHIFT_RATIO,
-                ),
-                VerticalAlign::Length(value) => (box_ascent + value, box_descent - value),
-                VerticalAlign::Percent(percent) => {
-                    let factor = if run.line_height_factor.is_finite() {
-                        run.line_height_factor.max(0.0)
-                    } else {
-                        fallback_line_height_factor.max(0.0)
-                    };
-                    let shift = run.line_height_font_size() * factor * percent;
-                    (box_ascent + shift, box_descent - shift)
-                }
-                VerticalAlign::Middle => (
-                    inline.outer_height() / 2.0 + line_x_height / 2.0,
-                    inline.outer_height() / 2.0 - line_x_height / 2.0,
-                ),
-                VerticalAlign::Baseline => (box_ascent, box_descent),
-                // These align after the baseline-aligned line box has been
-                // established. Their own box height is included below.
-                VerticalAlign::Top
-                | VerticalAlign::TextTop
-                | VerticalAlign::Bottom
-                | VerticalAlign::TextBottom => continue,
+            let basis = AlignmentBasis {
+                parent_font_size: shift_basis,
+                parent_x_height: line_x_height,
+                line_height: own_line_height(run),
+            };
+            // A box aligned to the line's top or bottom is placed below, once
+            // the baseline-aligned boxes have set the line's height.
+            let Some((box_above, box_below)) = AlignedBox::of(inline).baseline_extents(basis)
+            else {
+                continue;
             };
             above = above.max(box_above.max(0.0));
             *below = below.max(box_below.max(0.0));
@@ -1208,22 +1190,13 @@ fn resolve_line_box_metrics(
     if !above.is_finite() || !below.is_finite() {
         return None;
     }
-    // A `top`- or `bottom`-aligned box taller than the line makes the line
-    // taller, below the baseline for `top` and above it for `bottom`, so the
-    // line's text moves down beside a tall `bottom` box (CSS 2.1 §10.8, as
-    // Chromium applies them in source order). Each is its margin box.
-    for inline in runs.iter().filter_map(|run| run.inline_box.as_deref()) {
-        let extra = inline.outer_height() - (above + below);
-        if extra <= 0.0 {
-            continue;
-        }
-        match inline.vertical_align {
-            VerticalAlign::Top | VerticalAlign::TextTop => below += extra,
-            VerticalAlign::Bottom | VerticalAlign::TextBottom => above += extra,
-            _ => {}
-        }
-    }
-    Some((above + below, above))
+    let mut line = LineExtents { above, below };
+    line.fit_edge_aligned(
+        runs.iter()
+            .filter_map(|run| run.inline_box.as_deref())
+            .map(AlignedBox::of),
+    );
+    Some((line.height(), line.above))
 }
 
 /// One wrappable token (a word, a preserved space-run, a `\n`, or an atomic
@@ -3029,85 +3002,44 @@ pub(crate) fn wrap_text_runs_among_floats(
             // whole box rests above the line baseline (its bottom edge on it).
             // Sub/super then shift the box's baseline down/up relative to the line
             // baseline, moving its extents to the opposite side.
-            let box_extent = match inline.vertical_align {
-                crate::style::computed::VerticalAlign::Baseline
-                | crate::style::computed::VerticalAlign::Sub
-                | crate::style::computed::VerticalAlign::Super
-                | crate::style::computed::VerticalAlign::Length(_)
-                | crate::style::computed::VerticalAlign::Percent(_) => {
-                    let box_ascent = inline.outer_baseline_ascent();
-                    let box_descent = (inline.outer_height() - box_ascent).max(0.0);
-                    let shift = match inline.vertical_align {
-                        crate::style::computed::VerticalAlign::Sub => {
-                            -shift_basis_fs * crate::render::pdf::SUB_SHIFT_RATIO
-                        }
-                        crate::style::computed::VerticalAlign::Super => {
-                            shift_basis_fs * crate::render::pdf::SUPER_SHIFT_RATIO
-                        }
-                        crate::style::computed::VerticalAlign::Length(v) => v,
-                        crate::style::computed::VerticalAlign::Percent(p) => {
-                            authored_run_line_height(template) * p
-                        }
-                        _ => 0.0,
-                    };
-                    let box_above = (box_ascent + shift).max(0.0);
-                    let box_below = (box_descent - shift).max(0.0);
-                    // The surrounding text's own extents above and below the line
-                    // baseline (CSS2 §10.8.1): font ascent/descent plus SYMMETRIC
-                    // half-leading — NOT a split proportional to ascent:descent.
-                    // The two agree only at zero leading; for a larger line-height
-                    // the proportional form misplaces the baseline, so a baseline-
-                    // aligned box's overhang is measured against the wrong edge.
-                    let (asc_ratio, desc_ratio) = crate::fonts::font_metrics_ratios(
-                        template.css_font_family(),
-                        template.bold,
-                        template.font_style.is_slanted(),
-                        fonts,
-                    );
-                    let lh = run_line_height(template);
-                    let content = (asc_ratio + desc_ratio) * template.font_size;
-                    let half_leading = ((lh - content) / 2.0).max(0.0);
-                    let text_above = asc_ratio * template.font_size + half_leading;
-                    let text_below = desc_ratio * template.font_size + half_leading;
-                    box_above.max(text_above) + box_below.max(text_below)
-                }
-                crate::style::computed::VerticalAlign::Middle => {
-                    // Middle centres the box on the parent's mid-x-height
-                    // (baseline + x-height/2), so it reaches `h/2 + x-height/2`
-                    // above the baseline and `h/2 - x-height/2` below — the line
-                    // box must reserve that, combined with the surrounding text's
-                    // own half-leading extents. (Mirrors render `line_box_metrics`.)
-                    let (asc_ratio, desc_ratio) = crate::fonts::font_metrics_ratios(
-                        template.css_font_family(),
-                        template.bold,
-                        template.font_style.is_slanted(),
-                        fonts,
-                    );
-                    let lh = run_line_height(template);
-                    let content = (asc_ratio + desc_ratio) * template.font_size;
-                    let half_leading = ((lh - content) / 2.0).max(0.0);
-                    let text_above = asc_ratio * template.font_size + half_leading;
-                    let text_below = desc_ratio * template.font_size + half_leading;
-                    let xh_ratio = if let crate::style::computed::FontFamily::Custom(name) =
-                        template.css_font_family()
-                    {
-                        crate::system_fonts::find_font(
-                            fonts,
-                            name,
-                            template.bold,
-                            template.font_style.is_slanted(),
-                        )
-                        .map_or(0.5, |(_, f)| f.x_height_ratio())
-                    } else {
-                        0.5
-                    };
-                    let xh = xh_ratio * shift_basis_fs;
-                    let box_above = inline.outer_height() / 2.0 + xh / 2.0;
-                    let box_below = (inline.outer_height() / 2.0 - xh / 2.0).max(0.0);
-                    box_above.max(text_above) + box_below.max(text_below)
-                }
-                _ => inline.outer_height(),
+            // The box reaches above and below the baseline (CSS2 §10.8.1) beside
+            // the surrounding text's own extents: font ascent/descent plus
+            // SYMMETRIC half-leading, not a split proportional to
+            // ascent:descent. The two agree only at zero leading; for a larger
+            // line-height the proportional form misplaces the baseline, so a
+            // baseline-aligned box's overhang is measured against the wrong
+            // edge. A box aligned to the line's top or bottom takes its height.
+            let x_height_ratio = match template.css_font_family() {
+                crate::style::computed::FontFamily::Custom(name) => crate::system_fonts::find_font(
+                    fonts,
+                    name,
+                    template.bold,
+                    template.font_style.is_slanted(),
+                )
+                .map_or(0.5, |(_, font)| font.x_height_ratio()),
+                _ => 0.5,
             };
+            let basis = AlignmentBasis {
+                parent_font_size: shift_basis_fs,
+                parent_x_height: x_height_ratio * shift_basis_fs,
+                line_height: authored_run_line_height(template),
+            };
+            let box_extent = AlignedBox::of(inline).baseline_extents(basis).map_or(
+                inline.outer_height(),
+                |(box_above, box_below)| {
+                    let (asc_ratio, desc_ratio) = crate::fonts::font_metrics_ratios(
+                        template.css_font_family(),
+                        template.bold,
+                        template.font_style.is_slanted(),
+                        fonts,
+                    );
+                    let content = (asc_ratio + desc_ratio) * template.font_size;
+                    let half_leading = ((run_line_height(template) - content) / 2.0).max(0.0);
+                    let text_above = asc_ratio * template.font_size + half_leading;
+                    let text_below = desc_ratio * template.font_size + half_leading;
+                    box_above.max(0.0).max(text_above) + box_below.max(0.0).max(text_below)
+                },
+            );
             line_height = line_height.max(box_extent);
             current_runs.push(template.clone());
             continue;

@@ -3,6 +3,7 @@ use crate::layout::elements::{
     Positioning,
 };
 use crate::layout::flow_metrics::BlockMargins;
+use crate::layout::vertical_align::AlignedBox;
 use crate::parser::css::{AncestorInfo, CssRule, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
@@ -1014,6 +1015,9 @@ fn layout_inline_block_group_inner(
         space_before: bool,
         suppress_strut_descent: bool,
         vertical_align: crate::style::computed::VerticalAlign,
+        /// Its own used `line-height`, which a percentage `vertical-align`
+        /// refers to.
+        line_height: f32,
         /// The box's own baseline doesn't come from its content: it clips its
         /// overflow, so its baseline is its bottom margin edge (CSS 2.1 §10.8.1).
         clips_overflow: bool,
@@ -1159,6 +1163,7 @@ fn layout_inline_block_group_inner(
                 space_before: *space_before,
                 suppress_strut_descent: false,
                 vertical_align: child_style.vertical_align,
+                line_height: super::text::used_line_height(&child_style, fonts),
                 clips_overflow: child_style.overflow.clips(),
             });
             continue;
@@ -1214,6 +1219,7 @@ fn layout_inline_block_group_inner(
                 space_before: *space_before,
                 suppress_strut_descent: false,
                 vertical_align: child_style.vertical_align,
+                line_height: super::text::used_line_height(&child_style, fonts),
                 clips_overflow: child_style.overflow.clips(),
             });
             continue;
@@ -1350,6 +1356,7 @@ fn layout_inline_block_group_inner(
                 == Some(IntrinsicWidthKeyword::MinContent)
                 && child_style.overflow_wrap == OverflowWrap::Anywhere,
             vertical_align: child_style.vertical_align,
+            line_height: super::text::used_line_height(&child_style, fonts),
             clips_overflow: child_style.overflow.clips(),
         });
     }
@@ -1460,9 +1467,12 @@ fn layout_inline_block_group_inner(
             crate::layout::filter::surface::flex_cell_baseline(&cell, fonts)
         };
         current_boxes.push(atomic_row::AtomicRowBox {
-            height: outer_height,
-            ascent: baseline.map_or(outer_height, |baseline| item.margins.top + baseline),
-            vertical_align: item.vertical_align,
+            aligned: AlignedBox {
+                height: outer_height,
+                ascent: baseline.map_or(outer_height, |baseline| item.margins.top + baseline),
+                vertical_align: item.vertical_align,
+            },
+            line_height: item.line_height,
         });
         current_cells.push(cell);
         x += item.width + item.margins.right;

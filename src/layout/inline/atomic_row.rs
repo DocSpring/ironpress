@@ -5,16 +5,14 @@
 //! parent's `line-height`, and a `top` or `bottom` box taller than the rest
 //! makes the row taller below or above its baseline, as Chromium does.
 
-use crate::style::computed::VerticalAlign;
+use crate::layout::vertical_align::{AlignedBox, AlignmentBasis, LineExtents};
 
-/// One box in the row, by its margin box.
+/// One box in the row.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct AtomicRowBox {
-    pub(super) height: f32,
-    /// From the top margin edge to the box's baseline: its last line's
-    /// baseline, or with none its bottom margin edge (CSS 2.1 §10.8.1).
-    pub(super) ascent: f32,
-    pub(super) vertical_align: VerticalAlign,
+    pub(super) aligned: AlignedBox,
+    /// Its own used `line-height`, which a percentage `vertical-align` refers to.
+    pub(super) line_height: f32,
 }
 
 /// The parent's strut and the font measures `vertical-align` refers to.
@@ -27,69 +25,39 @@ pub(super) struct AtomicRowStrut {
     pub(super) line_height: f32,
 }
 
-/// The row's height, and each box's top margin edge below the row's top.
-pub(super) fn align_atomic_row(boxes: &[AtomicRowBox], strut: AtomicRowStrut) -> (f32, Vec<f32>) {
-    let mut above = strut.above;
-    let mut below = strut.below;
-    let extents: Vec<Option<(f32, f32)>> = boxes
-        .iter()
-        .map(|item| baseline_extents(*item, strut))
-        .collect();
-    for (box_above, box_below) in extents.iter().flatten() {
-        above = above.max(box_above.max(0.0));
-        below = below.max(box_below.max(0.0));
-    }
-    for item in boxes {
-        let extra = item.height - (above + below);
-        if extra <= 0.0 {
-            continue;
-        }
-        match item.vertical_align {
-            VerticalAlign::Top | VerticalAlign::TextTop => below += extra,
-            VerticalAlign::Bottom | VerticalAlign::TextBottom => above += extra,
-            _ => {}
+impl AtomicRowStrut {
+    fn basis(self, item: AtomicRowBox) -> AlignmentBasis {
+        AlignmentBasis {
+            parent_font_size: self.font_size,
+            parent_x_height: self.x_height,
+            line_height: item.line_height,
         }
     }
-    let height = above + below;
-    let tops = boxes
-        .iter()
-        .zip(&extents)
-        .map(|(item, extent)| match (item.vertical_align, extent) {
-            (_, Some((box_above, _))) => above - box_above,
-            (VerticalAlign::Bottom | VerticalAlign::TextBottom, None) => height - item.height,
-            _ => 0.0,
-        })
-        .collect();
-    (height, tops)
 }
 
-/// How far a box aligned to the baseline reaches above and below it; `None`
-/// for a box aligned to the row's top or bottom.
-fn baseline_extents(item: AtomicRowBox, strut: AtomicRowStrut) -> Option<(f32, f32)> {
-    let descent = item.height - item.ascent;
-    let shifted = |shift: f32| Some((item.ascent + shift, descent - shift));
-    match item.vertical_align {
-        VerticalAlign::Baseline => shifted(0.0),
-        VerticalAlign::Sub => shifted(-strut.font_size * crate::render::pdf::SUB_SHIFT_RATIO),
-        VerticalAlign::Super => shifted(strut.font_size * crate::render::pdf::SUPER_SHIFT_RATIO),
-        VerticalAlign::Length(value) => shifted(value),
-        VerticalAlign::Percent(percent) => shifted(strut.line_height * percent),
-        VerticalAlign::Middle => Some((
-            item.height / 2.0 + strut.x_height / 2.0,
-            item.height / 2.0 - strut.x_height / 2.0,
-        )),
-        // `text-top` and `text-bottom` are laid out as `top` and `bottom`, as
-        // in a line of text (`resolve_line_box_metrics`).
-        VerticalAlign::Top
-        | VerticalAlign::Bottom
-        | VerticalAlign::TextTop
-        | VerticalAlign::TextBottom => None,
+/// The row's height, and each box's top margin edge below the row's top.
+pub(super) fn align_atomic_row(boxes: &[AtomicRowBox], strut: AtomicRowStrut) -> (f32, Vec<f32>) {
+    let mut line = LineExtents {
+        above: strut.above,
+        below: strut.below,
+    };
+    for item in boxes {
+        if let Some(extents) = item.aligned.baseline_extents(strut.basis(*item)) {
+            line.include(extents);
+        }
     }
+    line.fit_edge_aligned(boxes.iter().map(|item| item.aligned));
+    let tops = boxes
+        .iter()
+        .map(|item| line.top_of(item.aligned, strut.basis(*item)))
+        .collect();
+    (line.height(), tops)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style::computed::VerticalAlign;
 
     const STRUT: AtomicRowStrut = AtomicRowStrut {
         above: 15.0,
@@ -99,12 +67,19 @@ mod tests {
         line_height: 20.0,
     };
 
-    fn empty_box(height: f32, vertical_align: VerticalAlign) -> AtomicRowBox {
+    fn row_box(height: f32, ascent: f32, vertical_align: VerticalAlign) -> AtomicRowBox {
         AtomicRowBox {
-            height,
-            ascent: height,
-            vertical_align,
+            aligned: AlignedBox {
+                height,
+                ascent,
+                vertical_align,
+            },
+            line_height: 20.0,
         }
+    }
+
+    fn empty_box(height: f32, vertical_align: VerticalAlign) -> AtomicRowBox {
+        row_box(height, height, vertical_align)
     }
 
     #[test]
@@ -115,11 +90,7 @@ mod tests {
 
     #[test]
     fn a_box_with_text_aligns_its_last_baseline() {
-        let item = AtomicRowBox {
-            height: 40.0,
-            ascent: 35.0,
-            vertical_align: VerticalAlign::Baseline,
-        };
+        let item = row_box(40.0, 35.0, VerticalAlign::Baseline);
         let (height, tops) = align_atomic_row(&[item], STRUT);
         assert_eq!((height, tops), (40.0, vec![0.0]));
     }
@@ -146,5 +117,14 @@ mod tests {
         let (height, tops) = align_atomic_row(&[empty_box(30.0, VerticalAlign::Middle)], STRUT);
         // 18.5pt above the baseline and 11.5pt below it.
         assert_eq!((height, tops), (30.0, vec![0.0]));
+    }
+
+    #[test]
+    fn a_percentage_refers_to_the_boxs_own_line_height() {
+        // Raised by half its own 60pt line height, not the parent's 20pt
+        let mut item = empty_box(10.0, VerticalAlign::Percent(0.5));
+        item.line_height = 60.0;
+        let (height, tops) = align_atomic_row(&[item], STRUT);
+        assert_eq!((height, tops), (45.0, vec![0.0]));
     }
 }

@@ -32,6 +32,7 @@ pub(crate) mod text;
 pub(crate) mod text_emphasis;
 pub(crate) mod traversal;
 pub(crate) mod units;
+pub(crate) mod vertical_align;
 pub(crate) mod vertical_text;
 
 #[cfg(test)]
