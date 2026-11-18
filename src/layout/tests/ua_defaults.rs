@@ -76,6 +76,32 @@ fn an_absolute_size_keeps_monospace_text_its_size() {
 }
 
 #[test]
+fn a_rem_size_is_absolute_so_monospace_text_in_it_keeps_its_size() {
+    // Chrome 157's computed sizes: Blink counts `rem` as an absolute size
+    // (StyleBuilderConverterBase::ConvertFontSize).
+    let runs = visible_runs(
+        "<p><code style=\"font-size:0.875rem\">remcode</code></p>\
+         <pre style=\"font-size:1rem\">rempre</pre>\
+         <div style=\"font-size:1.125rem\"><code>underrem</code></div>",
+    );
+    assert_px(&runs, "remcode", 14.0);
+    assert_px(&runs, "rempre", 16.0);
+    assert_px(&runs, "underrem", 18.0);
+}
+
+#[test]
+fn the_font_shorthands_em_line_height_follows_the_monospace_size() {
+    // Chrome 157: `font: 1em/2em monospace` is 13px text on a 26px line.
+    let runs = visible_runs("<p style=\"font: 1em/2em monospace\">shorthandline</p>");
+    let run = run(&runs, "shorthandline");
+    let line_height_px = run.line_height_factor * run.font_size / PT_PER_PX;
+    assert!(
+        (line_height_px - 26.0).abs() < 0.01,
+        "expected a 26px line, got {line_height_px}px"
+    );
+}
+
+#[test]
 fn only_the_lone_generic_monospace_family_changes_the_size() {
     let runs = visible_runs(
         "<p><code style=\"font-family:monospace,monospace\">doubled</code> \

@@ -5582,19 +5582,21 @@ fn color_in_text_emphasis_shorthand(value: &str) -> Option<SpecifiedColor> {
     })
 }
 
-fn apply_font_shorthand(
+/// Apply the `font` shorthand's style, weight, stretch, size and family, and return its line height, which the caller
+/// resolves once the size has settled: an `em` or `%` line height is relative to the used size, after the generic
+/// monospace resize.
+fn apply_font_shorthand<'a>(
     style: &mut ComputedStyle,
-    value: &str,
+    value: &'a str,
     parent: &ComputedStyle,
-    length_context: crate::style::resolve::LengthResolutionContext,
     font_metrics: FontMetrics<'_>,
-) {
+) -> Option<&'a str> {
     let tokens: Vec<&str> = value.split_whitespace().collect();
     let Some(size_idx) = tokens.iter().position(|token| {
         let size = token.split_once('/').map_or(*token, |(size, _)| size);
         parse_length(size).is_some() || crate::style::font_size::is_font_size_keyword(size)
     }) else {
-        return;
+        return None;
     };
 
     let inherited_font_weight = style.font_weight;
@@ -5651,14 +5653,7 @@ fn apply_font_shorthand(
     }
 
     apply_font_size_token(style, parent, size_raw, font_metrics);
-    if let Some(line) = line_raw {
-        apply_line_height_token(
-            style,
-            line,
-            line_height_length_context(style, parent, length_context, font_metrics),
-            font_metrics,
-        );
-    }
+    line_raw
 }
 
 fn apply_font_weight(style: &mut ComputedStyle, value: &str) {
@@ -5715,7 +5710,9 @@ fn resolve_font_size_value(
             *value * parent.font_size * font_metrics.style_ch_ratio(parent).unwrap_or(0.5),
             relative,
         ),
-        CssValue::Rem(value) => (*value * parent.root_font_size, relative),
+        // Blink counts a root-relative size as absolute (StyleBuilderConverterBase::ConvertFontSize), so the generic
+        // monospace resize leaves it alone
+        CssValue::Rem(value) => (*value * parent.root_font_size, FontSizeOrigin::ABSOLUTE),
         CssValue::Percentage(value) => (*value * parent.font_size / 100.0, relative),
         CssValue::Vw(value) => (
             *value * parent.viewport_width / 100.0,
@@ -6017,9 +6014,10 @@ fn apply_style_map_with_percentage_basis(
         style.color = color.resolve(parent.color);
     }
 
-    if let Some(CssValue::Keyword(k)) = get_non_special(map, "font") {
-        apply_font_shorthand(style, k, parent, length_context, font_metrics);
-    }
+    let shorthand_line_height = match get_non_special(map, "font") {
+        Some(CssValue::Keyword(k)) => apply_font_shorthand(style, k, parent, font_metrics),
+        _ => None,
+    };
 
     if let Some(value) = get_non_special(map, "font-size")
         && let Some(declared) =
@@ -6049,6 +6047,14 @@ fn apply_style_map_with_percentage_basis(
         style.font_family = style.font_stack.primary();
     }
     style.settle_font_size(parent);
+    if let Some(line) = shorthand_line_height {
+        apply_line_height_token(
+            style,
+            line,
+            line_height_length_context(style, parent, length_context, font_metrics),
+            font_metrics,
+        );
+    }
 
     if let Some(value) = get_non_special(map, "font-size-adjust") {
         match value {

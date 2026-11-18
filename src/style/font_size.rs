@@ -4,7 +4,7 @@
 //! `monospace` (13px where other text is 16px).
 //!
 //! Blink keeps two facts with every computed size: the keyword it came from,
-//! if any, and whether an absolute length (`px`, `pt`, a viewport unit)
+//! if any, and whether an absolute length (`px`, `pt`, a viewport unit, `rem`, `calc()`)
 //! decided it anywhere up the tree. When an element's family changes between
 //! the generic `monospace` and anything else and no absolute length decided
 //! its size, Blink resizes it: a keyword size is looked up again in the
