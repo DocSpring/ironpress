@@ -61,17 +61,41 @@ impl DecorationLine {
     }
 }
 
+/// A decoration's thickness as Blink resolves it (`ComputeDecorationThickness`
+/// in `text_decoration_info.cc`): `auto` is a tenth of the font size, and a
+/// length is rounded to whole CSS px; at least 1px either way. Wavy lines keep
+/// their own automatic thickness.
 pub(crate) fn thickness(run: &TextRun, decoration: &crate::style::computed::TextDecoration) -> f32 {
-    let thickness = if let Some(thickness) = decoration.thickness {
-        thickness
-    } else if decoration.style == crate::style::computed::TextDecorationStyle::Wavy {
-        run.font_size * 0.075
-    } else {
-        run.font_size * 0.085
+    let px = crate::fonts::PT_PER_CSS_PX;
+    let wavy = decoration.style == crate::style::computed::TextDecorationStyle::Wavy;
+    let thickness = match decoration.thickness {
+        Some(thickness) if wavy => thickness,
+        Some(thickness) => (thickness / px).round() * px,
+        None if wavy => run.font_size * 0.075,
+        None => run.font_size / 10.0,
     };
-    thickness.max(crate::fonts::PT_PER_CSS_PX)
+    thickness.max(px)
 }
 
+/// The thickness Blink paints a line with: solid and double lines are drawn
+/// without antialiasing, so their thickness is rounded down to whole CSS px
+/// (`RoundDownThickness`); dotted, dashed and wavy lines keep the resolved
+/// thickness.
+pub(crate) fn painted_thickness(
+    run: &TextRun,
+    decoration: &crate::style::computed::TextDecoration,
+) -> f32 {
+    let resolved = thickness(run, decoration);
+    if decoration.style.is_antialiased() {
+        return resolved;
+    }
+    solid_thickness(resolved)
+}
+
+/// How far below the baseline the underline's centre is. Blink leaves a gap of
+/// half the resolved thickness, rounded up to whole CSS px, between the
+/// baseline and the line's top; an authored `text-underline-offset` replaces
+/// that gap.
 pub(crate) fn underline_distance_from_baseline(
     run: &TextRun,
     decoration: &crate::style::computed::TextDecoration,
@@ -79,11 +103,62 @@ pub(crate) fn underline_distance_from_baseline(
     let top_offset = decoration
         .underline_offset
         .unwrap_or_else(|| crate::fonts::ceil_to_css_pixel(thickness(run, decoration) / 2.0));
-    top_offset + thickness(run, decoration) / 2.0
+    top_offset + painted_thickness(run, decoration) / 2.0
 }
 
-pub(crate) fn overline_lift(run: &TextRun) -> f32 {
-    run.font_size * 0.065
+/// How far above the baseline a line-through's centre is. Blink puts the
+/// line's top a third of the font's ascent (rounded to whole px) plus half its
+/// thickness above the baseline (`TextDecorationInfo::SetLineThroughLineData`),
+/// and a solid or double line's top on a whole pixel. Dotted and dashed lines
+/// snap their centre when they're painted, so they get it unrounded.
+/// `ascender_ratio` is the font's ascent per unit of font size.
+pub(crate) fn line_through_axis_above_baseline(
+    run: &TextRun,
+    decoration: &crate::style::computed::TextDecoration,
+    ascender_ratio: f32,
+) -> f32 {
+    let top = rounded_ascent(run, ascender_ratio) / 3.0 + thickness(run, decoration) / 2.0;
+    snapped_axis(run, decoration, top)
+}
+
+/// How far above the baseline an overline's centre is: Blink puts its bottom
+/// on the font's ascent, rounded to whole px, so it sits on the text's top
+/// edge. For dotted and dashed lines that edge is the solid line's thickness
+/// above the ascent, as for solid lines.
+pub(crate) fn overline_axis_above_baseline(
+    run: &TextRun,
+    decoration: &crate::style::computed::TextDecoration,
+    ascender_ratio: f32,
+) -> f32 {
+    let solid = solid_thickness(thickness(run, decoration));
+    let top = rounded_ascent(run, ascender_ratio) + solid;
+    snapped_axis(run, decoration, top)
+}
+
+/// The centre of a line whose top is `top` above the baseline: on whole
+/// pixels for a solid or double line, and as computed for an antialiased one.
+fn snapped_axis(
+    run: &TextRun,
+    decoration: &crate::style::computed::TextDecoration,
+    top: f32,
+) -> f32 {
+    let px = crate::fonts::PT_PER_CSS_PX;
+    if decoration.style.is_antialiased() {
+        return top - thickness(run, decoration) / 2.0;
+    }
+    (top / px).round() * px - painted_thickness(run, decoration) / 2.0
+}
+
+/// The font's ascent rounded to whole CSS px, as Blink's `FontMetrics::Ascent`
+/// gives it.
+fn rounded_ascent(run: &TextRun, ascender_ratio: f32) -> f32 {
+    let px = crate::fonts::PT_PER_CSS_PX;
+    (ascender_ratio * run.font_size / px).round() * px
+}
+
+fn solid_thickness(resolved: f32) -> f32 {
+    let px = crate::fonts::PT_PER_CSS_PX;
+    ((resolved / px).floor() * px).max(px)
 }
 
 /// Width of leading and trailing whitespace excluded from a decoration line.

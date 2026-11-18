@@ -14,6 +14,7 @@ include!("text_encoding.rs");
 include!("backgrounds.rs");
 include!("layout.rs");
 include!("fonts_and_metrics.rs");
+include!("decoration_styles.rs");
 include!("nested_boxes.rs");
 include!("nested_tables.rs");
 include!("math_and_writer.rs");

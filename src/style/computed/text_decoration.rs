@@ -38,7 +38,33 @@ impl BitOrAssign for TextDecorationLines {
 pub enum TextDecorationStyle {
     #[default]
     Solid,
+    Double,
+    Dotted,
+    Dashed,
     Wavy,
+}
+
+impl TextDecorationStyle {
+    /// The `text-decoration-style` keyword among `value`'s tokens, if any.
+    pub fn from_tokens(value: &str) -> Option<Self> {
+        value.split_whitespace().find_map(|token| {
+            Some(match token.to_ascii_lowercase().as_str() {
+                "solid" => Self::Solid,
+                "double" => Self::Double,
+                "dotted" => Self::Dotted,
+                "dashed" => Self::Dashed,
+                "wavy" => Self::Wavy,
+                _ => return None,
+            })
+        })
+    }
+
+    /// Whether Blink antialiases the line (`ShouldSetDecorationAntialias`):
+    /// dotted, dashed and wavy lines keep a fractional thickness, while solid
+    /// and double ones are rounded down to whole pixels.
+    pub(crate) const fn is_antialiased(self) -> bool {
+        matches!(self, Self::Dotted | Self::Dashed | Self::Wavy)
+    }
 }
 
 /// CSS `text-decoration-skip-ink` behavior captured by a decoration origin.

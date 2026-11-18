@@ -193,7 +193,7 @@ impl SourcePainter<'_> {
         let width = (span.width - leading - trailing).max(0.0);
         for decoration in &run.decorations {
             let color = color_override.unwrap_or_else(|| decoration.resolved_color(run.color));
-            let thickness = crate::render::text_decoration::thickness(run, decoration);
+            let thickness = crate::render::text_decoration::painted_thickness(run, decoration);
             let mut paint_line = |line, center_y: f32| {
                 let axis_from_baseline = span.baseline + span.offset.y - center_y;
                 let exclusions = crate::render::text_decoration::ink_skip_intervals(
@@ -228,24 +228,33 @@ impl SourcePainter<'_> {
                         + span.offset.y,
                 );
             }
+            let (ascender_ratio, _) = crate::fonts::font_metrics_ratios(
+                run.css_font_family(),
+                run.bold,
+                run.font_style.is_slanted(),
+                self.fonts,
+            );
             if decoration.lines.line_through && phase.paints_above_text() {
                 paint_line(
                     crate::render::text_decoration::DecorationLine::LineThrough,
-                    span.baseline - run.font_size * 0.3 + span.offset.y,
+                    span.baseline
+                        - crate::render::text_decoration::line_through_axis_above_baseline(
+                            run,
+                            decoration,
+                            ascender_ratio,
+                        )
+                        + span.offset.y,
                 );
             }
             if decoration.lines.overline && phase.paints_below_text() {
-                let (ascender_ratio, _) = crate::fonts::font_metrics_ratios(
-                    run.css_font_family(),
-                    run.bold,
-                    run.font_style.is_slanted(),
-                    self.fonts,
-                );
                 paint_line(
                     crate::render::text_decoration::DecorationLine::Overline,
                     span.baseline
-                        - ascender_ratio * run.font_size
-                        - crate::render::text_decoration::overline_lift(run)
+                        - crate::render::text_decoration::overline_axis_above_baseline(
+                            run,
+                            decoration,
+                            ascender_ratio,
+                        )
                         + span.offset.y,
                 );
             }

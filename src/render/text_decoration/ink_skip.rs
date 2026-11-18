@@ -45,12 +45,17 @@ pub(crate) fn ink_skip_intervals(
         .synthetic_bold_stroke_width(custom_fonts)
         .unwrap_or_default()
         / 2.0;
-    // A grazing contact with only the outer antialias fringe of a thick line
-    // should not punch a conspicuous hole in the decoration. Sample the line's
-    // central ink band; synthetic weight expands both the glyph and that band.
-    let collision_half_band = thickness * 0.1 + synthetic_bold;
+    // Blink (`TextPainter::ClipDecorationLine`) finds the glyph ink inside the
+    // line's bounds (its resolved thickness, before a solid line is rounded
+    // down to whole pixels) less half a pixel at the top and bottom, so ink
+    // that only grazes the line doesn't cut it, and widens each gap by the
+    // resolved thickness on each side (at most 13px,
+    // `kDecorationClipMaxDilation`). Synthetic weight widens both the glyph
+    // and its gap.
+    let px = crate::fonts::PT_PER_CSS_PX;
+    let collision_half_band = (thickness / 2.0 - px / 2.0).max(0.0) + synthetic_bold;
     let shear = run.synthetic_italic_shear(custom_fonts).unwrap_or_default();
-    let clearance = crate::fonts::PT_PER_CSS_PX / 2.0 + thickness / 2.0;
+    let clearance = thickness.min(13.0 * px);
     let mut cursor = 0.0;
     let mut intervals = Vec::new();
 

@@ -1,6 +1,5 @@
 use super::*;
 
-use crate::render::text_decoration::overline_lift;
 use crate::render::text_decoration::whitespace_insets as decoration_ws_insets;
 
 mod stroke;
@@ -284,8 +283,21 @@ impl<'a> HorizontalRunDecorations<'a> {
                     ),
                 );
             }
+            let ascender_ratio = || {
+                crate::fonts::font_metrics_ratios(
+                    self.run.css_font_family(),
+                    self.run.bold,
+                    self.run.font_style.is_slanted(),
+                    self.custom_fonts,
+                )
+                .0
+            };
             if decoration.lines.line_through && phase.paints_above_text() {
-                let axis = self.run.font_size * 0.3;
+                let axis = crate::render::text_decoration::line_through_axis_above_baseline(
+                    self.run,
+                    decoration,
+                    ascender_ratio(),
+                );
                 self.paint_stroke(
                     content,
                     decoration,
@@ -301,13 +313,11 @@ impl<'a> HorizontalRunDecorations<'a> {
                 );
             }
             if decoration.lines.overline && phase.paints_below_text() {
-                let (ascender_ratio, _) = crate::fonts::font_metrics_ratios(
-                    self.run.css_font_family(),
-                    self.run.bold,
-                    self.run.font_style.is_slanted(),
-                    self.custom_fonts,
+                let axis = crate::render::text_decoration::overline_axis_above_baseline(
+                    self.run,
+                    decoration,
+                    ascender_ratio(),
                 );
-                let axis = ascender_ratio * self.run.font_size + overline_lift(self.run);
                 self.paint_stroke(
                     content,
                     decoration,

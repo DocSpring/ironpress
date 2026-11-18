@@ -6225,8 +6225,8 @@ fn apply_style_map_with_percentage_basis(
             ..Default::default()
         };
         apply_text_decoration_line(style, &k);
-        if k.split_whitespace().any(|t| t == "wavy") {
-            style.text_decorations.current.style = TextDecorationStyle::Wavy;
+        if let Some(decoration_style) = TextDecorationStyle::from_tokens(&k) {
+            style.text_decorations.current.style = decoration_style;
         }
         for token in k.split_whitespace() {
             if let Some(CssValue::Length(v)) = parse_length(token) {
@@ -6241,12 +6241,8 @@ fn apply_style_map_with_percentage_basis(
         apply_text_decoration_line(style, k);
     }
     if let Some(CssValue::Keyword(k)) = get_non_special(map, "text-decoration-style") {
-        style.text_decorations.current.style = if k.split_whitespace().any(|token| token == "wavy")
-        {
-            TextDecorationStyle::Wavy
-        } else {
-            TextDecorationStyle::Solid
-        };
+        style.text_decorations.current.style =
+            TextDecorationStyle::from_tokens(k).unwrap_or_default();
     }
     if let Some(CssValue::Length(v)) = get_non_special(map, "text-decoration-thickness") {
         style.text_decorations.current.thickness = Some(*v);
