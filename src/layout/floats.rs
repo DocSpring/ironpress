@@ -11,7 +11,7 @@ mod avoid;
 mod flow;
 mod in_text;
 pub(crate) use avoid::FloatAvoidance;
-pub(crate) use flow::{FloatFrames, LineFloats, float_box};
+pub(crate) use flow::{BlockFloats, FloatFrames, LineFloats, float_box};
 pub(crate) use in_text::FloatsInText;
 
 #[cfg(test)]
@@ -111,6 +111,47 @@ pub(crate) struct FloatRequest {
 pub(crate) struct FloatOffset {
     pub(crate) inline: f32,
     pub(crate) block: f32,
+}
+
+/// Where a float that occurs in a paragraph's text sits: it can't float above
+/// the line it occurs on (CSS 2.1 §9.5.1 rule 8).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub(crate) struct FloatLine {
+    /// From the float's place in the flow down to its paragraph's border-box
+    /// top: the paragraph's top margin, as it collapses with the margin
+    /// before it.
+    pub(crate) paragraph_top: f32,
+    /// From the paragraph's border-box top down to the top of the line.
+    pub(crate) line_top: f32,
+}
+
+impl FloatLine {
+    /// How far below its place in the flow the float's line starts.
+    pub(crate) fn below_flow(self) -> f32 {
+        self.paragraph_top + self.line_top
+    }
+}
+
+/// Where the content box of a paragraph that floats occur in starts, for
+/// giving each of them its [`FloatLine`].
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub(crate) struct TextOrigin {
+    /// From the floats' place in the flow down to the paragraph's border-box
+    /// top.
+    pub(crate) paragraph_top: f32,
+    /// From the border-box top down to the content-box top.
+    pub(crate) content_top: f32,
+}
+
+impl TextOrigin {
+    /// The line of a float that occurs on the line `top` below the content
+    /// box's top.
+    pub(crate) fn line(self, top: f32) -> FloatLine {
+        FloatLine {
+            paragraph_top: self.paragraph_top,
+            line_top: self.content_top + top,
+        }
+    }
 }
 
 /// A placed float's margin box.

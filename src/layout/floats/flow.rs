@@ -6,7 +6,7 @@
 //! simulation that pagination and painting use, placing each float with
 //! [`FloatExclusions`] and recording where it went on the float itself.
 
-use super::{FloatBox, FloatExclusions, FloatOffset, FloatSide, InlineSpan};
+use super::{FloatBox, FloatExclusions, FloatLine, FloatOffset, FloatSide, InlineSpan, TextOrigin};
 use crate::layout::elements::{LayoutElement, LayoutNode};
 use crate::layout::engine::LineInsets;
 use crate::layout::paginate::{BlockFlowAccumulator, element_float, estimate_element_height};
@@ -102,6 +102,7 @@ impl FloatFrames {
         Some(BlockFloats {
             exclusions,
             border_top: flow.next_block_top(margin_top, clear),
+            float_top: flow.next_float_top(),
             flow_bottom: flow.flow_bottom(),
             width: frame.width,
         })
@@ -127,6 +128,7 @@ impl FloatFrames {
         (exclusions.lowest_bottom() > border_top).then_some(BlockFloats {
             exclusions,
             border_top,
+            float_top: flow.next_float_top(),
             flow_bottom: flow.flow_bottom(),
             width: frame.width,
         })
@@ -138,6 +140,9 @@ impl FloatFrames {
 pub(crate) struct BlockFloats {
     pub(super) exclusions: FloatExclusions,
     pub(super) border_top: f32,
+    /// Where a float emitted just before the block starts in the flow: below
+    /// the previous block's bottom margin, which it doesn't collapse with.
+    pub(super) float_top: f32,
     /// The bottom of the flow before the block, below the previous block's
     /// bottom margin's collapsing.
     pub(super) flow_bottom: f32,
@@ -153,6 +158,16 @@ impl BlockFloats {
             exclusions: self.exclusions.clone(),
             top: self.border_top + top,
             container: InlineSpan::new(left, left + width),
+        }
+    }
+
+    /// Where the block's content box starts, `content_top` below its
+    /// border-box top, for the floats that occur in its text and are emitted
+    /// just before it.
+    pub(crate) fn text_origin(&self, content_top: f32) -> TextOrigin {
+        TextOrigin {
+            paragraph_top: self.border_top - self.float_top,
+            content_top,
         }
     }
 
@@ -256,18 +271,20 @@ fn place_float(
     node: &LayoutNode,
     flow_top: f32,
 ) -> FloatOffset {
-    let (margins, line_offset) = node
+    let (margins, line) = node
         .block_flow_owner()
         .map(|owner| {
             (
                 owner.block_flow().inline_margins,
-                owner.block_flow().float_line_offset,
+                owner.block_flow().float_line,
             )
         })
         .unwrap_or_default();
     let (border_left, _) = crate::layout::block::child_x_and_width(node.as_ref());
-    let placed =
-        exclusions.place(float.request(flow_top + line_offset, InlineSpan::new(0.0, width)));
+    let placed = exclusions.place(float.request(
+        flow_top + line.map_or(0.0, FloatLine::below_flow),
+        InlineSpan::new(0.0, width),
+    ));
     // Painting puts a left float's border box at `border_left` and a right
     // float's against the right edge; the offset moves it to its margin box's
     // place.

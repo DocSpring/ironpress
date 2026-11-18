@@ -418,9 +418,8 @@ pub(crate) struct BlockFlow {
     pub(crate) float_offset: Option<crate::layout::floats::FloatOffset>,
     /// Its left and right margins, which a float's margin box includes.
     pub(crate) inline_margins: crate::layout::floats::InlineMargins,
-    /// For a float inside a paragraph's text: how far below its place in the
-    /// flow the line it occurs on starts, which it can't float above.
-    pub(crate) float_line_offset: f32,
+    /// For a float inside a paragraph's text, the line it occurs on.
+    pub(crate) float_line: Option<crate::layout::floats::FloatLine>,
 }
 
 impl BlockFlow {
@@ -439,7 +438,7 @@ impl BlockFlow {
                 left: style.margin.left,
                 right: style.margin.right,
             },
-            float_line_offset: 0.0,
+            float_line: None,
         }
     }
 }

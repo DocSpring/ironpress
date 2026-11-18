@@ -4,7 +4,7 @@
 //! 8: as high as possible), where a float that doesn't fit beside the line's
 //! content so far goes below it.
 
-use super::{FloatBox, FloatFrames, LineFloats, float_box};
+use super::{BlockFloats, FloatBox, FloatFrames, TextOrigin, float_box};
 use crate::layout::elements::LayoutNode;
 use crate::layout::engine::TextRun;
 use crate::layout::text::has_non_collapsible_text;
@@ -60,32 +60,39 @@ impl FloatsInText {
             .collect()
     }
 
-    /// The floats the text's lines go among, for an anonymous block about to
-    /// be emitted into `output` whose content box is `left` from the
-    /// formatting context's edge and `width` wide.
-    pub(crate) fn line_floats(
+    /// The floats around the block about to be emitted into `output` that
+    /// holds this text, with its own `margin_top` and `clear`: those it goes
+    /// among and, when floats occur in the text, the formatting context they
+    /// float in.
+    pub(crate) fn around_block(
         &self,
         frames: &FloatFrames,
         output: &mut Vec<LayoutNode>,
-        left: f32,
-        width: f32,
-    ) -> Option<LineFloats> {
-        let floats = if self.nodes.is_empty() {
-            frames.beside_next_block(output, 0.0, Clear::None)
+        margin_top: f32,
+        clear: Clear,
+    ) -> Option<BlockFloats> {
+        if self.nodes.is_empty() {
+            frames.beside_next_block(output, margin_top, clear)
         } else {
-            frames.around_next_block(output, 0.0, Clear::None)
-        };
-        floats.map(|floats| floats.lines(0.0, left, width))
+            frames.around_next_block(output, margin_top, clear)
+        }
     }
 
     /// Emit the floats into `output` ahead of the text's block, each kept
-    /// from floating above the line `tops[i]` below the block's top that it
-    /// occurs on.
-    pub(crate) fn emit(&mut self, tops: &[f32], output: &mut Vec<LayoutNode>) {
+    /// from floating above the line `tops[i]` below the block's content-box
+    /// top that it occurs on (the first line when `tops` has no entry for
+    /// it). Without an `origin` the block isn't in the floats' formatting
+    /// context, and they float as if they came before it.
+    pub(crate) fn emit(
+        &mut self,
+        tops: &[f32],
+        origin: Option<TextOrigin>,
+        output: &mut Vec<LayoutNode>,
+    ) {
         for (index, mut node) in self.nodes.drain(..).enumerate() {
             if let Some(owner) = node.block_flow_owner_mut() {
-                owner.block_flow_mut().float_line_offset =
-                    tops.get(index).copied().unwrap_or_default();
+                owner.block_flow_mut().float_line =
+                    origin.map(|origin| origin.line(tops.get(index).copied().unwrap_or_default()));
             }
             output.push(node);
         }

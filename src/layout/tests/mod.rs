@@ -9,6 +9,7 @@ mod container_flow;
 mod filter_cells;
 mod flex_intrinsic;
 mod flex_item_blocks;
+mod float_pages;
 mod floats;
 mod gauges;
 mod generated_content;

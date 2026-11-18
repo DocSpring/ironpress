@@ -905,7 +905,7 @@ pub(crate) fn layout_block_element(
          floats: &crate::layout::floats::FloatFrames,
          inline_floats: &mut crate::layout::floats::FloatsInText| {
             if runs.is_empty() {
-                inline_floats.emit(&[], output);
+                inline_floats.emit(&[], None, output);
                 return;
             }
             runs.as_mut_slice()
@@ -929,9 +929,17 @@ pub(crate) fn layout_block_element(
             // the floats go first in the flow, each kept from floating above its
             // line.
             let inline_float_boxes = inline_floats.boxes();
+            // The block's own margin and clearance place it among the floats,
+            // and its lines start below its border and padding.
+            let content_top = style.border.top.used_width() + layout_padding.top;
+            let around = inline_floats.around_block(floats, output, style.margin.top, style.clear);
+            let text_origin = around
+                .as_ref()
+                .map(|floats| floats.text_origin(content_top));
             let line_floats = lays_out_beside_floats
-                .then(|| inline_floats.line_floats(floats, output, auto_offset_left, inner_width))
-                .flatten();
+                .then_some(around)
+                .flatten()
+                .map(|floats| floats.lines(content_top, auto_offset_left, inner_width));
             let super::text::LinesAmongFloats {
                 lines,
                 inline_float_tops,
@@ -956,7 +964,7 @@ pub(crate) fn layout_block_element(
                 line_floats,
                 &inline_float_boxes,
             );
-            inline_floats.emit(&inline_float_tops, output);
+            inline_floats.emit(&inline_float_tops, text_origin, output);
             if lines.is_empty() {
                 return;
             }
@@ -1782,6 +1790,22 @@ pub(crate) fn layout_block_element(
         // Floats earlier in the formatting context shorten the lines beside
         // them (CSS 2.1 §9.5). A box that floats or is absolutely positioned
         // starts a formatting context of its own.
+        let content_top = style.border.top.used_width() + layout_padding.top;
+        // The floats in this text float from the lines they occur on, below
+        // the block's top as its margin collapses. With block children the
+        // text becomes an anonymous block in a wrapper, without margins or
+        // padding, and its floats go just before it there.
+        let text_origin = if has_block_kids_for_wrapper || has_out_of_flow_children {
+            Some(crate::layout::floats::TextOrigin::default())
+        } else {
+            (!leading_floats.is_empty())
+                .then(|| {
+                    env.floats
+                        .around_next_block(output, style.margin.top, style.clear)
+                })
+                .flatten()
+                .map(|floats| floats.text_origin(content_top))
+        };
         let line_floats = (wrap_width.is_finite()
             && wrap_width < f32::MAX
             && style.float == Float::None
@@ -1799,7 +1823,7 @@ pub(crate) fn layout_block_element(
         .flatten()
         .map(|floats| {
             floats.lines(
-                style.border.top.used_width() + layout_padding.top,
+                content_top,
                 style.margin.left + style.border.left.used_width() + layout_padding.left,
                 inner_width,
             )
@@ -1814,11 +1838,15 @@ pub(crate) fn layout_block_element(
                 line_floats,
                 &leading_floats.boxes(),
             );
-            leading_floats.emit(&wrapped.inline_float_tops, &mut leading_float_nodes);
+            leading_floats.emit(
+                &wrapped.inline_float_tops,
+                text_origin,
+                &mut leading_float_nodes,
+            );
             wrapped.lines
         };
         // Floats a `::first-line` text holds float from its first line.
-        leading_floats.emit(&[], &mut leading_float_nodes);
+        leading_floats.emit(&[], text_origin, &mut leading_float_nodes);
         if let Some(static_position_runs) = static_position_runs {
             out_of_flow_static_positions = super::inline_formatting::out_of_flow_static_positions(
                 static_position_runs,

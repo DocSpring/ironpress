@@ -1388,5 +1388,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "paged-floats-continue-on-next-page",
+    "category": "paged-media",
+    "feature": "fragmentation",
+    "subfeature": "floats",
+    "description": "Image floats that don't fit on their page go to the next one with the rows below them, a float in a paragraph's text goes with its line past the paragraph's break, and one in a paragraph with a top margin starts at its line (CSS 2.1 section 9.5.1, CSS Fragmentation 3 section 5.1).",
+    "file": "cases/paged-media/paged-floats-continue-on-next-page.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-image-render", "probe-block-flow"]
   }
 ]

@@ -130,8 +130,9 @@ fn in_flow_after_floats(page: &Page) -> (f32, &dyn LayoutElement) {
 fn line_offset(float: &dyn LayoutElement) -> f32 {
     float
         .block_flow_owner()
-        .map(|owner| owner.block_flow().float_line_offset)
-        .expect("a float has block flow")
+        .and_then(|owner| owner.block_flow().float_line)
+        .expect("a float in text has its line")
+        .line_top
 }
 
 fn inset_left(element: &dyn LayoutElement) -> f32 {
@@ -337,4 +338,42 @@ fn a_flex_items_text_wraps_beside_its_own_float() {
         50.0,
         "the item's text starts after the float",
     );
+}
+
+/// A paragraph with `clear: both` after a left float, holding a right float in its own text after `text`.
+fn cleared_paragraph(text: &str) -> Page {
+    page(&format!(
+        r#"<div style="float:left;width:100pt;height:30pt"></div>
+        <p style="clear:both">{text} <span style="float:right;width:50pt;height:12pt"></span> due today</p>"#
+    ))
+}
+
+#[test]
+fn a_paragraph_clears_earlier_floats_but_not_the_floats_in_its_own_text() {
+    for (text, path) in [
+        ("Total", "one text block"),
+        ("Invoice<br>Total", "a forced break"),
+    ] {
+        let page = cleared_paragraph(text);
+        let (top, _) = in_flow_after_floats(&page);
+        assert_near(
+            top,
+            30.0,
+            &format!("{path}: the paragraph starts below the left float"),
+        );
+        let line = blocks(&page).line_with("Total").insets;
+        assert_near(
+            line.left,
+            0.0,
+            &format!("{path}: the left float is above the paragraph"),
+        );
+        assert_near(
+            line.right,
+            50.0,
+            &format!("{path}: the line ends at its own float"),
+        );
+        let tops: Vec<f32> = floats(&page).iter().map(|(top, _)| *top).collect();
+        let line_top = if text.contains("<br>") { 48.0 } else { 30.0 };
+        assert_eq!(tops, [0.0, line_top], "{path}: the float sits on its line");
+    }
 }

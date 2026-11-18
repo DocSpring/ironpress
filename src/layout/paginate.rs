@@ -19,6 +19,7 @@ use crate::style::computed::{
 use crate::types::{Color, EdgeSizes, Margin, PageSize, Size};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+mod float_breaks;
 mod measurement;
 
 fn advance_positioned_ancestors_after_page_break(
@@ -426,6 +427,8 @@ struct FloatRegion {
     y_end: f32,
     #[allow(dead_code)]
     side: Float,
+    /// It's in the text of the paragraph that comes next, which doesn't clear it.
+    in_text: bool,
 }
 
 /// Estimate the height of a layout element for wrapper sizing.
@@ -618,6 +621,54 @@ pub(crate) struct BlockFlowResult {
 pub(crate) struct BlockFlowAccumulator {
     result: BlockFlowResult,
     prev_margin_bottom: Option<f32>,
+    /// The bottoms of the floats in the text of the paragraph that comes
+    /// next: they go just before it, but it doesn't clear them (CSS 2.1 §9.5.2
+    /// clears floats from earlier elements); the blocks after it do.
+    text_floats: FloatBottoms,
+}
+
+/// The lowest bottom edge of the floats on each side.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct FloatBottoms {
+    left: f32,
+    right: f32,
+}
+
+impl FloatBottoms {
+    /// The floats drawn on the page so far that a box clears. One in flow
+    /// doesn't clear the floats in its own text, drawn just before it.
+    fn drawn(left: &[FloatRegion], right: &[FloatRegion], in_flow: bool) -> Self {
+        let bottom = |regions: &[FloatRegion]| {
+            regions
+                .iter()
+                .filter(|region| !(in_flow && region.in_text))
+                .map(|region| region.y_end)
+                .fold(0.0, f32::max)
+        };
+        Self {
+            left: bottom(left),
+            right: bottom(right),
+        }
+    }
+
+    /// Where a box with `clear` starts when the flow is at `y`: below the
+    /// floats on the sides it clears.
+    pub(super) fn cleared(self, y: f32, clear: Clear) -> f32 {
+        match clear {
+            Clear::Left => y.max(self.left),
+            Clear::Right => y.max(self.right),
+            Clear::Both => y.max(self.left).max(self.right),
+            Clear::None => y,
+        }
+    }
+
+    fn side(&mut self, float: Float) -> &mut f32 {
+        if float == Float::Left {
+            &mut self.left
+        } else {
+            &mut self.right
+        }
+    }
 }
 
 impl BlockFlowAccumulator {
@@ -670,16 +721,27 @@ impl BlockFlowAccumulator {
         if float != Float::None {
             // A float is pinned to the current content bottom and stacked below
             // an earlier float on the same side, but does not advance normal flow.
-            let side_bottom = if float == Float::Left {
-                &mut self.result.left_float_bottom
+            let in_text = child
+                .block_flow_owner()
+                .is_some_and(|owner| owner.block_flow().float_line.is_some());
+            let earlier_bottom = if float == Float::Left {
+                self.result.left_float_bottom
             } else {
-                &mut self.result.right_float_bottom
-            };
+                self.result.right_float_bottom
+            }
+            .max(*self.text_floats.side(float));
             // A float its formatting context placed sits where that put it;
             // otherwise it stacks below the earlier floats on its side.
             let float_top = match element_float_offset(child) {
                 Some(offset) => self.result.height + margin_top + offset.block,
-                None => (self.result.height + margin_top).max(*side_bottom),
+                None => (self.result.height + margin_top).max(earlier_bottom),
+            };
+            let side_bottom = if in_text {
+                self.text_floats.side(float)
+            } else if float == Float::Left {
+                &mut self.result.left_float_bottom
+            } else {
+                &mut self.result.right_float_bottom
             };
             let border_box_height = (outer_height - margin_top - margin_bottom).max(0.0);
             *side_bottom = side_bottom.max(float_top + border_box_height + margin_bottom);
@@ -708,6 +770,7 @@ impl BlockFlowAccumulator {
             self.result.height = clear_to;
             self.prev_margin_bottom = None;
         }
+        self.include_text_floats();
 
         self.result.height += outer_height;
         if element_collapses_margins(child) {
@@ -720,7 +783,16 @@ impl BlockFlowAccumulator {
         }
     }
 
-    fn finish(self) -> BlockFlowResult {
+    /// The floats in the text of the paragraph just included count for the
+    /// blocks after it.
+    fn include_text_floats(&mut self) {
+        let text_floats = std::mem::take(&mut self.text_floats);
+        self.result.left_float_bottom = self.result.left_float_bottom.max(text_floats.left);
+        self.result.right_float_bottom = self.result.right_float_bottom.max(text_floats.right);
+    }
+
+    fn finish(mut self) -> BlockFlowResult {
+        self.include_text_floats();
         self.result
     }
 }
@@ -2268,6 +2340,9 @@ struct PendingElement {
     /// page. The group is still paginated element by element once admitted, so
     /// normal painting and flow stay unchanged.
     avoid_group: Option<AvoidBreakGroup>,
+    /// A float in a paragraph's text whose page has been decided with the
+    /// paragraph's break (`float_breaks`).
+    float_settled: bool,
 }
 
 impl PendingElement {
@@ -2276,6 +2351,7 @@ impl PendingElement {
             element,
             is_fragment_continuation: false,
             avoid_group: None,
+            float_settled: false,
         }
     }
 
@@ -2284,6 +2360,14 @@ impl PendingElement {
             element,
             is_fragment_continuation: true,
             avoid_group: None,
+            float_settled: false,
+        }
+    }
+
+    fn settled_float(element: LayoutNode) -> Self {
+        Self {
+            float_settled: true,
+            ..Self::fresh(element)
         }
     }
 }
@@ -2836,6 +2920,7 @@ pub(crate) fn paginate_with_context(
         mut element,
         is_fragment_continuation,
         avoid_group,
+        float_settled,
     }) = work.pop_front()
     {
         if is_avoid_page_break(element.as_ref()) {
@@ -2981,30 +3066,15 @@ pub(crate) fn paginate_with_context(
             .flex_padding_box_border_top
             .map(|border_top| (position.containing_block_depth, border_top));
 
-        // Handle clear: move y below active floats on the specified side
-        match elem_clear {
-            Clear::Left | Clear::Both => {
-                for f in &left_floats {
-                    if f.y_end > y {
-                        y = f.y_end;
-                    }
-                }
-                if elem_clear == Clear::Both {
-                    for f in &right_floats {
-                        if f.y_end > y {
-                            y = f.y_end;
-                        }
-                    }
-                }
+        // Handle clear: move y below active floats on the specified side. A
+        // paragraph doesn't clear the floats in its own text, drawn just
+        // before it; the boxes after it do.
+        let in_flow = elem_float == Float::None;
+        y = FloatBottoms::drawn(&left_floats, &right_floats, in_flow).cleared(y, elem_clear);
+        if in_flow {
+            for region in left_floats.iter_mut().chain(right_floats.iter_mut()) {
+                region.in_text = false;
             }
-            Clear::Right => {
-                for f in &right_floats {
-                    if f.y_end > y {
-                        y = f.y_end;
-                    }
-                }
-            }
-            Clear::None => {}
         }
 
         if let Some((mut side, mut name)) = page_break_data(element.as_ref()) {
@@ -3279,6 +3349,7 @@ pub(crate) fn paginate_with_context(
                     element: first,
                     is_fragment_continuation,
                     avoid_group: None,
+                    float_settled: false,
                 });
                 continue;
             }
@@ -3441,10 +3512,36 @@ pub(crate) fn paginate_with_context(
             let float_y = margin_box_top
                 + effective_flow_geometry.margins.start
                 + element_float_offset(element.as_ref()).map_or(0.0, |offset| offset.block);
+            // One that doesn't fit goes to the next page, with its line when
+            // it's in a paragraph's text.
+            let spot = float_breaks::FloatSpot {
+                flow_top: margin_box_top,
+                floats_above: FloatBottoms::drawn(&left_floats, &right_floats, true),
+                prev_margin_bottom: if page_broke_mid_loop {
+                    0.0
+                } else {
+                    prev_margin_bottom
+                },
+                top: float_y,
+                height: content_h_val,
+                page_bottom: effective_content_height,
+                page_has_content: current_elements.iter().any(|(_, element)| {
+                    element
+                        .page_content_role()
+                        .interrupts_forced_break_sequence()
+                }),
+            };
+            let element = match spot.settle(element, float_settled, &mut work) {
+                float_breaks::FloatOutcome::Here(element) => element,
+                float_breaks::FloatOutcome::Requeued => continue,
+            };
             let region = FloatRegion {
                 y_start: float_y,
                 y_end: float_y + content_h_val,
                 side: elem_float,
+                in_text: element
+                    .block_flow_owner()
+                    .is_some_and(|owner| owner.block_flow().float_line.is_some()),
             };
             if elem_float == Float::Left {
                 left_floats.push(region);
@@ -3494,6 +3591,7 @@ pub(crate) fn paginate_with_context(
                     element: first,
                     is_fragment_continuation,
                     avoid_group: None,
+                    float_settled: false,
                 });
             }
             continue;

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats that don't fit on their page go to the next one, and a float in a paragraph's text stays beside its line</title>
+<style>
+  @page { size: 320px 240px; margin: 12px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; }
+  body { margin: 0; }
+  p { margin: 0; }
+  .lead { height: 24px; background: #eef0f6; }
+  .cell { float: left; width: 120px; height: 60px; margin-right: 8px; }
+  .note { float: right; width: 60px; height: 20px; }
+  .after { clear: both; }
+  .spaced { margin-top: 30px; }
+</style>
+</head>
+<body>
+  <div class="lead"></div>
+  <img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%23ef476f%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%23ffd166%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%2306d6a0%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%23118ab2%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%23073b4c%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%238338ec%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%23fb5607%27/%3E%3C/svg%3E"><img class="cell" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27120%27%20height%3D%2760%27%3E%3Crect%20width%3D%27120%27%20height%3D%2760%27%20fill%3D%27%233a86ff%27/%3E%3C/svg%3E">
+  <p class="after">Line 0 of the paragraph<br>Line 1 of the paragraph<br>Line 2 of the paragraph<br>Line 3 of the paragraph<br>Line 4 of the paragraph<br>Line 5 of the paragraph<br>Line 6 of the paragraph<br>Line 7 of the paragraph<br>Line 8 <img class="note" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2760%27%20height%3D%2720%27%3E%3Crect%20width%3D%2760%27%20height%3D%2720%27%20fill%3D%27%23e76f51%27/%3E%3C/svg%3E"> after the float<br>Line 9 of the paragraph<br>Line 10 of the paragraph<br>Line 11 of the paragraph</p>
+  <p class="spaced">Total <img class="note" alt="" src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2760%27%20height%3D%2720%27%3E%3Crect%20width%3D%2760%27%20height%3D%2720%27%20fill%3D%27%232a9d8f%27/%3E%3C/svg%3E"> due with a top margin.</p>
+</body>
+</html>

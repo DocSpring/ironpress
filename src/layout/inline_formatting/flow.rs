@@ -8,7 +8,7 @@ use crate::layout::inline::layout_inline_mixed_sequence_with_env;
 use crate::layout::text::{InlineRunCollector, InlineRunContext};
 use crate::parser::css::{AncestorInfo, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
-use crate::style::computed::{ComputedStyle, compute_style_with_context_with_font_metrics};
+use crate::style::computed::{Clear, ComputedStyle, compute_style_with_context_with_font_metrics};
 
 use super::{
     AnonymousInlineFormattingContext, InlineContentSequence, InlineFormattingChild,
@@ -290,15 +290,18 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
         env: &LayoutEnv<'_>,
     ) {
         if runs.is_empty() {
-            floats_in_text.emit(&[], output);
+            floats_in_text.emit(&[], None, output);
             return;
         }
         let width = self.content.available_width();
-        let floats = floats_in_text.line_floats(&env.floats, output, 0.0, width);
+        // An anonymous block: no margins, padding or clearance of its own
+        let around = floats_in_text.around_block(&env.floats, output, 0.0, Clear::None);
+        let origin = around.as_ref().map(|floats| floats.text_origin(0.0));
+        let floats = around.map(|floats| floats.lines(0.0, 0.0, width));
         let (block, tops) =
             AnonymousInlineFormattingContext::new(self.parent_style, width, env.fonts)
                 .layout_runs_among_floats(std::mem::take(runs), floats, &floats_in_text.boxes());
-        floats_in_text.emit(&tops, output);
+        floats_in_text.emit(&tops, origin, output);
         output.extend(block);
     }
 }
