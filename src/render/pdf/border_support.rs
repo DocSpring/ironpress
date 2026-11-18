@@ -1,4 +1,5 @@
 use super::*;
+use crate::render::borders::{DashLayout, DashPattern, StrokePath};
 
 /// Compute a corner-symmetric dash array and phase for one straight side.
 pub(super) fn corner_dash_array(length: f32, border_width: f32, dotted: bool) -> (String, f32) {
@@ -48,43 +49,20 @@ pub(super) fn closed_border_pattern_for_style(
 
     match style {
         BorderStyle::Dashed => {
-            let ratio = if width / css_pixel >= 3.0 { 2.0 } else { 3.0 };
-            let gap_ratio = if width / css_pixel >= 3.0 { 1.0 } else { 2.0 };
-            let dash = width * ratio;
-            let nominal_gap = width * gap_ratio;
-            if path_length <= 2.0 * dash {
-                return String::new();
+            let pattern = DashPattern::dashed(width, width / css_pixel);
+            match pattern.layout(path_length, StrokePath::Closed) {
+                DashLayout::Solid => String::new(),
+                DashLayout::Dashes { dash, gap, .. } => format!("[{dash} {gap}] 0 d\n"),
             }
-            let two_dashes_and_gaps = 2.0 * (dash + nominal_gap);
-            let (dash, gap) = if path_length <= two_dashes_and_gaps {
-                let scale = path_length / two_dashes_and_gaps;
-                (dash * scale, nominal_gap * scale)
-            } else {
-                (dash, best_closed_path_gap(path_length, dash, nominal_gap))
-            };
-            format!("[{dash} {gap}] 0 d\n")
         }
         BorderStyle::Dotted => {
-            let nominal = width;
-            let gap = best_closed_path_gap(path_length, nominal, nominal);
+            let gap = DashPattern::dotted(width).best_gap(path_length, StrokePath::Closed);
             // Blink subtracts 0.01 CSS px so floating-point traversal cannot
             // drop the closing dot when it lies exactly at the path endpoint.
             let interval = (gap + width - 0.01 * css_pixel).max(0.0);
             format!("1 J\n[0 {interval}] 0 d\n")
         }
         _ => String::new(),
-    }
-}
-
-fn best_closed_path_gap(path_length: f32, dash: f32, nominal_gap: f32) -> f32 {
-    let minimum_count = (path_length / (dash + nominal_gap)).floor().max(1.0);
-    let maximum_count = minimum_count + 1.0;
-    let minimum_gap = (path_length - minimum_count * dash) / minimum_count;
-    let maximum_gap = (path_length - maximum_count * dash) / maximum_count;
-    if maximum_gap <= 0.0 || (minimum_gap - nominal_gap).abs() < (maximum_gap - nominal_gap).abs() {
-        minimum_gap.max(0.0)
-    } else {
-        maximum_gap
     }
 }
 

@@ -316,21 +316,17 @@ fn push_dash_pattern(
         return;
     }
 
-    let (dash, gap) = if unit >= 3.0 {
-        (unit * 2.0, unit)
-    } else {
-        (unit * 3.0, unit * 2.0)
-    };
-    if length <= dash * 2.0 {
+    let pattern = crate::render::borders::DashPattern::dashed(unit, unit);
+    let crate::render::borders::DashLayout::Dashes { count, dash, gap } =
+        pattern.layout(length, crate::render::borders::StrokePath::Open)
+    else {
         let whole = DecorationStroke {
             span: stroke.pattern,
             ..stroke
         };
         push_solid_line(content, whole, center, thickness);
         return;
-    }
-    let gap = best_dash_gap(length, dash, gap);
-    let count = ((length + gap) / (dash + gap)).round() as usize;
+    };
     for index in line.painted_marks(dash + gap, dash, count) {
         let x = start + index as f32 * (dash + gap);
         // Chromium draws the dashes as one path of four-sided subpaths, which
@@ -360,7 +356,8 @@ fn push_round_dots(content: &mut String, stroke: DecorationStroke, line: DashedL
         return;
     }
     let gap = if length > unit * 2.0 {
-        best_dash_gap(length, unit, unit)
+        crate::render::borders::DashPattern::dotted(unit)
+            .best_gap(length, crate::render::borders::StrokePath::Open)
     } else {
         length - unit
     };
@@ -384,18 +381,4 @@ fn push_round_dots(content: &mut String, stroke: DecorationStroke, line: DashedL
         // A hair past the last dot, so float error can't drop it.
         last * px + 0.01,
     ));
-}
-
-/// Blink's `StrokeData::SelectBestDashGap` for an open line: the gap nearest
-/// `gap` that fits a whole number of dashes with one at each end.
-fn best_dash_gap(length: f32, dash: f32, gap: f32) -> f32 {
-    let fewer = ((length + gap) / (dash + gap)).floor();
-    let more = fewer + 1.0;
-    let fewer_gap = (length - fewer * dash) / (fewer - 1.0);
-    let more_gap = (length - more * dash) / (more - 1.0);
-    if more_gap <= 0.0 || (fewer_gap - gap).abs() < (more_gap - gap).abs() {
-        fewer_gap
-    } else {
-        more_gap
-    }
 }

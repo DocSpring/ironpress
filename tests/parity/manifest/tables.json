@@ -28,6 +28,21 @@
     ]
   },
   {
+    "id": "tables-collapse-dashed-edges",
+    "category": "tables",
+    "feature": "border-collapse",
+    "subfeature": "dashed-edges",
+    "description": "Collapsed dashed borders 2px and 4px wide: each cell edge is an open stroke that starts and ends with a dash, with Chromium's dash ratios (three and two widths below 3px, two and one from 3px) and the gap stretched to fit. Catches: collapsed edges with their own dash lengths and no gap fitting.",
+    "file": "cases/tables/tables-collapse-dashed-edges.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
     "id": "tables-border-separate",
     "category": "tables",
     "feature": "border-collapse",

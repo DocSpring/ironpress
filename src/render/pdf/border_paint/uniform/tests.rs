@@ -239,30 +239,3 @@ fn a_dashed_border_from_three_pixels_has_dashes_twice_its_width() {
         "{dashes:?}"
     );
 }
-
-#[test]
-fn a_short_side_takes_the_dash_count_whose_gap_is_nearest_the_nominal_one() {
-    // Blink fits a 20px side of a 2px dashed border with three 6px dashes
-    // and 1px gaps (a gap 3px from the nominal 4px), not two dashes and an
-    // 8px gap (4px from it), as Chrome draws a bordered span's sides.
-    assert_eq!(
-        SideDashes::fit(20.0, 6.0, 4.0),
-        SideDashes {
-            count: 3,
-            dash: 6.0,
-            gap: 1.0
-        }
-    );
-}
-
-#[test]
-fn a_side_no_longer_than_two_dashes_is_solid() {
-    assert_eq!(
-        SideDashes::fit(12.0, 6.0, 4.0),
-        SideDashes {
-            count: 1,
-            dash: 12.0,
-            gap: 0.0
-        }
-    );
-}

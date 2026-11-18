@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tables-collapse-dashed-edges</title>
+<style>
+  @page { size: 440px 200px; margin: 0; }
+  html { font-family: ParitySans; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  body { padding: 16px; }
+  table { border-collapse: collapse; table-layout: fixed; width: 360px; margin-bottom: 16px; }
+  td { width: 90px; height: 40px; }
+  .thin td { border: 2px dashed #2b2d42; }
+  .thick td { border: 4px dashed #c62828; }
+</style>
+</head>
+<body>
+  <table class="thin"><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></table>
+  <table class="thick"><tr><td></td><td></td><td></td><td></td></tr></table>
+</body>
+</html>

@@ -104,6 +104,9 @@ fn paint_double_border_areas(
     }
 }
 
+/// The dashes of one collapsed border edge, as Blink draws a box side
+/// (`BoxBorderPainter::DrawLineForBoxSide`): an open stroke that starts and
+/// ends with a dash, solid when no longer than two dashes.
 fn paint_dashed_border_areas(
     content: &mut String,
     edge: PhysicalSide,
@@ -113,16 +116,21 @@ fn paint_dashed_border_areas(
     y2: f32,
     width: f32,
 ) {
-    let dash = (width * 2.0).max(1.0);
-    let gap = (width * (2.0 / 3.0)).max(1.0);
+    use crate::render::borders::{DashLayout, DashPattern, StrokePath};
+
     let horizontal = matches!(edge, PhysicalSide::Top | PhysicalSide::Bottom);
     let length = if horizontal {
         (x2 - x1).abs()
     } else {
         (y2 - y1).abs()
     };
-    let mut offset = 0.0;
-    while offset < length {
+    let pattern = DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX);
+    let (count, dash, gap) = match pattern.layout(length, StrokePath::Open) {
+        DashLayout::Solid => (1, length, 0.0),
+        DashLayout::Dashes { count, dash, gap } => (count, dash, gap),
+    };
+    for index in 0..count {
+        let offset = index as f32 * (dash + gap);
         let segment = dash.min(length - offset);
         if horizontal {
             let start = if x2 >= x1 {
@@ -145,7 +153,6 @@ fn paint_dashed_border_areas(
                 x1 - width / 2.0,
             ));
         }
-        offset += dash + gap;
     }
     content.push_str("f\n");
 }
@@ -270,6 +277,8 @@ mod tests {
 
     #[test]
     fn dashed_border_uses_explicit_filled_segments() {
+        // 8px wide (6pt): 12pt dashes, and 4 of them fit 60pt with 4pt gaps,
+        // nearer the nominal 6pt than 3 with 12pt gaps
         let mut content = String::new();
 
         paint_dashed_border_areas(&mut content, PhysicalSide::Left, 10.0, 0.0, 10.0, 60.0, 6.0);
@@ -278,6 +287,23 @@ mod tests {
         assert!(content.contains("7 16 6 12 re\n"));
         assert!(content.ends_with("f\n"));
         assert!(!content.contains(" S\n"));
+    }
+
+    #[test]
+    fn a_thin_dashed_edge_has_the_thin_dash_ratios() {
+        // 2px wide (1.5pt): 4.5pt dashes, three times the width, and 8 of
+        // them fit 60pt with 3.43pt gaps, nearest the nominal 3pt
+        let mut content = String::new();
+
+        paint_dashed_border_areas(&mut content, PhysicalSide::Top, 0.0, 10.0, 60.0, 10.0, 1.5);
+
+        let dashes: Vec<&str> = content
+            .lines()
+            .filter(|line| line.ends_with(" re"))
+            .collect();
+        assert_eq!(dashes.len(), 8, "{content}");
+        assert_eq!(dashes[0], "0 9.25 4.5 1.5 re");
+        assert!(dashes[7].starts_with("55.5 "), "{content}");
     }
 
     #[test]

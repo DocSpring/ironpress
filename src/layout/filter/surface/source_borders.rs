@@ -2,7 +2,10 @@ use crate::layout::engine::{LayoutBorder, LayoutBorderSide};
 use crate::style::computed::BorderStyle;
 use crate::types::{Color, CornerRadii, EdgeSizes, PhysicalEdges, PhysicalSide, Point, Rect};
 
-use crate::render::borders::{BorderRing, CssRoundedRect, DoubleBorderMetrics, bevel_edge_color};
+use crate::render::borders::{
+    BorderRing, CssRoundedRect, DashLayout, DashPattern, DoubleBorderMetrics, StrokePath,
+    bevel_edge_color,
+};
 
 /// Resolved CSS border paint for an offscreen CSS filter `SourceGraphic`.
 ///
@@ -229,19 +232,21 @@ struct PathProjection {
     offset: f32,
 }
 
+/// Whether `offset` along a side `length` long falls on one of its dashes: the
+/// same open stroke the PDF painter draws ([`DashPattern::layout`]).
 fn dashed_at(offset: f32, length: f32, width: f32) -> bool {
     if length <= 0.0 || width <= 0.0 {
         return false;
     }
-    let dash = (width * 2.0).min(length);
-    let count = (((length + width) / (dash + width)).round() as usize).max(1);
-    if count == 1 {
-        return offset <= dash;
+    let pattern = DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX);
+    match pattern.layout(length, StrokePath::Open) {
+        DashLayout::Solid => true,
+        DashLayout::Dashes { count, dash, gap } => {
+            let period = dash + gap;
+            let index = (offset / period).floor().clamp(0.0, (count - 1) as f32);
+            offset - index * period <= dash
+        }
     }
-    let gap = ((length - count as f32 * dash) / (count - 1) as f32).max(0.0);
-    let period = dash + gap;
-    let index = (offset / period).floor().min((count - 1) as f32);
-    offset - index * period <= dash
 }
 
 fn nearest_dot(offset: f32, length: f32, width: f32) -> f32 {

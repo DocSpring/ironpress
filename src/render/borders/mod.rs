@@ -5,8 +5,10 @@
 //! they must not independently decide corner radii, side ownership,
 //! double-rule widths, or bevel colours.
 
+mod dashes;
 mod geometry;
 mod styles;
 
+pub(crate) use dashes::*;
 pub(crate) use geometry::*;
 pub(crate) use styles::*;
