@@ -78,8 +78,11 @@ pub enum HtmlTag {
     Bdi,
     /// `<bdo>`: its text is laid out strictly in its `dir` (HTML §4.5.25).
     Bdo,
+    /// `<center>`: a block whose contents, blocks included, are centered
+    /// (`text-align: -webkit-center` in Chrome's UA stylesheet).
+    Center,
     /// An element Chrome's UA stylesheet makes a block that has no variant of
-    /// its own (`<center>`, `<form>`, `<fieldset>`, `<menu>`...).
+    /// its own (`<form>`, `<fieldset>`, `<menu>`...).
     OtherBlock,
     /// An element Chrome's UA stylesheet doesn't render (`display: none`):
     /// `<noscript>`, `<template>`, `<datalist>`, `<rp>`...
@@ -172,8 +175,9 @@ impl HtmlTag {
             // Chrome's UA stylesheet: monospace like `<code>`, italic like `<i>`.
             "kbd" | "samp" | "tt" => Self::Code,
             "var" | "dfn" => Self::I,
-            "center" | "form" | "fieldset" | "legend" | "hgroup" | "menu" | "dir" | "search"
-            | "optgroup" | "frameset" | "frame" => Self::OtherBlock,
+            "center" => Self::Center,
+            "form" | "fieldset" | "legend" | "hgroup" | "menu" | "dir" | "search" | "optgroup"
+            | "frameset" | "frame" => Self::OtherBlock,
             "area" | "base" | "basefont" | "datalist" | "link" | "meta" | "noembed"
             | "noframes" | "noscript" | "param" | "rp" | "script" | "template" | "title" => {
                 Self::NotRendered
@@ -224,6 +228,7 @@ impl HtmlTag {
                 | Self::Summary
                 | Self::Video
                 | Self::Textarea
+                | Self::Center
                 | Self::OtherBlock
         )
     }
@@ -407,6 +412,7 @@ impl ElementNode {
             HtmlTag::Meter => "meter",
             HtmlTag::Bdi => "bdi",
             HtmlTag::Bdo => "bdo",
+            HtmlTag::Center => "center",
             HtmlTag::OtherBlock => "#other-block",
             HtmlTag::NotRendered => "#not-rendered",
             HtmlTag::OtherInline => "#other-inline",
@@ -468,7 +474,8 @@ mod tests {
         assert_eq!(HtmlTag::from_tag_name("bdi"), HtmlTag::Bdi);
         assert_eq!(HtmlTag::from_tag_name("bdo"), HtmlTag::Bdo);
         assert_eq!(HtmlTag::from_tag_name("kbd"), HtmlTag::Code);
-        assert_eq!(HtmlTag::from_tag_name("center"), HtmlTag::OtherBlock);
+        assert_eq!(HtmlTag::from_tag_name("center"), HtmlTag::Center);
+        assert_eq!(HtmlTag::from_tag_name("fieldset"), HtmlTag::OtherBlock);
         assert_eq!(HtmlTag::from_tag_name("noscript"), HtmlTag::NotRendered);
         assert_eq!(HtmlTag::from_tag_name("nonsense"), HtmlTag::OtherInline);
         assert_eq!(HtmlTag::from_tag_name("my-widget"), HtmlTag::OtherInline);

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>center and hr attributes</title>
+<style>
+  @page { size: 420px 560px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 12px; line-height: 16px; background: #ffffff; }
+  body { margin: 0; }
+  .w { width: 160px; background: #e3f2fd; }
+  table { border-collapse: collapse; }
+  td { border: 1px solid #424242; padding: 1px 4px; }
+  hr { margin-top: 6px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+  <center>Centered text</center>
+  <center><div class="w">A block narrower than its center</div></center>
+  <center><div class="w" style="text-align: left">Its own text-align</div></center>
+  <center><div class="w" style="margin-left: 40px">margin-left 40px</div></center>
+  <center><table><tr><td>Table cell</td><td>Second</td></tr></table></center>
+  <center><div><div class="w">Two levels in</div></div></center>
+  <center><div style="text-align: left"><div class="w">In a left-aligned div</div></div></center>
+  <center><div class="w" style="float: left">Floated</div><div style="clear: both"></div></center>
+  <div style="text-align: -webkit-center"><div class="w">The CSS value</div></div>
+  <hr>
+  <hr align="left" style="width: 200px">
+  <hr width="200" align="right">
+  <hr width="50%" align="left">
+  <hr align="center" width="100">
+  <hr size="1">
+  <hr size="6">
+  <hr noshade>
+  <hr color="#c62828" size="4">
+  <hr noshade color="#1565c0" size="5">
+  <hr size="6" noshade width="120px">
+</body>
+</html>

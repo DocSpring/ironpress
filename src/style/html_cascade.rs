@@ -96,6 +96,74 @@ fn nearest_table_attributes<'a>(
         .map(|ancestor| &ancestor.element.attributes)
 }
 
+/// An HTML dimension attribute (`200`, `50%`): CSS pixels, or a percentage
+/// when the number is followed by `%` (HTML's rules for parsing dimension
+/// values).
+fn dimension_attribute(attributes: &HashMap<String, String>, name: &str) -> Option<CssValue> {
+    let source = attributes.get(name)?.trim_start();
+    let number_end = source
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(source.len());
+    let number: f32 = source[..number_end].parse().ok()?;
+    Some(if source[number_end..].starts_with('%') {
+        CssValue::Percentage(number)
+    } else {
+        CssValue::Length(number * CSS_PIXEL_IN_POINTS)
+    })
+}
+
+/// An HTML colour attribute: a CSS colour, or hex digits without the `#`.
+fn color_attribute(attributes: &HashMap<String, String>, name: &str) -> Option<CssValue> {
+    let source = attributes.get(name)?.trim();
+    crate::parser::css::parse_color(source)
+        .or_else(|| crate::parser::css::parse_color(&format!("#{source}")))
+}
+
+/// HTML's presentational hints for `<hr>` (HTML §15.3.10, as Blink's
+/// `HTMLHRElement` applies them): `align` places it, `width` sizes it, `size`
+/// sets its height, and `color` or `noshade` make it a solid rule filled with
+/// that colour.
+fn hr_presentational_hints(attributes: &HashMap<String, String>, hints: &mut StyleMap) {
+    if let Some(align) = attributes.get("align") {
+        let auto = || CssValue::Keyword("auto".into());
+        let (left, right) = if align.eq_ignore_ascii_case("left") {
+            (CssValue::Length(0.0), auto())
+        } else if align.eq_ignore_ascii_case("right") {
+            (auto(), CssValue::Length(0.0))
+        } else {
+            (auto(), auto())
+        };
+        hints.set("margin-left", left);
+        hints.set("margin-right", right);
+    }
+    if let Some(width) = dimension_attribute(attributes, "width") {
+        hints.set("width", width);
+    }
+    let solid_color = color_attribute(attributes, "color").or_else(|| {
+        attributes
+            .contains_key("noshade")
+            .then(|| CssValue::Color(Color::rgb(128, 128, 128).into()))
+    });
+    if let Some(color) = solid_color {
+        set_physical_edges(hints, "style", CssValue::Keyword("solid".into()));
+        set_physical_edges(hints, "color", color.clone());
+        hints.set("background-color", color);
+    }
+    if let Some(size) = attributes
+        .get("size")
+        .and_then(|size| parse_non_negative_integer(size))
+    {
+        if size <= 1 {
+            hints.set("border-bottom-width", CssValue::Length(0.0));
+        } else {
+            hints.set(
+                "height",
+                CssValue::Length((size - 2) as f32 * CSS_PIXEL_IN_POINTS),
+            );
+        }
+    }
+}
+
 /// Number of `<ul>`/`<ol>` elements the element is nested in.
 fn list_nesting_depth(selector_context: &SelectorContext<'_>) -> usize {
     selector_context
@@ -143,6 +211,10 @@ pub(crate) fn html_cascade_layers(
         layers
             .presentational_hints
             .set("unicode-bidi", CssValue::Keyword("isolate".into()));
+    }
+
+    if tag == HtmlTag::Hr {
+        hr_presentational_hints(attributes, &mut layers.presentational_hints);
     }
 
     if tag == HtmlTag::Table {

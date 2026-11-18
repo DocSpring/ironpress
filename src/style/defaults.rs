@@ -71,6 +71,10 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             );
             style.set("text-decoration", CssValue::Keyword("underline".into()));
         }
+        // Chrome UA stylesheet: `center { text-align: -webkit-center }`.
+        HtmlTag::Center => {
+            style.set("text-align", CssValue::Keyword("-webkit-center".into()));
+        }
         // Chrome UA stylesheet: `hr { color: gray; border-style: inset;
         // border-width: 1px; margin-block: 0.5em; margin-inline: auto;
         // overflow: hidden; unicode-bidi: isolate }`.

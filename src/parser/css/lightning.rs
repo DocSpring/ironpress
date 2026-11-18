@@ -1370,6 +1370,8 @@ fn strict_engine_extension_is_valid(property_name: &str, value: &str) -> bool {
                 | "optimizequality"
         ),
         "clip-path" => crate::style::computed::is_supported_clip_path(value),
+        // Chrome's value for `<center>` and `align="center"`
+        "text-align" => value.trim().eq_ignore_ascii_case("-webkit-center"),
         "position" => {
             let value = value.trim();
             value
@@ -1483,6 +1485,25 @@ mod tests {
             rules[0].declarations.get("image-rendering"),
             Some(CssValue::Keyword(value)) if value == "crisp-edges"
         ));
+    }
+
+    #[test]
+    fn keeps_text_align_webkit_center_and_drops_other_unknown_values() {
+        let inline = parse_inline_style_with_lightning("text-align: -webkit-center")
+            .expect("-webkit-center declaration should parse");
+        assert!(matches!(
+            inline.get("text-align"),
+            Some(CssValue::Keyword(value)) if value == "-webkit-center"
+        ));
+        let rules = parse_stylesheet_rules_with_lightning(
+            ".a { text-align: -WEBKIT-CENTER } .b { text-align: -webkit-middle }",
+        )
+        .expect("stylesheet should parse");
+        assert!(matches!(
+            rules[0].declarations.get("text-align"),
+            Some(CssValue::Keyword(value)) if value == "-webkit-center"
+        ));
+        assert!(rules.iter().all(|rule| rule.selector != ".b"));
     }
 
     #[test]

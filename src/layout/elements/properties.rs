@@ -501,6 +501,15 @@ impl InlineOffset {
         let start = match (style.margin_left_auto, style.margin_right_auto) {
             (true, true) => free_space / 2.0,
             (true, false) => free_space,
+            // A parent's `text-align: -webkit-center` centers an in-flow box
+            // whose margins aren't `auto` (Blink's `ResolveInlineAutoMargins`)
+            (false, false)
+                if style.centered_by_parent_text_align
+                    && style.float == crate::style::computed::Float::None
+                    && !style.position.is_absolute() =>
+            {
+                fixed_start + free_space / 2.0
+            }
             (false, _) => fixed_start,
         };
         Self(start)

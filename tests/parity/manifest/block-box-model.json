@@ -886,5 +886,17 @@
       "probe-fill-box",
       "probe-border-box"
     ]
+  },
+  {
+    "id": "block-ua-center-and-hr-attributes",
+    "category": "block-box-model",
+    "feature": "ua-stylesheet",
+    "subfeature": "center-hr-attributes",
+    "description": "center is text-align: -webkit-center, which centres its text and, by the container's alignment and at any depth, each in-flow block child narrower than it whose margins aren't auto (not floats, not inside a left-aligned block); the CSS value does the same. hr's align, width, size, noshade and color attributes place, size and colour it as HTML's presentational hints say. Catches: center's blocks left at the start edge, hr attributes ignored (a 200px rule spanning the page, a thick rule drawn thin, a coloured rule drawn gray and inset).",
+    "file": "cases/block-box-model/block-ua-center-and-hr-attributes.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-border-box", "probe-text-baseline"]
   }
 ]

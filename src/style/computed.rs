@@ -3394,6 +3394,13 @@ pub struct ComputedStyle {
     pub margin_em_left: Option<f32>,
     pub padding: EdgeSizes,
     pub text_align: TextAlign,
+    /// `text-align` is `-webkit-center` (`<center>`): `text_align` is
+    /// `Center`, and block-level children are centered too.
+    pub text_align_webkit_center: bool,
+    /// The parent's `text-align` is `-webkit-center`, so this box, when it's
+    /// an in-flow block narrower than its containing block and neither inline
+    /// margin is `auto`, is centered in it (Blink's `ResolveInlineAutoMargins`).
+    pub centered_by_parent_text_align: bool,
     pub text_align_last: Option<TextAlign>,
     pub word_break_keep_all: bool,
     pub hyphens_manual: bool,
@@ -3821,6 +3828,8 @@ impl Default for ComputedStyle {
             margin_em_left: None,
             padding: EdgeSizes::default(),
             text_align: TextAlign::Left,
+            text_align_webkit_center: false,
+            centered_by_parent_text_align: false,
             text_align_last: None,
             word_break_keep_all: false,
             hyphens_manual: true,
@@ -4296,6 +4305,7 @@ fn compute_style_with_context_and_percentage_basis_impl(
     // for block tags, so an inline tag such as a `display:inline-block`
     // `<span>` wrongly inherited its parent's padding/margin.)
     style.declared_font_size = None;
+    style.centered_by_parent_text_align = parent.text_align_webkit_center;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;
     style.margin_em_right = None;
@@ -4689,6 +4699,7 @@ pub(crate) fn compute_pseudo_element_style_with_font_metrics(
 
     // Reset non-inherited properties (pseudo-elements are generated boxes)
     style.declared_font_size = None;
+    style.centered_by_parent_text_align = parent_style.text_align_webkit_center;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;
     style.margin_em_right = None;
@@ -4940,7 +4951,10 @@ fn reset_to_initial(style: &mut ComputedStyle, property: &str) {
             style.line_height = default.line_height;
             style.line_height_absolute = default.line_height_absolute;
         }
-        "text-align" => style.text_align = default.text_align,
+        "text-align" => {
+            style.text_align = default.text_align;
+            style.text_align_webkit_center = default.text_align_webkit_center;
+        }
         "text-align-last" => style.text_align_last = default.text_align_last,
         "text-decoration" => {
             let controls = (
@@ -5193,8 +5207,11 @@ fn reset_all_to_initial(style: &mut ComputedStyle) {
     let direction_rtl = style.direction_rtl;
     let unicode_bidi = style.unicode_bidi;
     let custom_properties = style.custom_properties.clone();
+    // Not a property: it comes from the parent
+    let centered_by_parent_text_align = style.centered_by_parent_text_align;
 
     *style = ComputedStyle::default();
+    style.centered_by_parent_text_align = centered_by_parent_text_align;
     style.declared_font_size = Some(DeclaredFontSize {
         size: style.font_size,
         origin: style.font_size_origin,
@@ -5242,7 +5259,10 @@ fn restore_from_parent(style: &mut ComputedStyle, property: &str, parent: &Compu
             style.line_height = parent.line_height;
             style.line_height_absolute = parent.line_height_absolute;
         }
-        "text-align" => style.text_align = parent.text_align,
+        "text-align" => {
+            style.text_align = parent.text_align;
+            style.text_align_webkit_center = parent.text_align_webkit_center;
+        }
         "text-align-last" => style.text_align_last = parent.text_align_last,
         "text-decoration" => {
             let controls = (
@@ -5883,8 +5903,10 @@ fn apply_all_keyword(style: &mut ComputedStyle, keyword: &str, parent: &Computed
             let unicode_bidi = style.unicode_bidi;
             let custom_properties = std::mem::take(&mut style.custom_properties);
             let mut text_decorations = std::mem::take(&mut style.text_decorations);
+            let centered_by_parent_text_align = style.centered_by_parent_text_align;
             *style = parent.clone();
             style.declared_font_size = None;
+            style.centered_by_parent_text_align = centered_by_parent_text_align;
             text_decorations.current = parent
                 .text_decorations
                 .current
@@ -6306,8 +6328,13 @@ fn apply_style_map_with_percentage_basis(
     }
 
     if let Some(CssValue::Keyword(k)) = get_non_special(map, "text-align") {
+        style.text_align_webkit_center = match k.as_str() {
+            "-webkit-center" => true,
+            "match-parent" => parent.text_align_webkit_center,
+            _ => false,
+        };
         style.text_align = match k.as_str() {
-            "center" => TextAlign::Center,
+            "center" | "-webkit-center" => TextAlign::Center,
             "right" => TextAlign::Right,
             "left" => TextAlign::Left,
             "justify" => TextAlign::Justify,
@@ -8369,8 +8396,9 @@ fn apply_style_map_with_percentage_basis(
         if let Some(kw) =
             crate::style::resolve::try_resolve_var_to_keyword(val, &style.custom_properties)
         {
+            style.text_align_webkit_center = kw == "-webkit-center";
             style.text_align = match kw.as_str() {
-                "center" => TextAlign::Center,
+                "center" | "-webkit-center" => TextAlign::Center,
                 "right" => TextAlign::Right,
                 "justify" => TextAlign::Justify,
                 _ => TextAlign::Left,

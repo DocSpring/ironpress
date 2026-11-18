@@ -229,3 +229,154 @@ fn block_margins_match_chrome() {
         );
     }
 }
+
+/// The left edge of the text block holding `word`, from its containing block.
+fn block_left(markup: &str, word: &str) -> f32 {
+    use crate::layout::elements::{LayoutVisitor, TextBlock};
+    struct Find<'a> {
+        word: &'a str,
+        left: Option<f32>,
+    }
+    impl LayoutVisitor for Find<'_> {
+        fn visit_text_block(&mut self, block: &TextBlock) {
+            let holds = block.lines.iter().any(|line| {
+                line.runs
+                    .iter()
+                    .any(|run| run.text.split_whitespace().any(|w| w == self.word))
+            });
+            if holds {
+                self.left = Some(block.positioning.insets.left);
+            }
+        }
+    }
+    let pages = super::support::layout_pages_at(markup, crate::types::PageSize::new(400.0, 400.0));
+    let mut find = Find { word, left: None };
+    for (_, element) in &pages[0].elements {
+        crate::layout::engine::visit_layout_tree(element.as_ref(), &mut find);
+    }
+    find.left
+        .unwrap_or_else(|| panic!("no text block holds {word:?}"))
+}
+
+#[test]
+fn center_centers_its_text_and_blocks_narrower_than_it() {
+    // Chrome: `center { text-align: -webkit-center }`, which centers a block
+    // child without auto margins (Blink's `ResolveInlineAutoMargins`), by the
+    // container's alignment and at any depth. 150pt blocks on a 400pt page.
+    let cases = [
+        (
+            r#"<center><div style="width:150pt">plain</div></center>"#,
+            "plain",
+            125.0,
+        ),
+        (
+            r#"<center><div style="width:150pt; text-align:left">own</div></center>"#,
+            "own",
+            125.0,
+        ),
+        (
+            r#"<center><div style="width:150pt; margin-left:40pt">margin</div></center>"#,
+            "margin",
+            145.0,
+        ),
+        (
+            r#"<center><div><div style="width:150pt">deep</div></div></center>"#,
+            "deep",
+            125.0,
+        ),
+        (
+            r#"<div style="text-align:-webkit-center"><div style="width:150pt">value</div></div>"#,
+            "value",
+            125.0,
+        ),
+        (
+            r#"<center><p style="width:150pt; margin:0 0 0 auto">auto</p></center>"#,
+            "auto",
+            250.0,
+        ),
+        (
+            r#"<center><div style="text-align:left"><div style="width:150pt">left</div></div></center>"#,
+            "left",
+            0.0,
+        ),
+        (
+            r#"<center><div style="width:150pt; float:left">float</div></center>"#,
+            "float",
+            0.0,
+        ),
+    ];
+    for (markup, word, expected) in cases {
+        let left = block_left(markup, word);
+        assert!(
+            (left - expected).abs() < 0.01,
+            "{word}: expected {expected}pt, got {left}pt in {markup}"
+        );
+    }
+    let center = crate::style::computed::compute_style(
+        crate::parser::dom::HtmlTag::Center,
+        None,
+        &Default::default(),
+    );
+    assert_eq!(center.text_align, crate::style::computed::TextAlign::Center);
+    assert!(center.text_align_webkit_center);
+}
+
+#[test]
+fn hr_attributes_are_presentational_hints() {
+    use crate::parser::dom::HtmlTag;
+    use crate::style::computed::{BorderStyle, ComputedStyle, compute_style_with_context};
+    use std::collections::HashMap;
+
+    let hr = |attributes: &[(&str, &str)], inline_style: Option<&str>| {
+        let attributes: HashMap<String, String> = attributes
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .collect();
+        compute_style_with_context(
+            HtmlTag::Hr,
+            inline_style,
+            &ComputedStyle::default(),
+            &[],
+            "hr",
+            &[],
+            None,
+            &attributes,
+            &Default::default(),
+        )
+    };
+    // Chrome's computed values for the same markup
+    let left = hr(&[("align", "left")], Some("width: 200px"));
+    assert!(left.margin.left == 0.0 && !left.margin_left_auto && left.margin_right_auto);
+    assert_eq!(left.width, Some(150.0), "the author's width");
+    let right = hr(&[("width", "200"), ("align", "right")], None);
+    assert!(right.margin_left_auto && !right.margin_right_auto && right.margin.right == 0.0);
+    assert_eq!(right.width, Some(150.0));
+    let other = hr(&[("align", "bogus"), ("width", "120px")], None);
+    assert!(other.margin_left_auto && other.margin_right_auto);
+    assert_eq!(other.width, Some(90.0));
+    let percent = hr(&[("width", "50%")], None);
+    assert_eq!(percent.percentage_sizing.width, Some(50.0));
+
+    let thin = hr(&[("size", "1")], None);
+    assert_eq!(thin.border.bottom.used_width(), 0.0);
+    assert_eq!(thin.border.top.used_width(), 0.75);
+    let tall = hr(&[("size", "6")], None);
+    assert_eq!(tall.height, Some(3.0), "4px inside two 1px borders");
+
+    let noshade = hr(&[("noshade", "")], None);
+    let gray = Color::rgb(128, 128, 128);
+    assert_eq!(noshade.border.top.style, BorderStyle::Solid);
+    assert_eq!(
+        noshade.border.top.color,
+        crate::parser::css::SpecifiedColor::Absolute(gray)
+    );
+    assert_eq!(noshade.background_color, Some(gray));
+    let colored = hr(&[("noshade", ""), ("color", "#00f")], None);
+    assert_eq!(colored.border.left.style, BorderStyle::Solid);
+    assert_eq!(colored.background_color, Some(Color::rgb(0, 0, 255)));
+    let bare_hex = hr(&[("color", "ff0000")], None);
+    assert_eq!(bare_hex.background_color, Some(Color::rgb(255, 0, 0)));
+    let plain = hr(&[], None);
+    assert_eq!(plain.border.top.style, BorderStyle::Inset);
+    assert_eq!(plain.background_color, None);
+}
