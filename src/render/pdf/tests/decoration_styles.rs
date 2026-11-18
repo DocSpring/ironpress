@@ -266,3 +266,78 @@ fn overlines_and_line_throughs_sit_where_chrome_puts_them() {
     let rects = rects_px(&content);
     assert_close(rects[0].1 + 2.0, -13.0, "painted line-through centre");
 }
+
+#[test]
+fn a_piece_of_a_dotted_or_dashed_line_draws_only_its_own_marks() {
+    use crate::style::computed::TextDecorationStyle::{Dashed, Dotted};
+
+    // Ink skipping paints a line in pieces. Each keeps the whole line's
+    // pattern, clipped to the piece, and draws only the marks that reach it.
+    let piece = |run: &TextRun, from_px: f32, to_px: f32| {
+        let decoration = &run.decorations[0];
+        let axis_y = underline_center_y(run, decoration, DECORATION_BASELINE);
+        let whole = DecorationStroke::new(
+            (0.0, 0.0, 0.0),
+            DecorationLine::Underline,
+            10.0 * PX,
+            148.05 * PX,
+            axis_y,
+            axis_y - DECORATION_BASELINE,
+        );
+        let mut content = String::new();
+        push_decoration_stroke(
+            &mut content,
+            run,
+            decoration,
+            DecorationStroke {
+                span: crate::render::text_decoration::InlineInterval::new(from_px * PX, to_px * PX),
+                ..whole
+            },
+        );
+        assert!(content.contains("W\nn\n"), "the piece is clipped: {content}");
+        // Leave out the clip rectangle, four times the line's thickness tall
+        rects_px(&content)
+            .into_iter()
+            .filter(|rect| rect.3 < 2.0)
+            .map(|rect| rect.0)
+            .collect::<Vec<_>>()
+    };
+
+    // 16px dots 4px apart from x=10: the dot at 38 ends before the piece and
+    // the one at 50 starts where it ends.
+    let dots = piece(&decorated_run(16.0, Dotted), 40.5, 50.0);
+    assert_eq!(dots.len(), 2, "{dots:?}");
+    assert_close(dots[0], 42.0, "first dot");
+    assert_close(dots[1], 46.0, "second dot");
+
+    // 16px dashes 6px long, 6 + 54/13 px apart from x=10
+    let dashes = piece(&decorated_run(16.0, Dashed), 40.5, 60.0);
+    let pitch = 6.0 + 54.0 / 13.0;
+    assert_eq!(dashes.len(), 2, "{dashes:?}");
+    assert_close(dashes[0], 10.0 + 3.0 * pitch, "first dash");
+    assert_close(dashes[1], 10.0 + 4.0 * pitch, "second dash");
+}
+
+#[test]
+fn a_decoration_longer_than_any_page_is_painted_only_near_it() {
+    use crate::style::computed::TextDecorationStyle::{Dashed, Dotted, Double, Solid, Wavy};
+
+    // Letter spacing can make a run any length. Past twice the largest PDF
+    // page from the page's origin a line can't be seen, so painting stops
+    // there rather than taking memory in proportion to the line.
+    let reach_px = 2.0 * 14_400.0 / PX;
+    for (font_px, style) in [(16.0, Solid), (16.0, Double), (16.0, Dotted), (40.0, Dotted), (16.0, Dashed), (16.0, Wavy)] {
+        for (start_px, end_px) in [(0.0, 1e30), (-1e30, 1e30), (1e30, 2e30)] {
+            let content =
+                paint_decoration(&decorated_run(font_px, style), DecorationLine::Underline, start_px, end_px);
+            assert!(content.len() < 2_000_000, "{style:?} from {start_px}: {} bytes", content.len());
+            // Positions within the reach, and lengths up to twice it
+            for number in content.split_whitespace().filter_map(|word| word.parse::<f32>().ok()) {
+                assert!(
+                    number.is_finite() && number.abs() <= 2.0 * reach_px * PX + 100.0,
+                    "{style:?} from {start_px}: {number}"
+                );
+            }
+        }
+    }
+}

@@ -71,6 +71,32 @@ pub(in crate::render::pdf) struct DecorationStroke {
 }
 
 impl DecorationStroke {
+    /// How far from the page's origin, either way, a decoration is painted: twice the largest page a PDF can have
+    /// (ISO 32000-1 Annex C, 14,400 units), so a box a transform moves back onto the page still gets its line. A line
+    /// as long as letter spacing can make it (`1e30px`) would otherwise take memory and time in proportion to its
+    /// length, and never finish once a dot's position stops changing in `f32`.
+    const REACH: f32 = 2.0 * 14_400.0;
+
+    /// This stroke cut to [`Self::REACH`], or `None` when nothing of it is left to paint.
+    fn within_reach(self) -> Option<Self> {
+        let cut = |interval: crate::render::text_decoration::InlineInterval| {
+            crate::render::text_decoration::InlineInterval::new(
+                interval.start.clamp(-Self::REACH, Self::REACH),
+                interval.end.clamp(-Self::REACH, Self::REACH),
+            )
+        };
+        let (span, pattern) = (cut(self.span), cut(self.pattern));
+        let numbers = [span.start, span.end, pattern.start, pattern.end];
+        if numbers.iter().any(|number| number.is_nan()) || span.end <= span.start {
+            return None;
+        }
+        Some(Self {
+            span,
+            pattern,
+            ..self
+        })
+    }
+
     pub(in crate::render::pdf) fn new(
         color: (f32, f32, f32),
         line: DecorationLine,
@@ -97,9 +123,9 @@ pub(in crate::render::pdf) fn push_decoration_stroke(
     stroke: DecorationStroke,
 ) {
     let thickness = decoration_thickness(run, decoration);
-    if stroke.span.end <= stroke.span.start {
+    let Some(stroke) = stroke.within_reach() else {
         return;
-    }
+    };
     let painted = crate::render::text_decoration::painted_thickness(run, decoration);
     match decoration.style {
         crate::style::computed::TextDecorationStyle::Solid => {
@@ -214,6 +240,7 @@ fn push_dashed_line(
     let line = DashedLine {
         start,
         length,
+        painted: (stroke.span.start / px, stroke.span.end / px),
         unit,
         center,
         thickness,
@@ -225,15 +252,29 @@ fn push_dashed_line(
 }
 
 /// A dotted or dashed line on the pixel grid: where it starts and how long it
-/// is in whole CSS px, its pattern unit in px, and its centre and thickness in
-/// pt.
+/// is in whole CSS px, the part of it painted in px, its pattern unit in px,
+/// and its centre and thickness in pt.
 #[derive(Clone, Copy)]
 struct DashedLine {
     start: f32,
     length: f32,
+    painted: (f32, f32),
     unit: f32,
     center: f32,
     thickness: f32,
+}
+
+impl DashedLine {
+    /// Which of `count` marks, each `mark` px long and `pitch` px from the
+    /// last, reach the painted part of the line. Ink skipping paints a line in
+    /// pieces, and each piece draws only its own dots and dashes.
+    fn painted_marks(self, pitch: f32, mark: f32, count: usize) -> std::ops::Range<usize> {
+        let (from, to) = self.painted;
+        // The first mark that ends after `from`, and every one that starts before `to`
+        let first = (((from - self.start - mark) / pitch).floor() + 1.0).max(0.0) as usize;
+        let last = ((to - self.start) / pitch).ceil().max(0.0) as usize;
+        first.min(count)..last.min(count)
+    }
 }
 
 /// The dots or dashes of `line`.
@@ -249,6 +290,7 @@ fn push_dash_pattern(
         unit,
         center,
         thickness,
+        ..
     } = line;
     let px = crate::fonts::PT_PER_CSS_PX;
     let end = start + length;
@@ -263,12 +305,13 @@ fn push_dash_pattern(
         // Square dots, a dot apart from the line's start, the last one cut
         // where the line ends. Each is filled on its own, as Chromium does,
         // so a rasterizer can snap a lone rectangle to its pixels.
-        let mut x = start;
-        while x < end {
+        let pitch = unit * 2.0;
+        let count = (length / pitch).ceil() as usize;
+        for index in line.painted_marks(pitch, unit, count) {
+            let x = start + index as f32 * pitch;
             let width = unit.min(end - x);
             content.push_str(&PdfRect::new(x * px, bottom, width * px, thickness).rect_path());
             content.push_str("f\n");
-            x += unit * 2.0;
         }
         return;
     }
@@ -288,7 +331,7 @@ fn push_dash_pattern(
     }
     let gap = best_dash_gap(length, dash, gap);
     let count = ((length + gap) / (dash + gap)).round() as usize;
-    for index in 0..count {
+    for index in line.painted_marks(dash + gap, dash, count) {
         let x = start + index as f32 * (dash + gap);
         // Chromium draws the dashes as one path of four-sided subpaths, which
         // rasterizers antialias rather than snapping to pixels as they do a
@@ -310,6 +353,7 @@ fn push_round_dots(content: &mut String, stroke: DecorationStroke, line: DashedL
         unit,
         center,
         thickness,
+        ..
     } = line;
     let px = crate::fonts::PT_PER_CSS_PX;
     if length < unit {
@@ -322,8 +366,16 @@ fn push_round_dots(content: &mut String, stroke: DecorationStroke, line: DashedL
     };
     let pitch = unit + gap;
     let count = ((length + gap) / pitch).round().max(1.0) as usize;
-    let first = start + unit / 2.0;
-    let last = first + (count - 1) as f32 * pitch;
+    let painted = line.painted_marks(pitch, unit, count);
+    let Some(last_index) = painted
+        .end
+        .checked_sub(1)
+        .filter(|last| *last >= painted.start)
+    else {
+        return;
+    };
+    let first = start + unit / 2.0 + painted.start as f32 * pitch;
+    let last = start + unit / 2.0 + last_index as f32 * pitch;
     content.push_str(&format!(
         "q\n{}{thickness} w\n1 J\n[0 {}] 0 d\n{} {center} m\n{} {center} l\nS\nQ\n",
         stroke.color.stroke_operator(),
