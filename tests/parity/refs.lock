@@ -1288,6 +1288,34 @@
       "reference_file": "cases/block-box-model/block-subpoint-height-continuation.html",
       "reference_html_sha256": "6f475dc10f0bec74a60c7e43121baf330bdc1cd515e5ad452b3de2bdd66279a9"
     },
+    "block-ua-grouping-elements": {
+      "category": "block-box-model",
+      "file": "cases/block-box-model/block-ua-grouping-elements.html",
+      "html_sha256": "96176e726919d61b5dfc103a3be05e9dcd995e651b026d1a57d81a260233fd0d",
+      "manifest_sha256": "fccb341f5bf8e1e7bcbe8598ff9efb0560a42c0998663fb644a221b280562540",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/block-box-model/block-ua-grouping-elements.pdf",
+        "sha256": "a5839d90d899d4da42f994eaefdd124adab277ba60c3ef722e6dcbf37be18960"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/block-box-model/block-ua-grouping-elements.html",
+      "reference_html_sha256": "96176e726919d61b5dfc103a3be05e9dcd995e651b026d1a57d81a260233fd0d"
+    },
+    "block-ua-hr": {
+      "category": "block-box-model",
+      "file": "cases/block-box-model/block-ua-hr.html",
+      "html_sha256": "23c977a6fa201773ebda5d977f045420c3ef1f7960e57b88d240fc591ec1ccc9",
+      "manifest_sha256": "ae1aa314ebca881d7b0d6892e107906d75d52d5e9404b217d1aa8f2193c3c44b",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/block-box-model/block-ua-hr.pdf",
+        "sha256": "dde1022a9c4e52fb30671f5900a8aaadeb1606f9840475510f299f57ab95daa3"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/block-box-model/block-ua-hr.html",
+      "reference_html_sha256": "23c977a6fa201773ebda5d977f045420c3ef1f7960e57b88d240fc591ec1ccc9"
+    },
     "block-width-auto-fills-parent": {
       "category": "block-box-model",
       "file": "cases/block-box-model/block-width-auto-fills-parent.html",
@@ -1856,11 +1884,25 @@
       "oracle": "chrome",
       "pdf": {
         "file": "oracles/backgrounds-borders/border-style-3d-bevels.pdf",
-        "sha256": "5fb4fa6dec1f9b041b6e1ba4b38cbe2e240be09bbbf70f9575cf1ee2faa34b7a"
+        "sha256": "82329dce23a0c47a602d88c84accfbf30f946a5eb3fc24e77cabb87a08188d82"
       },
-      "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
       "reference_file": "cases/backgrounds-borders/border-style-3d-bevels.html",
       "reference_html_sha256": "343c61201d76f9a82df3e123f6b887ab3204c2ded7b0222f6f28d9570355d931"
+    },
+    "border-style-3d-colors": {
+      "category": "backgrounds-borders",
+      "file": "cases/backgrounds-borders/border-style-3d-colors.html",
+      "html_sha256": "6c2e52b9807be9c524c5a2853520e7fa8556955bbdf0f1073b5e473c1d0e803a",
+      "manifest_sha256": "635e3edc49ef0c118a5f4807ccd50449ccd2f1eb9a6da8b3374d047acbcedc3a",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/backgrounds-borders/border-style-3d-colors.pdf",
+        "sha256": "43bf44cb51c6beee32092b8dab6e27a4ecfeb11b16e30ead0af7589c0ecd0ecd"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/backgrounds-borders/border-style-3d-colors.html",
+      "reference_html_sha256": "6c2e52b9807be9c524c5a2853520e7fa8556955bbdf0f1073b5e473c1d0e803a"
     },
     "border-style-dashed": {
       "category": "backgrounds-borders",
@@ -7966,6 +8008,20 @@
       "reference_file": "cases/inline-text/inline-text-collapsed-space-owner.html",
       "reference_html_sha256": "d4e59238a9404e64d419258bc3407d166f15f12d4b59be9eb0b2fe55f6f2b2c2"
     },
+    "inline-text-decoration-styles": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-decoration-styles.html",
+      "html_sha256": "56c88140ee0b64d7033b8c6c6bb80f11c7d92c03eac0277fce5e073061f3c953",
+      "manifest_sha256": "efc4a3fc91baca8646bff535d6b12d850a8381ce4b0b58a7c53b26a4de76fdf9",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-decoration-styles.pdf",
+        "sha256": "ebe58af3f7ca487e22e21a0c08691ec1bfc71916fd0376d4bbf8b8dd01307e3a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-decoration-styles.html",
+      "reference_html_sha256": "56c88140ee0b64d7033b8c6c6bb80f11c7d92c03eac0277fce5e073061f3c953"
+    },
     "inline-text-decoration-subpoint-geometry": {
       "category": "inline-text",
       "file": "cases/inline-text/inline-text-decoration-subpoint-geometry.html",
@@ -8427,6 +8483,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/inline-text/inline-text-text-underline-offset-length.html",
       "reference_html_sha256": "55c45bd218e421fdd001c6313f180b5af008b7cedb65c12eaf328c40acb329aa"
+    },
+    "inline-text-ua-phrase-elements": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-ua-phrase-elements.html",
+      "html_sha256": "8f4190835780ad989ea9bf8ecb3fed9d132f26da4fe0c4e6069f84b3d5cb4504",
+      "manifest_sha256": "eea71ec417c47fa2428eac4106f141862a2f88a90c625e594af042ce3b8228d6",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-ua-phrase-elements.pdf",
+        "sha256": "39e4c8ccbfd7f88b16a2a233be2968048cf439f69dadf5d4202ac666d9fe74d4"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-ua-phrase-elements.html",
+      "reference_html_sha256": "8f4190835780ad989ea9bf8ecb3fed9d132f26da4fe0c4e6069f84b3d5cb4504"
     },
     "inline-text-unicode-spaces": {
       "category": "inline-text",
@@ -23379,6 +23449,34 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/typography/typography-text-emphasis-whitespace.html",
       "reference_html_sha256": "f4de626e0076f5fa0b5ad84a5b55c42400a2a8bd8de15de2dee673021da2086d"
+    },
+    "typography-ua-font-size-keywords": {
+      "category": "typography",
+      "file": "cases/typography/typography-ua-font-size-keywords.html",
+      "html_sha256": "a948713bd9fbfca6fd2964fdae6f4ed0d4542242ba271a88991211d840f1b018",
+      "manifest_sha256": "575c65f9e70875e5b2cbc6b694d589dc05507986bd2a0126171af67ca173954f",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/typography/typography-ua-font-size-keywords.pdf",
+        "sha256": "1ea393ba6eb08983eaf3ba3f8a5dad5e7c7213df0dc8c055767aef782cb12fa3"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/typography/typography-ua-font-size-keywords.html",
+      "reference_html_sha256": "a948713bd9fbfca6fd2964fdae6f4ed0d4542242ba271a88991211d840f1b018"
+    },
+    "typography-ua-monospace-size": {
+      "category": "typography",
+      "file": "cases/typography/typography-ua-monospace-size.html",
+      "html_sha256": "c441fd6456a8f62231719dead32e6cb7912379f3e66264799b2f82a8a8d5c000",
+      "manifest_sha256": "4403090d7a5ada79c021fbb894504e9112062d014e860122c85a48ccf68f7176",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/typography/typography-ua-monospace-size.pdf",
+        "sha256": "5424aede95478925ae975e4547e505586a14f316878407e5d6a9c5a0482f2dbc"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/typography/typography-ua-monospace-size.html",
+      "reference_html_sha256": "c441fd6456a8f62231719dead32e6cb7912379f3e66264799b2f82a8a8d5c000"
     },
     "typography-vertical-align-sub": {
       "category": "typography",

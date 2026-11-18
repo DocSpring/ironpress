@@ -858,5 +858,33 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "block-ua-grouping-elements",
+    "category": "block-box-model",
+    "feature": "ua-stylesheet",
+    "subfeature": "grouping-elements",
+    "description": "dl, dt, dd, figure, figcaption, address and pre take Chromium's UA margins, indents and font styles; catches bold dt, padded pre and unindented figure.",
+    "file": "cases/block-box-model/block-ua-grouping-elements.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
+  },
+  {
+    "id": "block-ua-hr",
+    "category": "block-box-model",
+    "feature": "ua-stylesheet",
+    "subfeature": "hr",
+    "description": "hr is a 1px gray inset box with 8px margins, centred by auto margins when given a width unless author margins replace them, and its border color comes from the border, not a stroked line.",
+    "file": "cases/block-box-model/block-ua-hr.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-border-box"
+    ]
   }
 ]

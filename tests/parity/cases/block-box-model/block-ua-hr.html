@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hr is a gray inset box centred by auto margins</title>
+<style>
+  @page { size: 360px 240px; margin: 0; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 20px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0; }
+  .rule { border: 0; border-top: 2px solid #c0392b; }
+  .thick { height: 6px; background: #2e86c1; border: none; }
+</style>
+</head>
+<body>
+  <p>Above</p>
+  <hr>
+  <p>Between</p>
+  <hr style="width: 50%">
+  <hr style="width: 50%; margin: 4px 0">
+  <hr class="rule">
+  <hr class="thick" style="width: 120px">
+  <hr style="color: #2e86c1">
+  <p>Below</p>
+</body>
+</html>

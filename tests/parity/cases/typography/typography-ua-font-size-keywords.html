@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>font-size keywords, small and big</title>
+<style>
+  @page { size: 360px 240px; margin: 0; }
+  html { font-family: ParitySans; line-height: 30px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 6px; background: #eef1f8; }
+</style>
+</head>
+<body>
+  <p>Net <small>small</small> <small><small>twice</small></small> <big>big</big></p>
+  <p style="font-size: 14px">Fixed <small>small of 14px</small></p>
+  <p><span style="font-size: x-small">x-small</span> <span style="font-size: small">small</span> <span style="font-size: large">large</span> <span style="font-size: x-large">x-large</span></p>
+  <p><span style="font-size: smaller">smaller</span> <span style="font-size: larger">larger</span> <span style="font: small ParitySans">shorthand</span></p>
+  <p style="font-size: xx-large; line-height: 40px">xx-large <small>small</small></p>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>border-style 3d colors</title>
+<style>
+  @page { size: 360px 192px; margin: 0; }
+  html { font-family: ParitySans; line-height: 1.5; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { background: #ffffff; }
+  .row { height: 64px; padding: 10px; font-size: 0; background: #f5f5f5; }
+  .box {
+    display: inline-block;
+    width: 44px;
+    height: 44px;
+    margin-right: 6px;
+    border: 10px inset;
+    background: #ffffff;
+  }
+  .outset { border-style: outset; }
+  .groove { border-style: groove; }
+  .ridge { border-style: ridge; }
+</style>
+</head>
+<body>
+  <!-- Too dark to darken: lightened once for the shadow, twice for the highlight. -->
+  <div class="row">
+    <div class="box" style="border-color: #000000"></div>
+    <div class="box" style="border-color: #202020"></div>
+    <div class="box outset" style="border-color: #1a1a2e"></div>
+    <div class="box groove" style="border-color: #000000"></div>
+    <div class="box ridge" style="border-color: #202020"></div>
+    <div class="box" style="border-color: #5a5a5a"></div>
+  </div>
+  <!-- Too light to lighten: the color is its own highlight. -->
+  <div class="row">
+    <div class="box" style="border-color: #ffffff"></div>
+    <div class="box" style="border-color: #ebebeb"></div>
+    <div class="box outset" style="border-color: #eeeeee"></div>
+    <div class="box groove" style="border-color: #d0d0d0"></div>
+    <div class="box ridge" style="border-color: #ffffff"></div>
+    <div class="box" style="border-color: #999999"></div>
+  </div>
+  <!-- No border color: Chrome paints a currentColor 3D border #eeeeee. -->
+  <div class="row" style="color: #c0392b">
+    <div class="box"></div>
+    <div class="box outset"></div>
+    <div class="box groove"></div>
+    <div class="box ridge"></div>
+    <div class="box" style="border-color: currentColor"></div>
+    <div class="box outset" style="border-color: #c0392b"></div>
+  </div>
+</body>
+</html>

@@ -338,5 +338,31 @@
       "probe-border-box",
       "probe-color-swatch"
     ]
+  },
+  {
+    "id": "typography-ua-monospace-size",
+    "category": "typography",
+    "feature": "font-size",
+    "subfeature": "generic-monospace",
+    "description": "code, kbd, samp, tt and pre text is 13px where no absolute length set the size, scales by 13/16 inside relative sizes, and keeps an absolute size; catches monospace elements left at the 16px proportional size.",
+    "file": "cases/typography/typography-ua-monospace-size.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline"
+    ]
+  },
+  {
+    "id": "typography-ua-font-size-keywords",
+    "category": "typography",
+    "feature": "font-size",
+    "subfeature": "keywords",
+    "description": "Absolute-size keywords use the proportional or monospace column of Chromium's size table, and small, big, smaller and larger scale the parent size by 1.2; catches dropped keywords and fixed-ratio small.",
+    "file": "cases/typography/typography-ua-font-size-keywords.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline"
+    ]
   }
 ]

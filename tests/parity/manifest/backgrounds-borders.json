@@ -1239,5 +1239,20 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-border-box"]
+  },
+  {
+    "id": "border-style-3d-colors",
+    "category": "backgrounds-borders",
+    "feature": "border-style",
+    "subfeature": "3d-colors",
+    "description": "Inset, outset, groove and ridge borders in very dark, very light and currentColor colors use Chromium's shadow and highlight rules, including #eeeeee for a currentColor 3D border.",
+    "file": "cases/backgrounds-borders/border-style-3d-colors.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-border-box",
+      "probe-color-swatch"
+    ]
   }
 ]

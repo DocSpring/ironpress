@@ -799,5 +799,31 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "inline-text-ua-phrase-elements",
+    "category": "inline-text",
+    "feature": "ua-stylesheet",
+    "subfeature": "phrase-elements",
+    "description": "mark is black on yellow, cite, var and dfn are italic, abbr with a title has a dotted underline and q adds quotation marks; catches phrase elements rendered as plain text.",
+    "file": "cases/inline-text/inline-text-ua-phrase-elements.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline"
+    ]
+  },
+  {
+    "id": "inline-text-decoration-styles",
+    "category": "inline-text",
+    "feature": "text-decoration-style",
+    "subfeature": "dotted-dashed-double",
+    "description": "Dotted, dashed and double underlines, overlines and line-throughs take Chromium's dot and dash sizes, gaps and line spacing; catches decoration styles drawn as solid lines.",
+    "file": "cases/inline-text/inline-text-decoration-styles.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline"
+    ]
   }
 ]

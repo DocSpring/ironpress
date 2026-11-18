@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>monospace elements are 13px unless an absolute size was set</title>
+<style>
+  @page { size: 360px 288px; margin: 0; }
+  html { font-family: ParitySans; line-height: 24px; background: #ffffff; }
+  body { margin: 12px; }
+  p, h1, pre { margin: 0 0 6px; background: #eef1f8; }
+  /* The parity harness pins h1 to 32px for Chrome; 2em is the UA size. */
+  h1 { line-height: 40px; font-size: 2em; }
+  /* The harness has only a regular face for the generic monospace family, so
+     bold monospace text would compare ironpress's Liberation Mono Bold with
+     Chrome's synthetic bold. */
+  h1 code { font-weight: normal; }
+</style>
+</head>
+<body>
+  <p>Ref <code>INV-204</code>, key <kbd>Ctrl</kbd>, out <samp>OK</samp>, <tt>tt</tt>.</p>
+  <pre>Total   1,204.00
+Tax       120.40 <code>code</code></pre>
+  <h1>Heading <code>h1</code></h1>
+  <p style="font-size: 120%">Bigger <code>15.6px</code> text</p>
+  <p style="font-size: 14px">Fixed <code>14px</code> size</p>
+  <p><code style="font-family: monospace, monospace">doubled</code> <code style="font-size: small">small</code> <code><span style="font-family: sans-serif">sans</span></code></p>
+  <p style="font: 1em monospace">The font shorthand, 13px</p>
+</body>
+</html>
