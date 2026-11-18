@@ -481,6 +481,16 @@ pub(crate) fn layout_block_element(
         && ratio > 0.0
     {
         block_w = h * ratio + content_box_extra;
+    } else if matches!(style.float, Float::Left | Float::Right) {
+        // An auto-width float is as wide as its content, up to the width
+        // available (CSS 2.1 §10.3.5 shrink-to-fit): what `fit-content` gives.
+        block_w = crate::layout::intrinsic_width::resolve_intrinsic_keyword_width(
+            el,
+            style,
+            crate::style::computed::IntrinsicWidthKeyword::FitContent,
+            available_width,
+            env,
+        );
     } else if margin_h > 0.0 {
         block_w = (available_width - margin_h).max(0.0);
     }
@@ -940,26 +950,32 @@ pub(crate) fn layout_block_element(
                 .then_some(around)
                 .flatten()
                 .map(|floats| floats.lines(content_top, auto_offset_left, inner_width));
+            let wrap_options = TextWrapOptions::new(
+                wrap_width,
+                used_font_size(style, fonts),
+                text_run_line_height_factor(style, fonts),
+                style.overflow_wrap,
+            )
+            .with_white_space(style.white_space)
+            .with_parent_strut(parent_line_strut(style, fonts))
+            .with_rtl(style.direction_rtl)
+            .with_bidi_override(style.unicode_bidi.overrides())
+            .with_bidi_plaintext(style.unicode_bidi.is_plaintext())
+            .with_word_break_keep_all(style.word_break_keep_all)
+            .with_hyphens_manual(style.hyphens_manual)
+            .with_text_indent(text_indent);
+            let wrap_options = if shrink_to_fit && !style.text_wrap_mode_nowrap {
+                wrap_options.shrink_to_fit(runs, inner_width, fonts)
+            } else {
+                wrap_options
+            };
             let super::text::LinesAmongFloats {
                 lines,
                 inline_float_tops,
                 ..
             } = super::text::wrap_text_runs_among_floats(
                 std::mem::take(runs),
-                TextWrapOptions::new(
-                    wrap_width,
-                    used_font_size(style, fonts),
-                    text_run_line_height_factor(style, fonts),
-                    style.overflow_wrap,
-                )
-                .with_white_space(style.white_space)
-                .with_parent_strut(parent_line_strut(style, fonts))
-                .with_rtl(style.direction_rtl)
-                .with_bidi_override(style.unicode_bidi.overrides())
-                .with_bidi_plaintext(style.unicode_bidi.is_plaintext())
-                .with_word_break_keep_all(style.word_break_keep_all)
-                .with_hyphens_manual(style.hyphens_manual)
-                .with_text_indent(text_indent),
+                wrap_options,
                 fonts,
                 line_floats,
                 &inline_float_boxes,
@@ -1778,6 +1794,11 @@ pub(crate) fn layout_block_element(
         // A dropped initial letter reserves its kerned margin-box exclusion on
         // every line it overlaps (css-inline-3 §7.5–7.8).
         .with_drop_cap(drop_cap);
+        let wrap_options = if shrink_to_fit && !style.text_wrap_mode_nowrap {
+            wrap_options.shrink_to_fit(&runs, inner_width, env.fonts)
+        } else {
+            wrap_options
+        };
         // A `::first-letter` or `::first-line` restyles the runs after they
         // were counted, and right-to-left or vertical lines start elsewhere:
         // their absolute boxes keep the flow's static position.

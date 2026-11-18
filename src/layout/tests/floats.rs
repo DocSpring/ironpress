@@ -377,3 +377,58 @@ fn a_paragraph_clears_earlier_floats_but_not_the_floats_in_its_own_text() {
         assert_eq!(tops, [0.0, line_top], "{path}: the float sits on its line");
     }
 }
+
+fn border_box_width(element: &dyn LayoutElement) -> f32 {
+    crate::layout::block::child_x_and_width(element).1
+}
+
+#[test]
+fn a_float_without_a_width_is_as_wide_as_its_widest_block() {
+    let page = page(&format!(
+        r#"<div style="float:right"><div><img style="width:80pt;height:10pt" src="{PIXEL}"></div>
+        <div><img style="width:60pt;height:10pt" src="{PIXEL}"></div></div>
+        <p>Bill to a customer whose name and address run over several lines.</p>"#
+    ));
+    let floats = floats(&page);
+    assert_near(border_box_width(floats[0].1), 80.0, "shrink-to-fit width");
+    assert_near(
+        blocks(&page).line_with("Bill").insets.right,
+        80.0,
+        "the line beside it ends at it",
+    );
+}
+
+#[test]
+fn shrink_to_fit_text_wraps_at_the_width_available() {
+    for (style, what) in [
+        ("float:left", "a float"),
+        ("position:absolute", "an absolute box"),
+    ] {
+        let page = page(&format!(
+            r#"<div style="{style}">Twelve words of text that cannot all fit on one line of this page.</div>"#
+        ));
+        let lines = blocks(&page).block_with("Twelve").len();
+        assert!(lines > 1, "{what}'s text wraps: {lines} line");
+        let (_, element) = page
+            .elements
+            .iter()
+            .find(|(_, element)| {
+                let mut found = Blocks::default();
+                visit_layout_tree(element.as_ref(), &mut found);
+                !found.0.is_empty()
+            })
+            .expect("the box");
+        assert!(
+            border_box_width(element.as_ref()) <= 240.0,
+            "{what} fits the page"
+        );
+    }
+}
+
+#[test]
+fn a_letter_spaced_float_keeps_its_text_on_one_line() {
+    let page = page(
+        r#"<div style="float:left;letter-spacing:4pt;word-spacing:6pt">Total due</div><p>x</p>"#,
+    );
+    assert_eq!(blocks(&page).block_with("Total").len(), 1);
+}

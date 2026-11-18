@@ -625,5 +625,20 @@
       "probe-fill-box",
       "probe-block-flow"
     ]
+  },
+  {
+    "id": "positioning-float-shrink-to-fit",
+    "category": "positioning",
+    "feature": "float",
+    "subfeature": "shrink-to-fit",
+    "description": "A float or absolutely positioned box without a width is as wide as its content, blocks or text, letter and word spacing included, and wraps at the width available (CSS 2.1 sections 10.3.5 and 10.3.7).",
+    "file": "cases/positioning/positioning-float-shrink-to-fit.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
   }
 ]

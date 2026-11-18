@@ -873,6 +873,27 @@ pub(crate) struct TextWrapOptions {
 }
 
 impl TextWrapOptions {
+    /// The options for the text of a shrink-to-fit box, which these leave unwrapped (CSS 2.1 §10.3.5 and §10.3.7):
+    /// its lines stay as wide as `runs` are while that fits in the `available` content width, and wrap at it
+    /// otherwise.
+    pub(crate) fn shrink_to_fit(
+        self,
+        runs: &[TextRun],
+        available: f32,
+        fonts: &HashMap<String, TtfFont>,
+    ) -> Self {
+        let unwrapped = wrap_text_runs(runs.to_vec(), self, fonts);
+        let width = crate::layout::helpers::measure_lines_width(&unwrapped, fonts);
+        if crate::layout::roundoff::exceeds_with_roundoff(width, available) {
+            Self {
+                max_width: available,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     pub(crate) const fn new(
         max_width: f32,
         default_font_size: f32,

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats and absolute boxes without a width are as wide as their content, and wrap at the width available</title>
+<style>
+  @page { size: 360px 300px; margin: 0; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0; }
+  .card { margin-bottom: 12px; }
+  .address { float: right; text-align: right; background: #f7d774; }
+  .note { float: left; background: #7aa6d8; margin-right: 6px; }
+  .spaced { float: right; letter-spacing: 2px; word-spacing: 4px; background: #c9e4b4; }
+  .holder { position: relative; height: 60px; }
+  .absolute { position: absolute; top: 0; left: 0; background: #e8b4c8; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="address"><div>ACME Corporation</div><div>123 Example Street</div><div>Springfield 12345</div></div>
+    <p>Bill to: Jane Customer, 42 Long Road Name, Some Suburb, Big City 99999.</p>
+  </div>
+  <div class="card">
+    <div class="note">A floated note with enough words that it can't fit on one line, so it wraps.</div>
+    <p>After the note.</p>
+  </div>
+  <div class="card"><div class="spaced">Total due</div><p>Spacing counts.</p></div>
+  <div class="holder"><div class="absolute">An absolute box with auto width and enough words to wrap in its containing block.</div></div>
+</body>
+</html>

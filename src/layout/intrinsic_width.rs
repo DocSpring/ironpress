@@ -421,6 +421,8 @@ struct TextMeasurement<'a> {
     family: FontFamily,
     bold: bool,
     italic: bool,
+    /// `letter-spacing` and `word-spacing`, added as layout adds them to a run
+    spacing: crate::layout::elements::TextSpacing,
     fonts: &'a HashMap<String, TtfFont>,
 }
 
@@ -431,6 +433,7 @@ impl<'a> TextMeasurement<'a> {
             family: resolve_style_font_family(style, fonts),
             bold: style.font_weight == FontWeight::Bold,
             italic: style.font_style.is_slanted(),
+            spacing: crate::layout::elements::TextSpacing::from_style(style),
             fonts,
         }
     }
@@ -468,14 +471,15 @@ impl<'a> TextMeasurement<'a> {
     }
 
     fn width(&self, text: &str) -> f32 {
-        estimate_word_width(
+        let raw = estimate_word_width(
             text,
             self.font_size,
             &self.family,
             self.bold,
             self.italic,
             self.fonts,
-        )
+        );
+        self.spacing.add_internal_advance(raw, text)
     }
 }
 
