@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>bidi levels resolved over the whole paragraph, not each line</title>
+<style>
+  @page { size: 320px 400px; margin: 0; }
+  html { font-family: ParitySans; font-size: 18px; line-height: 28px; background: #ffffff; }
+  body { margin: 12px; }
+  p { margin: 0 0 8px; background: #eef1f8; }
+</style>
+</head>
+<body>
+  <p dir="rtl">אחד שתיים hello, world, again and more, English words, שלוש ארבע</p>
+  <p>Ship to: רחוב הרצל 12 תל אביב, דירה 4, קומה 3 ועוד 56 מילים</p>
+  <p>שלום<br>12 עולם</p>
+  <p style="white-space: pre">שלום
+34 עולם</p>
+  <p style="unicode-bidi: plaintext">שלום עולם hello again and more words שוב</p>
+</body>
+</html>

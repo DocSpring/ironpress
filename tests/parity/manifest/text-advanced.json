@@ -787,6 +787,23 @@
     ]
   },
   {
+    "id": "text-advanced-bidi-paragraph-levels",
+    "category": "text-advanced",
+    "feature": "direction:rtl basic inline paragraph",
+    "subfeature": "bidi-paragraph-levels",
+    "description": "Mixed-direction paragraphs that wrap at commas and numbers, a <br> and a preserved newline before a number, and a plaintext paragraph whose later line starts with English. Catches: bidi levels resolved per line instead of per paragraph (a comma or number at a line edge moves to the wrong end); a forced break not ending the bidi paragraph; a plaintext paragraph's direction picked per line.",
+    "file": "cases/text-advanced/text-advanced-bidi-paragraph-levels.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "oracle": "chrome",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box",
+      "probe-border-box",
+      "probe-color-swatch"
+    ]
+  },
+  {
     "id": "text-advanced-bdi-isolate",
     "category": "text-advanced",
     "feature": "unicode-bidi",

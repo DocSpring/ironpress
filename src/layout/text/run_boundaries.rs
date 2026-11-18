@@ -98,7 +98,7 @@ impl InlineTextSequence for [TextRun] {
 /// The pair kerning of the last glyph before a boundary and the first after it, when both are in the same bidi
 /// level run: two right-to-left letters, or two left-to-right characters (in a right-to-left paragraph, two strong
 /// left-to-right letters, as a neutral or a digit there can take another level). Bidi reordering moves the advance
-/// of a right-to-left pair to the right side of the piece after it (`reorder_runs_bidi`). The caller has checked
+/// of a right-to-left pair to the right side of the piece after it (`reorder_lines_bidi`). The caller has checked
 /// that nothing between the runs (an inline element's margin, border or padding, an atomic inline) separates the
 /// glyphs.
 fn boundary_kerning(

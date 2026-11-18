@@ -1,34 +1,36 @@
 //! Bidirectional text reordering (UAX #9) for mixed LTR/RTL content.
 
+use std::ops::Range;
+
 use crate::layout::engine::{ShapingDirection, TextRun};
 use unicode_bidi::{BidiInfo, Level};
 use unicode_script::{Script, UnicodeScript};
 
 mod frames;
+mod paragraph;
 pub(crate) use frames::BidiFrame;
+use paragraph::{CharInfo, ParagraphText};
 
 const OBJECT_REPLACEMENT_CHARACTER: char = '\u{fffc}';
 
-/// Reorder text runs according to the Unicode Bidirectional Algorithm.
+/// Reorder the lines of a paragraph according to the Unicode Bidirectional Algorithm.
 ///
-/// Takes a list of text runs in logical order and returns them split into
-/// one run per level-run, arranged in visual left-to-right order. Each
-/// resulting run's text is kept in LOGICAL order (not pre-reversed) so that
-/// the downstream text shaper (rustybuzz, via `guess_segment_properties`)
-/// can apply the correct RTL shaping itself. Pre-reversing here would cause
-/// rustybuzz to reverse a second time, undoing the bidi reorder.
-pub(crate) fn reorder_runs_bidi(
-    runs: &[TextRun],
+/// Takes each line's text runs in logical order and returns them split into one run per level run, arranged in
+/// visual left-to-right order. The levels are resolved over the whole paragraph (UAX #9 §3.3) and each line is
+/// reordered on its own (§3.4), so a number or a comma at the end of a line takes its level from the text it
+/// belongs with, on this line or the next. Each resulting run's text is kept in LOGICAL order (not pre-reversed) so
+/// that the downstream text shaper (rustybuzz, via `guess_segment_properties`) can apply the correct RTL shaping
+/// itself. Pre-reversing here would cause rustybuzz to reverse a second time, undoing the bidi reorder.
+pub(crate) fn reorder_lines_bidi(
+    lines: &[&[TextRun]],
     paragraph_rtl: bool,
     bidi_override: bool,
-) -> Vec<TextRun> {
-    if runs.is_empty()
-        || runs
-            .iter()
-            .all(|run| run.text.is_empty() && run.inline_box.is_none())
-    {
-        return runs.to_vec();
-    }
+) -> Vec<Vec<TextRun>> {
+    let has_content = |runs: &[TextRun]| {
+        runs.iter()
+            .any(|run| !run.text.is_empty() || run.inline_box.is_some())
+    };
+    let has_frames = |runs: &[TextRun]| runs.iter().any(|run| !run.bidi_frames.is_empty());
 
     // `unicode-bidi: bidi-override`: the characters' intrinsic bidi classes are
     // ignored and the content is laid out strictly in sequence according to
@@ -37,103 +39,78 @@ pub(crate) fn reorder_runs_bidi(
     // in logical order, and for `rtl` the runs are in reverse order. Inline
     // boxes with brackets of their own go through the algorithm instead, with
     // the override as their outermost bracket.
-    let has_frames = runs.iter().any(|run| !run.bidi_frames.is_empty());
-    if bidi_override && !has_frames {
-        return override_runs(runs, paragraph_rtl);
+    if bidi_override && !lines.iter().any(|runs| has_frames(runs)) {
+        return lines
+            .iter()
+            .map(|runs| {
+                if has_content(runs) {
+                    override_runs(runs, paragraph_rtl)
+                } else {
+                    runs.to_vec()
+                }
+            })
+            .collect();
+    }
+    if !lines.iter().any(|runs| has_content(runs)) {
+        return lines.iter().map(|runs| runs.to_vec()).collect();
     }
 
-    // The paragraph's text with each inline box's bracket around its text
-    // (`BidiFrame`), and each character's run. Atomic inline boxes take part
-    // in UAX #9 as an object replacement character but keep their empty
-    // authored text.
-    struct CharInfo {
-        ch: char,
-        byte_offset: usize,
-        run_idx: usize,
-        object: bool,
-        /// The run's last character: its piece owns the run's boundary advance.
-        ends_run: bool,
-    }
-    let mut full_text = String::new();
-    let mut char_info: Vec<CharInfo> = Vec::new();
-    if bidi_override {
-        full_text.push(if paragraph_rtl {
-            '\u{202e}'
-        } else {
-            '\u{202d}'
-        });
-    }
-    let mut open_frames: &[BidiFrame] = &[];
-    for (run_idx, run) in runs.iter().enumerate() {
-        frames::push_transition(&mut full_text, open_frames, &run.bidi_frames);
-        open_frames = &run.bidi_frames;
-        if run.text.is_empty() && run.inline_box.is_some() {
-            char_info.push(CharInfo {
-                ch: OBJECT_REPLACEMENT_CHARACTER,
-                byte_offset: full_text.len(),
-                run_idx,
-                object: true,
-                ends_run: true,
-            });
-            full_text.push(OBJECT_REPLACEMENT_CHARACTER);
-            continue;
-        }
-        let count = run.text.chars().count();
-        for (index, ch) in run.text.chars().enumerate() {
-            char_info.push(CharInfo {
-                ch,
-                byte_offset: full_text.len(),
-                run_idx,
-                object: false,
-                ends_run: index + 1 == count,
-            });
-            full_text.push(ch);
-        }
-    }
-    frames::push_transition(&mut full_text, open_frames, &[]);
-
+    let paragraph = ParagraphText::new(lines, paragraph_rtl, bidi_override);
     let default_level = if paragraph_rtl {
         Level::rtl()
     } else {
         Level::ltr()
     };
-    let bidi_info = BidiInfo::new(&full_text, Some(default_level));
+    let bidi_info = BidiInfo::new(&paragraph.text, Some(default_level));
+    let scripts = resolved_scripts(paragraph.chars.iter().map(|info| info.ch));
 
-    if bidi_info.paragraphs.is_empty() {
-        return runs.to_vec();
-    }
+    lines
+        .iter()
+        .enumerate()
+        .map(|(line, runs)| {
+            if !has_content(runs) {
+                return runs.to_vec();
+            }
+            let visual = paragraph.visual_runs(&bidi_info, line);
+            // Purely left to right: the runs are already in visual order. Inside an
+            // inline box's bracket, right-to-left text at a left-to-right level (a
+            // left-to-right `<bdo>`) still has to be shaped left to right.
+            if !has_frames(runs) && matches!(visual.as_slice(), [(_, false)]) {
+                return runs.to_vec();
+            }
+            let chars = paragraph.line_chars(line);
+            let pieces = visual_pieces(
+                runs,
+                &paragraph.chars[chars.clone()],
+                &scripts[chars],
+                &visual,
+            );
+            // Each piece keeps its text in logical order and is shaped in its own
+            // direction, so a space at either end of a right-to-left piece already
+            // falls between the words it separates.
+            if pieces.is_empty() {
+                runs.to_vec()
+            } else {
+                pieces
+            }
+        })
+        .collect()
+}
 
-    let para = &bidi_info.paragraphs[0];
-    let line = para.range.clone();
-
-    // Get visual runs: `vis_levels` is per-byte resolved levels; `vis_ranges`
-    // are byte ranges already in visual (left-to-right) order. We look up a
-    // run's level via its starting byte.
-    let (vis_levels, vis_ranges) = bidi_info.visual_runs(para, line);
-
-    // Purely left to right: the runs are already in visual order. Inside an
-    // inline box's bracket, right-to-left text at a left-to-right level (a
-    // left-to-right `<bdo>`) still has to be shaped left to right.
-    if !has_frames
-        && vis_ranges.len() == 1
-        && vis_ranges[0].start < vis_levels.len()
-        && vis_levels[vis_ranges[0].start].is_ltr()
-    {
-        return runs.to_vec();
-    }
-
-    let scripts = resolved_scripts(char_info.iter().map(|info| info.ch));
-
+/// A line's runs cut at its visual runs' edges and put in visual order. `chars` and `scripts` are the line's
+/// characters in the paragraph's text; `visual` the line's visual runs ([`ParagraphText::visual_runs`]).
+fn visual_pieces(
+    runs: &[TextRun],
+    chars: &[CharInfo],
+    scripts: &[Script],
+    visual: &[(Range<usize>, bool)],
+) -> Vec<TextRun> {
     let mut result: Vec<TextRun> = Vec::new();
-
-    for byte_range in vis_ranges.iter() {
+    for (byte_range, range_is_rtl) in visual {
+        let range_is_rtl = *range_is_rtl;
         // Each visual run's characters remain in *logical* order inside the
         // run — the shaper (rustybuzz) will flip RTL glyphs itself. Only the
-        // *order of runs* is visual (left-to-right on the page), so we emit
-        // runs in the order `visual_runs` gives them.
-        let range_is_rtl = vis_levels
-            .get(byte_range.start)
-            .is_some_and(|level| level.is_rtl());
+        // *order of runs* is visual (left-to-right on the page).
         // One piece per run in the range, in logical order. A piece that
         // doesn't end its run leaves the run's boundary advance to the piece
         // that does.
@@ -150,9 +127,9 @@ pub(crate) fn reorder_runs_bidi(
         };
         let mut range_runs = Vec::new();
         let mut current: Option<(usize, Script, String, bool)> = None;
-        for (info, &script) in char_info
+        for (info, &script) in chars
             .iter()
-            .zip(&scripts)
+            .zip(scripts)
             .filter(|(info, _)| byte_range.contains(&info.byte_offset))
         {
             if info.object {
@@ -190,18 +167,10 @@ pub(crate) fn reorder_runs_bidi(
         }
         result.extend(range_runs);
     }
-
-    // Each piece keeps its text in logical order and is shaped in its own
-    // direction, so a space at either end of a right-to-left piece already
-    // falls between the words it separates.
-    if result.is_empty() {
-        runs.to_vec()
-    } else {
-        result
-    }
+    result
 }
 
-/// The runs of a `bidi-override` line in visual order (`reorder_runs_bidi`).
+/// The runs of a `bidi-override` line in visual order (`reorder_lines_bidi`).
 fn override_runs(runs: &[TextRun], rtl: bool) -> Vec<TextRun> {
     let mut pieces: Vec<TextRun> = runs
         .iter()
@@ -324,6 +293,17 @@ mod tests {
         InlineBox, InlineDecoration, InlineDecorationId, InlineEdge, InlineEdgeSide,
         TextRunMetadata,
     };
+
+    /// One line as a paragraph of its own.
+    fn reorder_runs_bidi(
+        runs: &[TextRun],
+        paragraph_rtl: bool,
+        bidi_override: bool,
+    ) -> Vec<TextRun> {
+        reorder_lines_bidi(&[runs], paragraph_rtl, bidi_override)
+            .pop()
+            .unwrap()
+    }
 
     fn make_run(text: &str) -> TextRun {
         TextRun {

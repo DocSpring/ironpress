@@ -76,3 +76,13 @@ fn a_hebrew_paragraph_without_dir_is_laid_out_left_to_right() {
     assert_eq!(lines[0].1, 0.0, "it starts at the left edge");
     assert!(lines[0].0.starts_with("שלום"), "{lines:?}");
 }
+
+#[test]
+fn a_line_break_ends_the_bidi_paragraph() {
+    // After a `<br>` or a preserved newline, the number starts a new paragraph, so it's left to right (W7) and drawn
+    // before the Hebrew after it. Chrome's output is in `text-advanced-bidi-paragraph-levels`.
+    let lines = lines("<p>שלום<br>12 עולם</p><p style=\"white-space:pre\">שלום\n34 עולם</p>");
+    assert_eq!(lines.len(), 4, "{lines:?}");
+    assert!(lines[1].0.starts_with("12 "), "{lines:?}");
+    assert!(lines[3].0.starts_with("34 "), "{lines:?}");
+}

@@ -3,6 +3,7 @@ use crate::parser::css::SelectorContext;
 use crate::parser::css::{AncestorInfo, CssRule, PseudoElement};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::parser::ttf::TtfFont;
+use line_bidi::{BidiParagraphs, LineBidi};
 // Re-export OverflowWrap so callers of TextWrapOptions::new can use it
 // without a separate import.
 pub(crate) use crate::style::computed::OverflowWrap;
@@ -31,6 +32,7 @@ use super::inline_formatting::{
 use super::list_markers::format_counter_value;
 use super::text_emphasis::TextEmphasisMetrics;
 
+mod line_bidi;
 mod line_room;
 pub(crate) mod nested_inline;
 mod run_boundaries;
@@ -2144,15 +2146,6 @@ struct PreparedTextRuns {
     line_bidi: Option<LineBidi>,
 }
 
-/// A paragraph is wrapped in logical order and each line is then reordered
-/// (UAX #9 §3.4): reordering first would wrap the paragraph in visual order,
-/// so a right-to-left paragraph's later words came first.
-#[derive(Clone, Copy)]
-struct LineBidi {
-    rtl: bool,
-    bidi_override: bool,
-}
-
 fn prepare_text_runs(
     runs: Vec<TextRun>,
     options: TextWrapOptions,
@@ -2693,6 +2686,7 @@ pub(crate) fn wrap_text_runs_among_floats(
     crate::layout::text_emphasis::resolve_text_emphasis_metrics(&mut runs, fonts);
     let line_height_factor = options.line_height_factor.max(0.0);
     let mut lines: Vec<TextLine> = Vec::new();
+    let mut bidi_paragraphs = BidiParagraphs::default();
     let mut current_runs: Vec<TextRun> = Vec::new();
     let mut current_width: f32 = 0.0;
     // The baseline-shift of a `vertical-align: super`/`sub` run is a fraction of
@@ -2783,6 +2777,7 @@ pub(crate) fn wrap_text_runs_among_floats(
         if word == "\n" {
             // Line break
             push_wrapped_line(&mut lines, &mut current_runs, line_height, options, fonts);
+            bidi_paragraphs.end_after(lines.len());
             current_width = 0.0;
             line_height = run_line_height(template);
             bs_break_run_idx = 0;
@@ -3254,29 +3249,10 @@ pub(crate) fn wrap_text_runs_among_floats(
     }
 
     if let Some(bidi) = line_bidi {
-        for line in &mut lines {
-            line.runs = crate::bidi::reorder_runs_bidi(&line.runs, bidi.rtl, bidi.bidi_override);
-        }
+        bidi_paragraphs.reorder(&mut lines, bidi);
     }
-
     if options.bidi_plaintext {
-        for line in &mut lines {
-            let line_text: String = line.runs.iter().map(|r| r.text.as_str()).collect();
-            if line_text.is_empty() {
-                continue;
-            }
-            let line_rtl = crate::bidi::first_strong_is_rtl(&line_text);
-            if line_rtl
-                || crate::bidi::has_rtl_chars(&line_text)
-                || crate::bidi::inline_brackets_reorder(&line.runs)
-            {
-                line.runs = crate::bidi::reorder_runs_bidi(&line.runs, line_rtl, false);
-            }
-            if line_rtl && options.max_width.is_finite() {
-                let line_width = crate::layout::helpers::measure_runs_width(&line.runs, fonts);
-                line.x_offset += (options.max_width - line_width).max(0.0);
-            }
-        }
+        bidi_paragraphs.reorder_plaintext(&mut lines, options.max_width, fonts);
     }
 
     resolve_inline_fragment_decorations(&mut lines);

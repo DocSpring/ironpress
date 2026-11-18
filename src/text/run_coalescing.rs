@@ -33,7 +33,7 @@ pub(crate) fn coalesce_text_runs(runs: &[TextRun]) -> Vec<TextRun> {
                 // Right-to-left pieces are in visual order with their text in
                 // logical order, so the piece to the right comes first in the
                 // text. In both directions the boundary to the right is the
-                // later run's (`reorder_runs_bidi`).
+                // later run's (`reorder_lines_bidi`).
                 if run.metadata.bidi_rtl {
                     previous.text.insert_str(0, &run.text);
                 } else {

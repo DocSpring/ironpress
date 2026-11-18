@@ -882,10 +882,10 @@ pub struct TextRunMetadata {
     pub(crate) is_outside_marker: bool,
     /// A piece of a line at a right-to-left bidi level: its text is in
     /// logical order, shaped right to left, so the piece visually before it
-    /// on the line follows it in the text (`reorder_runs_bidi`).
+    /// on the line follows it in the text (`reorder_lines_bidi`).
     pub(crate) bidi_rtl: bool,
     /// The script a piece of a bidi line is shaped in, with spaces and
-    /// punctuation taking the script before them (`reorder_runs_bidi`);
+    /// punctuation taking the script before them (`reorder_lines_bidi`);
     /// `None` outside bidi lines.
     pub(crate) script: Option<unicode_script::Script>,
     pub whitespace: RunWhitespace,
@@ -908,7 +908,7 @@ pub struct TextShaping {
     pub kerning: bool,
     /// The direction to shape in: a piece of a bidi line is shaped in its
     /// level's direction, so a piece of only spaces and punctuation at a
-    /// right-to-left level is drawn right to left (`reorder_runs_bidi`).
+    /// right-to-left level is drawn right to left (`reorder_lines_bidi`).
     pub(crate) direction: ShapingDirection,
 }
 
@@ -1029,7 +1029,7 @@ pub struct TextRun {
     /// first.
     pub(crate) inline_borders: Vec<InlineBorder>,
     /// The bidi brackets of the inline boxes around the run, outermost first
-    /// (`reorder_runs_bidi`).
+    /// (`reorder_lines_bidi`).
     pub(crate) bidi_frames: Vec<crate::bidi::BidiFrame>,
 }
 
