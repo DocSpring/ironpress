@@ -5,6 +5,7 @@
 //! left edge, block offsets from its top. Each placed float occupies its margin
 //! box; line boxes and later floats avoid it.
 
+use crate::layout::roundoff::exceeds_with_roundoff;
 use crate::style::computed::Float;
 
 mod avoid;
@@ -164,8 +165,12 @@ pub(crate) struct PlacedFloat {
 }
 
 impl PlacedFloat {
+    /// Whether it's beside any of `top` to `bottom`: lengths that meet
+    /// within the rounding of the arithmetic that made them don't overlap,
+    /// so a float placed at the top of a line isn't also beside the line
+    /// above it.
     fn overlaps(&self, top: f32, bottom: f32) -> bool {
-        self.top < bottom && self.bottom > top
+        exceeds_with_roundoff(bottom, self.top) && exceeds_with_roundoff(self.bottom, top)
     }
 }
 

@@ -30,6 +30,8 @@ fn page(markup: &str) -> Page {
 struct Line {
     words: String,
     insets: LineInsets,
+    /// How wide its text is
+    width: f32,
 }
 
 /// Every text block's lines, in tree order, each block's lines together.
@@ -50,6 +52,10 @@ impl Blocks {
                     .collect::<Vec<_>>()
                     .join(" "),
                 insets: line.float_insets,
+                width: crate::layout::helpers::measure_runs_width(
+                    &line.runs,
+                    &std::collections::HashMap::new(),
+                ),
             })
             .filter(|line| !line.words.is_empty())
             .collect();
@@ -431,4 +437,50 @@ fn a_letter_spaced_float_keeps_its_text_on_one_line() {
         r#"<div style="float:left;letter-spacing:4pt;word-spacing:6pt">Total due</div><p>x</p>"#,
     );
     assert_eq!(blocks(&page).block_with("Total").len(), 1);
+}
+
+#[test]
+fn no_line_runs_under_a_float_in_its_text_however_much_text_comes_before_it() {
+    // An A4 page with 72pt margins and 14px text, the float's width varying with the text before it: the pre-review
+    // build drew the float over the text on its line in most of these
+    let words = "Alpha be gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau \
+        upsilon phi chi psi omega"
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    let content_width = crate::types::PageSize::A4.width - 144.0;
+    for side in ["left", "right"] {
+        for count in (1..120).step_by(3) {
+            let before: Vec<String> = (0..count)
+                .map(|index| {
+                    let word = words[index % words.len()];
+                    if index % 7 == 6 {
+                        format!("{word}.")
+                    } else {
+                        word.to_string()
+                    }
+                })
+                .collect();
+            let width = 60 + (count * 13) % 90;
+            let pages = super::support::layout_pages_at_with_fonts(
+                &format!(
+                    r#"<style>body {{ margin: 0; font: 14px sans-serif }}</style>
+                    <p>{} <span style="float:{side};width:{width}px;height:30px"></span> After words continue for
+                    a while so the paragraph has more lines after the float here.</p>"#,
+                    before.join(" ")
+                ),
+                crate::types::PageSize::A4,
+                crate::types::Margin::uniform(72.0),
+                &std::collections::HashMap::new(),
+            );
+            for line in blocks(&pages[0]).block_with("Alpha") {
+                assert!(
+                    line.width <= content_width - line.insets.horizontal() + 0.01,
+                    "{side} float after {count} words: {:?} ({} wide) runs under it ({:?})",
+                    line.words,
+                    line.width,
+                    line.insets
+                );
+            }
+        }
+    }
 }
