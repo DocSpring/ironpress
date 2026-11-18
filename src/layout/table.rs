@@ -1838,6 +1838,7 @@ pub(crate) fn flatten_table(
     let fonts = env.fonts;
     let filter_defs = env.filter_defs;
     let filter_dpi = env.filter_dpi;
+    let print_fit_widening = env.print_fit_widening;
     let grid_item_heights = &mut *env.grid_item_heights;
     let counter_state = &mut *env.counter_state;
     let resources = &mut *env.resources;
@@ -2074,6 +2075,7 @@ pub(crate) fn flatten_table(
                 filter_dpi,
                 grid_item_heights: &mut *grid_item_heights,
                 floats: crate::layout::floats::FloatFrames::default(),
+                print_fit_widening,
                 table_cell_sizing: table_cell_sizing.descendants(&table_grid),
             };
             measure_caption_min_width(
@@ -2539,6 +2541,7 @@ pub(crate) fn flatten_table(
                                     filter_dpi,
                                     grid_item_heights: &mut *grid_item_heights,
                                     floats: crate::layout::floats::FloatFrames::default(),
+                                    print_fit_widening,
                                     table_cell_sizing: table_cell_sizing
                                         .cell_descendants(&table_grid, cell_position),
                                 };
@@ -3248,6 +3251,7 @@ pub(crate) fn flatten_table(
                     filter_dpi,
                     grid_item_heights: &mut *grid_item_heights,
                     floats: crate::layout::floats::FloatFrames::default(),
+                    print_fit_widening,
                     table_cell_sizing: table_cell_sizing.cell_descendants(
                         &table_grid,
                         TableCellPosition::new(row_idx, cell_siblings.child_index()),
@@ -3683,6 +3687,7 @@ pub(crate) fn flatten_table(
                 filter_dpi,
                 grid_item_heights: &mut *grid_item_heights,
                 floats: crate::layout::floats::FloatFrames::default(),
+                print_fit_widening,
                 table_cell_sizing: table_cell_sizing.descendants(&table_grid),
             };
             layout_table_cell_flow(

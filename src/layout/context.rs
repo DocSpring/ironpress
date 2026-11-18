@@ -35,6 +35,9 @@ pub(crate) struct LayoutEnv<'a> {
     pub grid_item_heights: &'a mut GridItemHeightMemo,
     /// The floats of the block formatting contexts being laid out.
     pub floats: crate::layout::floats::FloatFrames,
+    /// How much wider than the physical pages this layout's pages are, when a
+    /// document too wide for them is laid out again
+    pub print_fit_widening: Option<crate::layout::print_scale::PrintFitWidening>,
 }
 
 impl<'a> LayoutEnv<'a> {
@@ -60,6 +63,7 @@ impl<'a> LayoutEnv<'a> {
             table_cell_sizing: self.table_cell_sizing.source_descendants(source_path),
             grid_item_heights: &mut *self.grid_item_heights,
             floats: crate::layout::floats::FloatFrames::default(),
+            print_fit_widening: self.print_fit_widening,
         }
     }
 }
@@ -187,6 +191,33 @@ impl LayoutContext {
                 font_size,
                 percent_width_basis,
             },
+            ..*self
+        }
+    }
+
+    /// The same context on pages whose area is `factor` times narrower and
+    /// shorter: every width and height it holds that comes from the page area
+    /// divided by `factor`.
+    pub(crate) fn with_page_area_shrunk(&self, factor: f32) -> Self {
+        let shrink_block = |block: ContainingBlock| ContainingBlock {
+            x: block.x / factor,
+            width: block.width / factor,
+            height: block.height / factor,
+            ..block
+        };
+        LayoutContext {
+            viewport: Viewport {
+                width: self.viewport.width / factor,
+                height: self.viewport.height / factor,
+            },
+            parent: ParentBox {
+                content_width: self.parent.content_width / factor,
+                content_height: self.parent.content_height.map(|height| height / factor),
+                percent_width_basis: self.parent.percent_width_basis / factor,
+                ..self.parent
+            },
+            containing_block: self.containing_block.map(shrink_block),
+            percent_height_cb: self.percent_height_cb.map(shrink_block),
             ..*self
         }
     }

@@ -145,3 +145,49 @@ fn overflow_hidden_keeps_its_content_from_shrinking_the_document() {
         pages[0].print_content_scale.factor()
     );
 }
+
+#[test]
+fn a_running_element_is_laid_out_at_the_physical_page_width() {
+    // Its page-margin box is on the physical page: only the page area's
+    // content is scaled back down onto it
+    #[derive(Default)]
+    struct ItemOffsets(Vec<f32>);
+    impl LayoutVisitor for ItemOffsets {
+        fn visit_flex_row(&mut self, row: &crate::layout::elements::FlexRow) {
+            self.0
+                .extend(row.content.cells.iter().map(|cell| cell.x_offset));
+        }
+    }
+    let header_items = |wide_block: &str| {
+        let pages = layout_pages_at(
+            &format!(
+                r#"<style>
+                    * {{ margin:0; padding:0 }}
+                    .hdr {{ position:running(hdr); display:flex; justify-content:space-between }}
+                </style>
+                <div class="hdr"><span>Left</span><span>Right</span></div>
+                <p>Body</p>{wide_block}"#
+            ),
+            page(),
+        );
+        let header = pages[0]
+            .generated_content
+            .running_element(&crate::parser::css::PageContentReference::new(
+                "hdr".into(),
+                crate::parser::css::PageContentPolicy::Last,
+            ))
+            .expect("the running header");
+        let mut items = ItemOffsets::default();
+        visit_layout_tree(header, &mut items);
+        (pages[0].print_content_scale.factor(), items.0)
+    };
+    let (fitting_scale, fitting) = header_items("");
+    let (widened_scale, widened) = header_items(r#"<div style="width:300pt;height:10pt"></div>"#);
+    assert_eq!(fitting_scale, 1.0);
+    assert!(widened_scale < 1.0, "the 300pt block widens the layout");
+    assert_eq!(fitting.len(), 2, "both header items: {fitting:?}");
+    assert_eq!(
+        widened, fitting,
+        "the header items sit as on the physical page"
+    );
+}

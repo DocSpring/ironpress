@@ -2517,6 +2517,7 @@ fn layout_document_pass(
         table_cell_sizing: super::table::TableCellSizingContext::root(&mut table_cell_sizing),
         grid_item_heights: &mut grid_item_heights,
         floats: crate::layout::floats::FloatFrames::default(),
+        print_fit_widening: widening,
     };
     if let Some(root) =
         RootFormattingContext::from_projected_body(nodes, &body_style, available_width)
@@ -2931,6 +2932,20 @@ fn capture_running_element(
     context: ElementLayoutContext<'_, '_, '_>,
     env: &mut LayoutEnv,
 ) -> Option<LayoutNode> {
+    // It's drawn in a page-margin box of the physical page. Laying a document
+    // out again on wider pages scales only the page area's content back down
+    // onto the physical page, so the element is laid out as on that page.
+    let unwidened_layout;
+    let context = match env.print_fit_widening {
+        Some(widening) => {
+            unwidened_layout = context
+                .tree()
+                .layout()
+                .with_page_area_shrunk(widening.factor());
+            context.with_layout(&unwidened_layout)
+        }
+        None => context,
+    };
     let mut captured = Vec::new();
     let defer_page_counters = std::mem::replace(&mut env.counter_state.defer_page_counters, true);
     flatten_element_with_running_mode(

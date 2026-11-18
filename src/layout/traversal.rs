@@ -301,6 +301,23 @@ impl<'context, 'siblings, 'dom> ElementLayoutContext<'context, 'siblings, 'dom> 
         style.width_keyword = None;
     }
 
+    /// The same element laid out in `layout` in place of its parent's layout context
+    pub(crate) fn with_layout<'layout>(
+        self,
+        layout: &'layout LayoutContext,
+    ) -> ElementLayoutContext<'layout, 'siblings, 'dom>
+    where
+        'context: 'layout,
+    {
+        ElementLayoutContext {
+            tree: LayoutTreeContext {
+                layout,
+                ..self.tree
+            },
+            ..self
+        }
+    }
+
     pub(crate) const fn tree(self) -> LayoutTreeContext<'context, 'dom> {
         self.tree
     }
