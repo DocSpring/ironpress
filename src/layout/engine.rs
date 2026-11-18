@@ -139,7 +139,7 @@ impl PhysicalEdges<LayoutBorderSide> {
             // style is `none` or `hidden`. Normalize at the layout boundary so
             // every box-model consumer sees the same used geometry.
             width: side.used_width(),
-            color: side.color.resolve(current_color),
+            color: side.used_color(current_color),
             style: side.style,
         };
         Self {

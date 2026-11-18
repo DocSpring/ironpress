@@ -3108,6 +3108,21 @@ impl Default for BorderSide {
 }
 
 impl BorderSide {
+    /// The color the side paints with. A 3D side (`inset`, `outset`, `groove`,
+    /// `ridge`) whose color is `currentColor` paints as `#eee` in Blink, which
+    /// is why an unstyled `<hr>` is light gray whatever its `color`.
+    pub fn used_color(&self, current_color: Color) -> Color {
+        if self.color == SpecifiedColor::CurrentColor
+            && matches!(
+                self.style,
+                BorderStyle::Inset | BorderStyle::Outset | BorderStyle::Groove | BorderStyle::Ridge
+            )
+        {
+            return Color::rgb(238, 238, 238);
+        }
+        self.color.resolve(current_color)
+    }
+
     pub const fn new(width: f32, color: SpecifiedColor, style: BorderStyle) -> Self {
         Self {
             specified_width: width,
