@@ -285,8 +285,10 @@ fn render_horizontal_rule() {
     let pages = layout(&nodes, PageSize::A4, Margin::default());
     let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();
     let content = String::from_utf8_lossy(&pdf);
-    // HR draws a line with stroke
-    assert!(content.contains(" l\nS\n"));
+    // Chrome's `<hr>` is a box with a 1px inset gray border: filled
+    // border edges, not a stroked line.
+    assert!(!content.contains(" l\nS\n"));
+    assert!(content.contains(" rg\n"));
 }
 
 #[test]

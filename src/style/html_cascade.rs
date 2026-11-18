@@ -122,6 +122,14 @@ pub(crate) fn html_cascade_layers(
         layers.ua.set("display", CssValue::Keyword("none".into()));
     }
 
+    // `abbr[title], acronym[title] { text-decoration: dotted underline }`.
+    if tag == HtmlTag::Abbr && attributes.contains_key("title") {
+        layers.ua.set(
+            "text-decoration",
+            CssValue::Keyword("dotted underline".into()),
+        );
+    }
+
     // An element with a valid `dir` isolates its text from the text around it
     // (HTML §15.3.5); Chromium leaves `<bdi>` and `<bdo>` their own
     // `unicode-bidi`.

@@ -488,6 +488,10 @@ pub(crate) fn parse_property_value(property: &str, val: &str) -> Option<CssValue
         return Some(CssValue::Keyword(lower));
     }
 
+    if property == "font-size" && crate::style::font_size::is_font_size_keyword(&lower) {
+        return Some(CssValue::Keyword(lower));
+    }
+
     if matches!(
         property,
         "border-color" | "border-block-color" | "border-inline-color"

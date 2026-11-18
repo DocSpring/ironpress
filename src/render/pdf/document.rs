@@ -946,10 +946,6 @@ pub(super) fn render_running_margin_element(
             self.render_layout_element(element);
         }
 
-        fn visit_horizontal_rule(&mut self, element: &HorizontalRule) {
-            self.render_layout_element(element);
-        }
-
         fn visit_progress_bar(&mut self, element: &ProgressBar) {
             self.render_layout_element(element);
         }

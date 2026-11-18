@@ -1,7 +1,6 @@
 use crate::layout::elements::{
-    AvoidPageBreak, ColumnRule, Container, FlexRow, GridRow, HorizontalRule, Image, LayoutElement,
-    LayoutVisitor, MathBlock, NamedString, PageBreak, ProgressBar, RunningElement, Svg, TableRow,
-    TextBlock,
+    AvoidPageBreak, ColumnRule, Container, FlexRow, GridRow, Image, LayoutElement, LayoutVisitor,
+    MathBlock, NamedString, PageBreak, ProgressBar, RunningElement, Svg, TableRow, TextBlock,
 };
 use crate::layout::engine::{Page, TextLine, TextRun};
 use crate::parser::ttf::TtfFont;
@@ -303,7 +302,6 @@ impl LayoutVisitor for FontUsageCollector<'_> {
     fn visit_avoid_page_break(&mut self, _element: &AvoidPageBreak) {}
     fn visit_column_rule(&mut self, _element: &ColumnRule) {}
     fn visit_image(&mut self, _element: &Image) {}
-    fn visit_horizontal_rule(&mut self, _element: &HorizontalRule) {}
     fn visit_progress_bar(&mut self, _element: &ProgressBar) {}
     fn visit_math_block(&mut self, _element: &MathBlock) {}
     fn visit_container(&mut self, _element: &Container) {}

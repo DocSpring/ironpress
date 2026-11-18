@@ -8,10 +8,10 @@ use super::fragmentation::split_flow_at_descendant_break;
 use super::roundoff::{equal_with_roundoff, exceeds_with_roundoff, is_positive_with_roundoff};
 use super::text::{OverflowWrap, TextWrapOptions, wrap_text_runs};
 use crate::layout::elements::{
-    BlockSize, Container, FlexRow, FragmentBreakRule, GridRow, HorizontalRule, Image,
-    IntoLayoutNode, LayoutElement, LayoutNode, LayoutVisitor, LayoutVisitorMut, MathBlock,
-    NamedString, PageContentRole, ProgressBar, RunningElement, Svg, Table, TableFragmentGroup,
-    TableRow, TextBlock, visit_layout_tree,
+    BlockSize, Container, FlexRow, FragmentBreakRule, GridRow, Image, IntoLayoutNode,
+    LayoutElement, LayoutNode, LayoutVisitor, LayoutVisitorMut, MathBlock, NamedString,
+    PageContentRole, ProgressBar, RunningElement, Svg, Table, TableFragmentGroup, TableRow,
+    TextBlock, visit_layout_tree,
 };
 use crate::style::computed::{
     BoxDecorationBreak, Clear, Float, FootnotePolicy, ObjectFit, Position,
@@ -2624,10 +2624,6 @@ impl ElementFlowGeometry {
 }
 
 impl LayoutVisitor for ElementFlowGeometry {
-    fn visit_horizontal_rule(&mut self, element: &HorizontalRule) {
-        self.set(1.0, element.margins);
-    }
-
     fn visit_table_row(&mut self, element: &TableRow) {
         let row_height = element.content.cells.row_block_extent();
         self.set(

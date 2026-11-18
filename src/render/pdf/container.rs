@@ -1,7 +1,7 @@
 use super::*;
 use crate::layout::elements::{
-    ColumnRule, Container, FlexRow, FragmentPlacementOwner, GridRow, HorizontalRule, Image,
-    LayoutNode, LayoutVisitor, MathBlock, ProgressBar, Svg, TableRow, TextBlock,
+    ColumnRule, Container, FlexRow, FragmentPlacementOwner, GridRow, Image, LayoutNode,
+    LayoutVisitor, MathBlock, ProgressBar, Svg, TableRow, TextBlock,
 };
 
 mod flex;
@@ -243,53 +243,6 @@ impl LayoutVisitor for DirectChildRenderer<'_, '_, '_> {
             self.ctx,
         );
         self.finish(result);
-    }
-
-    fn visit_horizontal_rule(&mut self, element: &HorizontalRule) {
-        let mut position = self.position;
-        let planned_flow_top = self.flow.flow_top_by_index.get(&self.child_index).copied();
-        if let Some(top) = planned_flow_top {
-            position.y = top;
-        } else {
-            position.cursor_y -=
-                collapsed_margin_top_extra(element.margins.start, position.previous_margin_bottom);
-            position.y = position.cursor_y;
-        }
-        let layout_geometry = LayoutBoxGeometry::new(
-            PdfRect::from_top(
-                self.flow.frame.content_origin.x,
-                position.y,
-                self.flow.frame.width(),
-                1.0,
-            ),
-            EdgeSizes::ZERO,
-            EdgeSizes::ZERO,
-        );
-        let box_geometry = self
-            .ctx
-            .text
-            .pdf_writer
-            .resolve_box_geometry(layout_geometry);
-        let paint_geometry = box_geometry.painting();
-        let geometry = box_geometry.fragment(Default::default());
-        if self.flow.paint_phase.paints_contents() {
-            let group = PaintGroupScope::begin(self.content, element, geometry, self.ctx);
-            paint_horizontal_rule(
-                self.content,
-                PdfPoint::new(
-                    paint_geometry.border_box.left,
-                    paint_geometry.border_box.top(),
-                ),
-                paint_geometry.border_box.width,
-            );
-            group.finish(self.content, self.ctx);
-        }
-        if planned_flow_top.is_none() {
-            position.cursor_y -= 1.0 + element.margins.end;
-            position.y = position.cursor_y;
-        }
-        position.previous_margin_bottom = element.margins.end;
-        self.finish(position);
     }
 
     fn visit_progress_bar(&mut self, element: &ProgressBar) {

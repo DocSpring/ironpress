@@ -1,8 +1,8 @@
 use crate::error::IronpressError;
 use crate::layout::cells::{CellBox, CellBoxHolder, GridCell};
 use crate::layout::elements::{
-    ColumnRule, Container, FlexRow, GridRow, HorizontalRule, Image, LayoutElement, LayoutVisitor,
-    MathBlock, ProgressBar, StackingParticipant, Svg, TableRow, TextBlock,
+    ColumnRule, Container, FlexRow, GridRow, Image, LayoutElement, LayoutVisitor, MathBlock,
+    ProgressBar, StackingParticipant, Svg, TableRow, TextBlock,
 };
 use crate::layout::engine::{
     FlexCell, FlexLineId, FootnoteItem, ImageFormat, Page, PngMetadata, TableCell, TextLine,
@@ -269,32 +269,6 @@ impl LayoutVisitor for PageElementRenderer<'_, '_, '_> {
 
     fn visit_svg(&mut self, element: &Svg) {
         render_svg(self.content, element, self.frame, self.ctx);
-    }
-
-    fn visit_horizontal_rule(&mut self, element: &HorizontalRule) {
-        let y = self.frame.page_size.height - self.frame.margin.top - self.frame.y_pos;
-        let layout_geometry = LayoutBoxGeometry::new(
-            PdfRect::from_top(self.frame.margin.left, y, self.frame.available_width, 1.0),
-            EdgeSizes::ZERO,
-            EdgeSizes::ZERO,
-        );
-        let box_geometry = self
-            .ctx
-            .text
-            .pdf_writer
-            .resolve_box_geometry(layout_geometry);
-        let paint_geometry = box_geometry.painting();
-        let geometry = box_geometry.fragment(Default::default());
-        let group = PaintGroupScope::begin(self.content, element, geometry, self.ctx);
-        paint_horizontal_rule(
-            self.content,
-            PdfPoint::new(
-                paint_geometry.border_box.left,
-                paint_geometry.border_box.top(),
-            ),
-            paint_geometry.border_box.width,
-        );
-        group.finish(self.content, self.ctx);
     }
 
     fn visit_progress_bar(&mut self, element: &ProgressBar) {

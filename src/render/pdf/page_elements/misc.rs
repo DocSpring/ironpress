@@ -1,20 +1,6 @@
 use super::*;
 use crate::layout::elements::{MathBlock, ProgressBar};
 
-/// Paint the fixed UA representation of an `<hr>` at its block-start edge.
-pub(in crate::render::pdf) fn paint_horizontal_rule(
-    content: &mut String,
-    origin: PdfPoint,
-    width: f32,
-) {
-    content.push_str(&format!(
-        "0.5 w\n0 0 0 RG\n{x1} {y} m {x2} {y} l\nS\n",
-        x1 = origin.x,
-        y = origin.y,
-        x2 = origin.x + width,
-    ));
-}
-
 /// Paint a progress/meter box at an already-resolved border-box rectangle.
 pub(in crate::render::pdf) fn paint_progress_bar(
     content: &mut String,

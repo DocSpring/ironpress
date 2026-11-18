@@ -29,11 +29,11 @@ use super::cells::CellBoxHolder;
 pub use super::cells::{GridCell, TableCell};
 pub(crate) use super::elements::{
     AvoidPageBreak, BackgroundBox, BackgroundBoxGeometry, BoxFragmentation, BoxModel, Container,
-    FlexRow, GridRow, HorizontalRule, Image, ImagePaint, ImageSampling, IntoLayoutNode,
-    LayoutElement, LayoutNode, LayoutSize, LayoutVisitor, LayoutVisitorMut, LineFragmentation,
-    MathBlock, NamedString, PageBreak, Positioning, ProgressBar, ReplacedContent, ReplacedFragment,
-    ReplacedGeometry, RunningElement, TableRow, TextBlock, TextBlockStyle, TextFragmentation,
-    TextSpacing, visit_layout_tree, visit_layout_tree_mut,
+    FlexRow, GridRow, Image, ImagePaint, ImageSampling, IntoLayoutNode, LayoutElement, LayoutNode,
+    LayoutSize, LayoutVisitor, LayoutVisitorMut, LineFragmentation, MathBlock, NamedString,
+    PageBreak, Positioning, ProgressBar, ReplacedContent, ReplacedFragment, ReplacedGeometry,
+    RunningElement, TableRow, TextBlock, TextBlockStyle, TextFragmentation, TextSpacing,
+    visit_layout_tree, visit_layout_tree_mut,
 };
 use super::flex::layout_flex_container;
 pub(crate) use super::flow_metrics::BlockMargins;
@@ -3942,17 +3942,6 @@ fn flatten_element_with_running_mode(
             return;
         }
 
-        if el.tag == HtmlTag::Hr {
-            output.push(
-                HorizontalRule {
-                    margins: BlockMargins::new(style.margin.top, style.margin.bottom),
-                    group: super::elements::PaintGroup::from_style(&style),
-                }
-                .boxed(),
-            );
-            return;
-        }
-
         if el.tag == HtmlTag::Img {
             if let Some(img_element) = load_image_from_element(
                 &mut *env.resources,
@@ -6284,15 +6273,15 @@ mod tests {
     }
 
     #[test]
-    fn pre_element_with_background() {
+    fn pre_element_has_no_ua_background() {
         let html = "<pre>code block</pre>";
         let nodes = parse_html(html).unwrap();
         let pages = layout(&nodes, PageSize::A4, Margin::default());
         assert_eq!(pages.len(), 1);
-        // Pre has background color in defaults
+        // Chrome's UA stylesheet gives `<pre>` no background.
         pages[0].elements[0]
             .1
-            .inspect_text(|text| assert!(text.paint.background.color.is_some()))
+            .inspect_text(|text| assert!(text.paint.background.color.is_none()))
             .expect("expected text block");
     }
 

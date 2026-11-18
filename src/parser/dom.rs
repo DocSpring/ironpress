@@ -44,6 +44,7 @@ pub enum HtmlTag {
     Pre,
     Code,
     Small,
+    Big,
     Sub,
     Sup,
     Del,
@@ -132,9 +133,11 @@ impl HtmlTag {
             "dd" => Self::Dd,
             "img" => Self::Img,
             "blockquote" => Self::Blockquote,
-            "pre" => Self::Pre,
+            // Chrome styles `<listing>`, `<plaintext>` and `<xmp>` as `<pre>`.
+            "pre" | "listing" | "plaintext" | "xmp" => Self::Pre,
             "code" => Self::Code,
             "small" => Self::Small,
+            "big" => Self::Big,
             "sub" => Self::Sub,
             "sup" => Self::Sup,
             "del" | "strike" => Self::Del,
@@ -170,9 +173,7 @@ impl HtmlTag {
             "kbd" | "samp" | "tt" => Self::Code,
             "var" | "dfn" => Self::I,
             "center" | "form" | "fieldset" | "legend" | "hgroup" | "menu" | "dir" | "search"
-            | "listing" | "plaintext" | "xmp" | "optgroup" | "frameset" | "frame" => {
-                Self::OtherBlock
-            }
+            | "optgroup" | "frameset" | "frame" => Self::OtherBlock,
             "area" | "base" | "basefont" | "datalist" | "link" | "meta" | "noembed"
             | "noframes" | "noscript" | "param" | "rp" | "script" | "template" | "title" => {
                 Self::NotRendered
@@ -239,6 +240,7 @@ impl HtmlTag {
                 | Self::A
                 | Self::Code
                 | Self::Small
+                | Self::Big
                 | Self::Sub
                 | Self::Sup
                 | Self::Del
@@ -373,6 +375,7 @@ impl ElementNode {
             HtmlTag::Pre => "pre",
             HtmlTag::Code => "code",
             HtmlTag::Small => "small",
+            HtmlTag::Big => "big",
             HtmlTag::Sub => "sub",
             HtmlTag::Sup => "sup",
             HtmlTag::Del => "del",
@@ -576,6 +579,7 @@ mod tests {
             (HtmlTag::Pre, "pre"),
             (HtmlTag::Code, "code"),
             (HtmlTag::Small, "small"),
+            (HtmlTag::Big, "big"),
             (HtmlTag::Sub, "sub"),
             (HtmlTag::Sup, "sup"),
             (HtmlTag::Del, "del"),

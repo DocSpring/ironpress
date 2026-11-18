@@ -38,7 +38,7 @@ pub(crate) use media::{
 pub(crate) use metadata::{AvoidPageBreak, NamedString, PageBreak, RunningElement};
 #[cfg(test)]
 pub(crate) use misc::ProgressColors;
-pub(crate) use misc::{ColumnRule, HorizontalRule, MathBlock, ProgressBar};
+pub(crate) use misc::{ColumnRule, MathBlock, ProgressBar};
 pub(crate) use multicol::{MulticolColumn, MulticolContainer};
 pub(crate) use placement::{FragmentBox, FragmentPlacement, FragmentPlacementOwner};
 pub(crate) use principal::{PrincipalBox, impl_principal_layout_element};
@@ -942,7 +942,6 @@ pub(crate) trait LayoutVisitor {
     fn visit_table_row(&mut self, _element: &TableRow) {}
     fn visit_grid_row(&mut self, _element: &GridRow) {}
     fn visit_image(&mut self, _element: &Image) {}
-    fn visit_horizontal_rule(&mut self, _element: &HorizontalRule) {}
     fn visit_svg(&mut self, _element: &Svg) {}
     fn visit_flex_row(&mut self, _element: &FlexRow) {}
     fn visit_progress_bar(&mut self, _element: &ProgressBar) {}
@@ -970,7 +969,6 @@ pub(crate) trait LayoutVisitorMut {
     fn visit_table_row(&mut self, _element: &mut TableRow) {}
     fn visit_grid_row(&mut self, _element: &mut GridRow) {}
     fn visit_image(&mut self, _element: &mut Image) {}
-    fn visit_horizontal_rule(&mut self, _element: &mut HorizontalRule) {}
     fn visit_svg(&mut self, _element: &mut Svg) {}
     fn visit_flex_row(&mut self, _element: &mut FlexRow) {}
     fn visit_progress_bar(&mut self, _element: &mut ProgressBar) {}

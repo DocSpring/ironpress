@@ -9,6 +9,10 @@ use crate::parser::css::{
 use crate::parser::dom::HtmlTag;
 use crate::style::defaults::default_style;
 use crate::style::font_metrics::FontMetrics;
+use crate::style::font_size::{
+    DeclaredFontSize, FontSizeKeyword, FontSizeOrigin, relative_keyword_factor,
+    size_for_generic_family,
+};
 use crate::style::html_cascade::html_cascade_layers;
 use crate::style::raster_quality::{RasterQuality, background_raster_dimensions};
 use crate::types::{
@@ -776,6 +780,9 @@ impl FontFamily {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FontStack {
     families: Vec<FontFamily>,
+    /// Whether the list is just the generic `monospace`, which Blink sizes
+    /// differently (see [`crate::style::font_size`]).
+    generic_monospace: bool,
 }
 
 impl Default for FontStack {
@@ -793,11 +800,19 @@ impl FontStack {
     pub fn from_family(family: FontFamily) -> Self {
         Self {
             families: vec![family],
+            generic_monospace: false,
         }
     }
 
     pub fn families(&self) -> &[FontFamily] {
         &self.families
+    }
+
+    /// Whether the family list is only the generic `monospace` (Blink's
+    /// `FontDescription::IsMonospace`): `monospace, monospace` and named
+    /// monospace fonts are not.
+    pub(crate) fn is_generic_monospace(&self) -> bool {
+        self.generic_monospace
     }
 
     pub fn primary(&self) -> FontFamily {
@@ -869,14 +884,17 @@ fn split_font_family_list(raw: &str) -> Vec<&str> {
 }
 
 pub(crate) fn parse_font_stack(raw: &str) -> FontStack {
-    let families: Vec<FontFamily> = split_font_family_list(raw)
-        .into_iter()
-        .map(parse_font_family_name)
-        .collect();
+    let names = split_font_family_list(raw);
+    let generic_monospace =
+        matches!(names.as_slice(), [name] if name.eq_ignore_ascii_case("monospace"));
+    let families: Vec<FontFamily> = names.into_iter().map(parse_font_family_name).collect();
     if families.is_empty() {
         FontStack::default()
     } else {
-        FontStack { families }
+        FontStack {
+            families,
+            generic_monospace,
+        }
     }
 }
 
@@ -3327,6 +3345,12 @@ pub struct ComputedStyle {
     /// context. It is not a CSS property and never changes box geometry.
     pub(crate) raster_quality: RasterQuality,
     pub font_size: f32,
+    /// Where `font_size` came from (inherited with it).
+    pub(crate) font_size_origin: FontSizeOrigin,
+    /// The size this element's own `font-size` declared, before any resize
+    /// for a change of generic family; `None` when it inherits the parent's.
+    /// Not inherited.
+    pub(crate) declared_font_size: Option<DeclaredFontSize>,
     pub root_font_size: f32,
     pub root_font_units: FontUnitLengths,
     pub viewport_width: f32,
@@ -3757,6 +3781,8 @@ impl Default for ComputedStyle {
         Self {
             raster_quality: RasterQuality::default(),
             font_size: 12.0,
+            font_size_origin: FontSizeOrigin::default(),
+            declared_font_size: None,
             root_font_size: 12.0,
             root_font_units: FontUnitLengths::default(),
             viewport_width: 595.28,
@@ -3948,6 +3974,31 @@ impl Default for ComputedStyle {
 }
 
 impl ComputedStyle {
+    /// Record the size this element's own `font-size` declares. The used size
+    /// follows once its family is known ([`Self::settle_font_size`]).
+    fn declare_font_size(&mut self, declared: DeclaredFontSize) {
+        self.declared_font_size = Some(declared);
+        self.font_size = declared.size;
+        self.font_size_origin = declared.origin;
+    }
+
+    /// Compute the used font size from the declared one (or the parent's) and
+    /// the element's generic family, as Blink does
+    /// ([`crate::style::font_size`]). Idempotent across the cascade's layers.
+    fn settle_font_size(&mut self, parent: &ComputedStyle) {
+        let declared = self.declared_font_size.unwrap_or(DeclaredFontSize {
+            size: parent.font_size,
+            origin: parent.font_size_origin,
+        });
+        self.font_size_origin = declared.origin;
+        self.font_size = size_for_generic_family(
+            declared,
+            self.declared_font_size.is_some(),
+            self.font_stack.is_generic_monospace(),
+            parent.font_stack.is_generic_monospace(),
+        );
+    }
+
     /// Start a style-resolution tree with one conversion-owned raster policy.
     pub(crate) fn with_raster_quality(raster_quality: RasterQuality) -> Self {
         Self {
@@ -4226,6 +4277,7 @@ fn compute_style_with_context_and_percentage_basis_impl(
     // every element regardless of display. (Previously these were reset only
     // for block tags, so an inline tag such as a `display:inline-block`
     // `<span>` wrongly inherited its parent's padding/margin.)
+    style.declared_font_size = None;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;
     style.margin_em_right = None;
@@ -4584,11 +4636,24 @@ pub(crate) fn compute_pseudo_element_style_with_font_metrics(
         }
     }
 
-    if matched.is_empty() {
+    // HTML's UA stylesheet quotes a `<q>` (`q::before { content: open-quote }`,
+    // `q::after { content: close-quote }`).
+    let ua_quote = tag_name
+        .eq_ignore_ascii_case("q")
+        .then_some(())
+        .and(match pseudo {
+            crate::parser::css::PseudoElement::Before => Some("open-quote"),
+            crate::parser::css::PseudoElement::After => Some("close-quote"),
+            _ => None,
+        });
+    if matched.is_empty() && ua_quote.is_none() {
         return None;
     }
     matched.sort_by_key(|(specificity, _)| *specificity);
     let mut cascaded = StyleMap::new();
+    if let Some(quote) = ua_quote {
+        cascaded.set("content", CssValue::Keyword(quote.into()));
+    }
     for (_, rule) in &matched {
         cascade_style_map_filtered(&mut cascaded, &rule.declarations, Importance::Normal);
     }
@@ -4605,6 +4670,7 @@ pub(crate) fn compute_pseudo_element_style_with_font_metrics(
     );
 
     // Reset non-inherited properties (pseudo-elements are generated boxes)
+    style.declared_font_size = None;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;
     style.margin_em_right = None;
@@ -4829,7 +4895,10 @@ fn reset_to_initial(style: &mut ComputedStyle, property: &str) {
     let default = ComputedStyle::default();
     match property {
         "color" => style.color = default.color,
-        "font-size" => style.font_size = default.font_size,
+        "font-size" => style.declare_font_size(DeclaredFontSize {
+            size: default.font_size,
+            origin: default.font_size_origin,
+        }),
         "font-weight" => style.font_weight = default.font_weight,
         "font-style" => style.font_style = default.font_style,
         "font-stretch" => style.font_stretch = default.font_stretch,
@@ -5108,6 +5177,10 @@ fn reset_all_to_initial(style: &mut ComputedStyle) {
     let custom_properties = style.custom_properties.clone();
 
     *style = ComputedStyle::default();
+    style.declared_font_size = Some(DeclaredFontSize {
+        size: style.font_size,
+        origin: style.font_size_origin,
+    });
 
     style.raster_quality = raster_quality;
     style.root_font_size = root_font_size;
@@ -5124,7 +5197,10 @@ fn reset_all_to_initial(style: &mut ComputedStyle) {
 fn restore_from_parent(style: &mut ComputedStyle, property: &str, parent: &ComputedStyle) {
     match property {
         "color" => style.color = parent.color,
-        "font-size" => style.font_size = parent.font_size,
+        "font-size" => style.declare_font_size(DeclaredFontSize {
+            size: parent.font_size,
+            origin: parent.font_size_origin,
+        }),
         "font-weight" => style.font_weight = parent.font_weight,
         "font-style" => style.font_style = parent.font_style,
         "font-stretch" => style.font_stretch = parent.font_stretch,
@@ -5516,7 +5592,7 @@ fn apply_font_shorthand(
     let tokens: Vec<&str> = value.split_whitespace().collect();
     let Some(size_idx) = tokens.iter().position(|token| {
         let size = token.split_once('/').map_or(*token, |(size, _)| size);
-        parse_length(size).is_some()
+        parse_length(size).is_some() || crate::style::font_size::is_font_size_keyword(size)
     }) else {
         return;
     };
@@ -5606,11 +5682,16 @@ fn apply_font_size_token(
     token: &str,
     font_metrics: FontMetrics<'_>,
 ) {
-    if let Some(value) = parse_length(token)
-        && let Some(size) =
+    let value = if crate::style::font_size::is_font_size_keyword(token) {
+        Some(CssValue::Keyword(token.to_string()))
+    } else {
+        parse_length(token)
+    };
+    if let Some(value) = value
+        && let Some(declared) =
             resolve_font_size_value(&value, &style.custom_properties, parent, font_metrics)
     {
-        style.font_size = size;
+        style.declare_font_size(declared);
     }
 }
 
@@ -5624,23 +5705,38 @@ fn resolve_font_size_value(
     custom_properties: &HashMap<String, String>,
     parent: &ComputedStyle,
     font_metrics: FontMetrics<'_>,
-) -> Option<f32> {
-    let size = match value {
-        CssValue::Length(value) => *value,
-        CssValue::Em(value) => *value * parent.font_size,
-        CssValue::Ex(value) => *value * style_ex_length(parent, font_metrics),
-        CssValue::Ch(value) => {
-            *value * parent.font_size * font_metrics.style_ch_ratio(parent).unwrap_or(0.5)
-        }
-        CssValue::Rem(value) => *value * parent.root_font_size,
-        CssValue::Percentage(value) => *value * parent.font_size / 100.0,
-        CssValue::Vw(value) => *value * parent.viewport_width / 100.0,
-        CssValue::Vh(value) => *value * parent.viewport_height / 100.0,
-        CssValue::Vmin(value) => *value * parent.viewport_width.min(parent.viewport_height) / 100.0,
-        CssValue::Vmax(value) => *value * parent.viewport_width.max(parent.viewport_height) / 100.0,
-        CssValue::Math(expression) => {
-            expression.resolve(parent.math_unit_context(font_metrics), parent.font_size)?
-        }
+) -> Option<DeclaredFontSize> {
+    let relative = FontSizeOrigin::relative_to(parent.font_size_origin);
+    let (size, origin) = match value {
+        CssValue::Length(value) => (*value, FontSizeOrigin::ABSOLUTE),
+        CssValue::Em(value) => (*value * parent.font_size, relative),
+        CssValue::Ex(value) => (*value * style_ex_length(parent, font_metrics), relative),
+        CssValue::Ch(value) => (
+            *value * parent.font_size * font_metrics.style_ch_ratio(parent).unwrap_or(0.5),
+            relative,
+        ),
+        CssValue::Rem(value) => (*value * parent.root_font_size, relative),
+        CssValue::Percentage(value) => (*value * parent.font_size / 100.0, relative),
+        CssValue::Vw(value) => (
+            *value * parent.viewport_width / 100.0,
+            FontSizeOrigin::ABSOLUTE,
+        ),
+        CssValue::Vh(value) => (
+            *value * parent.viewport_height / 100.0,
+            FontSizeOrigin::ABSOLUTE,
+        ),
+        CssValue::Vmin(value) => (
+            *value * parent.viewport_width.min(parent.viewport_height) / 100.0,
+            FontSizeOrigin::ABSOLUTE,
+        ),
+        CssValue::Vmax(value) => (
+            *value * parent.viewport_width.max(parent.viewport_height) / 100.0,
+            FontSizeOrigin::ABSOLUTE,
+        ),
+        CssValue::Math(expression) => (
+            expression.resolve(parent.math_unit_context(font_metrics), parent.font_size)?,
+            FontSizeOrigin::ABSOLUTE,
+        ),
         CssValue::PendingMath(expression) => {
             let resolved = crate::style::resolve::resolve_vars_in_value(
                 expression.source(),
@@ -5659,13 +5755,21 @@ fn resolve_font_size_value(
             return resolve_font_size_value(&resolved, custom_properties, parent, font_metrics);
         }
         CssValue::Keyword(raw) => {
-            let parsed = parse_length(raw)?;
-            return resolve_font_size_value(&parsed, custom_properties, parent, font_metrics);
+            if let Some(keyword) = FontSizeKeyword::parse(raw) {
+                // Sized for the element's family once that is known
+                // (`ComputedStyle::settle_font_size`).
+                (keyword.size(false), FontSizeOrigin::keyword(keyword))
+            } else if let Some(factor) = relative_keyword_factor(raw) {
+                (parent.font_size * factor, relative)
+            } else {
+                let parsed = parse_length(raw)?;
+                return resolve_font_size_value(&parsed, custom_properties, parent, font_metrics);
+            }
         }
         CssValue::Number(_) | CssValue::Color(_) | CssValue::BackgroundLayers(_) => return None,
     };
 
-    (size.is_finite() && size >= 0.0).then_some(size)
+    (size.is_finite() && size >= 0.0).then_some(DeclaredFontSize { size, origin })
 }
 
 fn apply_line_height_token(
@@ -5765,6 +5869,7 @@ fn apply_all_keyword(style: &mut ComputedStyle, keyword: &str, parent: &Computed
             let custom_properties = std::mem::take(&mut style.custom_properties);
             let mut text_decorations = std::mem::take(&mut style.text_decorations);
             *style = parent.clone();
+            style.declared_font_size = None;
             text_decorations.current = parent
                 .text_decorations
                 .current
@@ -5917,10 +6022,10 @@ fn apply_style_map_with_percentage_basis(
     }
 
     if let Some(value) = get_non_special(map, "font-size")
-        && let Some(size) =
+        && let Some(declared) =
             resolve_font_size_value(value, &style.custom_properties, parent, font_metrics)
     {
-        style.font_size = size;
+        style.declare_font_size(declared);
     }
 
     if let Some(CssValue::Keyword(k)) = get_non_special(map, "font-weight") {
@@ -5943,6 +6048,7 @@ fn apply_style_map_with_percentage_basis(
         style.font_stack = parse_font_stack(k);
         style.font_family = style.font_stack.primary();
     }
+    style.settle_font_size(parent);
 
     if let Some(value) = get_non_special(map, "font-size-adjust") {
         match value {
@@ -6099,6 +6205,24 @@ fn apply_style_map_with_percentage_basis(
     // (see the em-fixup block at the end of `compute_style_with_context`).
     // Length (absolute) sets the margin and clears the em factor so later
     // re-resolution doesn't clobber the explicit value.
+    // Any value but `auto` replaces an `auto` from a lower layer (the UA's
+    // `hr { margin-inline: auto }` under an author `margin: 8px 0`).
+    let replaces_auto = |property: &str| {
+        get_non_special(map, property)
+            .is_some_and(|value| !matches!(value, CssValue::Keyword(k) if k == "auto"))
+    };
+    if replaces_auto("margin-top") {
+        style.margin_top_auto = false;
+    }
+    if replaces_auto("margin-right") {
+        style.margin_right_auto = false;
+    }
+    if replaces_auto("margin-bottom") {
+        style.margin_bottom_auto = false;
+    }
+    if replaces_auto("margin-left") {
+        style.margin_left_auto = false;
+    }
     match get_non_special(map, "margin-top") {
         Some(CssValue::Length(v)) => {
             style.margin.top = *v;
@@ -20191,7 +20315,8 @@ mod tests {
             &parent,
             FontMetrics::new(&fonts),
         )
-        .expect("valid ex font size");
+        .expect("valid ex font size")
+        .size;
 
         // ParitySans has no OS/2.sxHeight. Current Chromium's Fontations
         // backend measures a 15px hinted `x` at the inherited 26.667px size,
@@ -20210,7 +20335,8 @@ mod tests {
             &parent,
             FontMetrics::default(),
         )
-        .expect("valid fallback ex font size");
+        .expect("valid fallback ex font size")
+        .size;
 
         assert_eq!(size, 40.0);
     }

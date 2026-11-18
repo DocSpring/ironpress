@@ -114,12 +114,6 @@ pub(crate) trait LayoutElementTestExt: LayoutElement {
     tree_inspector!(find_svg, SvgTreeInspector, Svg, visit_svg);
     inspector!(inspect_math, MathInspector, MathBlock, visit_math_block);
     inspector!(
-        inspect_rule,
-        RuleInspector,
-        HorizontalRule,
-        visit_horizontal_rule
-    );
-    inspector!(
         inspect_progress,
         ProgressInspector,
         ProgressBar,

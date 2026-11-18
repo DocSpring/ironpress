@@ -2,8 +2,8 @@
 
 use crate::layout::cells::TableRowCells;
 use crate::layout::elements::{
-    Container, FlexRow, GridRow, HorizontalRule, Image, LayoutElement, LayoutVisitor, MathBlock,
-    ProgressBar, Svg, TableRow, TextBlock,
+    Container, FlexRow, GridRow, Image, LayoutElement, LayoutVisitor, MathBlock, ProgressBar, Svg,
+    TableRow, TextBlock,
 };
 /// Measure one laid-out node's outer block-axis extent.
 pub(crate) fn element_height(element: &dyn LayoutElement) -> f32 {
@@ -76,10 +76,6 @@ pub(crate) fn element_height(element: &dyn LayoutElement) -> f32 {
                 .geometry
                 .flow
                 .outer_extent(element.geometry.size.height);
-        }
-
-        fn visit_horizontal_rule(&mut self, element: &HorizontalRule) {
-            self.0 = element.margins.total() + 1.0;
         }
 
         fn visit_progress_bar(&mut self, element: &ProgressBar) {
