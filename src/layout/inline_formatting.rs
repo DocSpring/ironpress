@@ -19,9 +19,14 @@ use super::text::{
     used_font_size,
 };
 
+mod blocks_in_inline;
 mod flow;
 mod inline_content;
 mod out_of_flow;
+pub(crate) use blocks_in_inline::{
+    BlockInInline, blocks_in_inline, collects_contents, is_block_in_inline,
+    may_hold_block_in_inline,
+};
 pub(crate) use flow::{AnonymousBlockFlow, IndependentFlowLayout, layout_mixed_flow_children};
 pub(crate) use out_of_flow::{LineGeometry, nested_out_of_flow, out_of_flow_static_positions};
 
@@ -629,6 +634,9 @@ impl AtomicInlineEmission {
 pub(crate) struct InlineFormattingChild {
     pub(crate) style: ComputedStyle,
     pub(crate) role: InlineFormattingRole,
+    /// An inline element that holds a block-level element, at any depth: it's split around the block, which is laid
+    /// out among the parent's lines as a block (CSS 2.1 §9.2.1.1, [`blocks_in_inline`]).
+    pub(crate) holds_block: bool,
     source: ElementSiblingPosition,
 }
 
@@ -661,6 +669,16 @@ impl InlineFormattingChildren {
         self.0
             .iter()
             .any(|child| child.role == InlineFormattingRole::Outside)
+    }
+
+    /// Whether an inline child holds a block-level element, which splits the lines around it.
+    pub(crate) fn has_block_in_inline(&self) -> bool {
+        self.0.iter().any(|child| child.holds_block)
+    }
+
+    /// Whether a block-level box sits among the inline content: a block-level child, or one inside an inline child.
+    pub(crate) fn has_block_level(&self) -> bool {
+        self.has_outside() || self.has_block_in_inline()
     }
 
     pub(crate) fn requires_independent_layout(&self, element_index: usize) -> bool {
@@ -802,6 +820,8 @@ impl<'a> InlineFormattingContext<'a> {
     }
 
     pub(crate) fn children(&self, sequence: InlineContentSequence<'_>) -> InlineFormattingChildren {
+        let may_hold_block =
+            blocks_in_inline::may_hold_block_in_inline(sequence.nodes(), self.rules);
         let mut siblings = InlineSiblingCursor::starting_at(
             sequence.source_nodes(),
             sequence.starting_element_index(),
@@ -827,9 +847,20 @@ impl<'a> InlineFormattingContext<'a> {
                     &selector_context,
                     self.font_metrics,
                 );
+                let role = InlineFormattingRole::of(element, &style);
+                let holds_block = may_hold_block
+                    && collects_contents(element, role, &style)
+                    && blocks_in_inline::holds_block(
+                        element,
+                        &style,
+                        &selector_context,
+                        self.rules,
+                        self.font_metrics,
+                    );
                 Some(InlineFormattingChild {
-                    role: InlineFormattingRole::of(element, &style),
+                    role,
                     style,
+                    holds_block,
                     source: ElementSiblingPosition::from_selector_context(&selector_context),
                 })
             })

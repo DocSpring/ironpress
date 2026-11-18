@@ -13,7 +13,7 @@ use crate::parser::css::{AncestorInfo, CssRule, CssValue, SelectorContext, Style
 use crate::parser::dom::{DomNode, ElementNode};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
-    ComputedStyle, Float, TextAlign, compute_style_with_context_with_font_metrics,
+    ComputedStyle, TextAlign, compute_style_with_context_with_font_metrics,
 };
 use crate::style::font_metrics::FontMetrics;
 use crate::types::Point;
@@ -22,6 +22,7 @@ use super::super::engine::{TextLine, TextRun};
 use super::super::text::{
     OutOfFlowBoundary, OutOfFlowPlace, TextWrapOptions, wrap_text_runs_among_floats,
 };
+use super::blocks_in_inline::collects_contents;
 use super::{InlineFormattingChildren, InlineFormattingRole, InlineSiblingCursor};
 
 /// An absolutely positioned element inside one of a block's inline elements.
@@ -62,7 +63,7 @@ pub(crate) fn nested_out_of_flow<'dom>(
         let Some(child) = roles.get(index) else {
             continue;
         };
-        if walker.collects_contents(element, child.role, &child.style) {
+        if collects_contents(element, child.role, &child.style) {
             walker.walk(element, &child.style, &selector_context, index, &mut found);
         }
     }
@@ -113,20 +114,6 @@ struct Walker<'a> {
 }
 
 impl Walker<'_> {
-    /// Whether the run collector collects `element`'s children into the
-    /// block's lines: an inline element, other than a footnote or math, whose
-    /// contents it gathers in their own way.
-    fn collects_contents(
-        &self,
-        element: &ElementNode,
-        role: InlineFormattingRole,
-        style: &ComputedStyle,
-    ) -> bool {
-        role == InlineFormattingRole::Text
-            && style.float != Float::Footnote
-            && !element.attributes.contains_key("data-math")
-    }
-
     fn walk<'dom>(
         &self,
         element: &'dom ElementNode,
@@ -164,7 +151,7 @@ impl Walker<'_> {
                     parent_style: style.clone(),
                     selector_context: child_context,
                 });
-            } else if self.collects_contents(child, role, &child_style) {
+            } else if collects_contents(child, role, &child_style) {
                 self.walk(child, &child_style, &child_context, holder, found);
             }
         }

@@ -258,7 +258,7 @@ fn clear_anonymous_block_margins(nodes: &mut [LayoutNode]) {
     }
 }
 
-fn trim_leading_collapsible_space(runs: &mut Vec<TextRun>) {
+pub(crate) fn trim_leading_collapsible_space(runs: &mut Vec<TextRun>) {
     while let Some(first) = runs.first_mut() {
         if first.inline_box.is_some() {
             return;
@@ -857,10 +857,18 @@ pub(crate) fn layout_block_element(
     let is_list = matches!(el.tag, HtmlTag::Ul | HtmlTag::Ol);
     let requires_principal_box =
         early_has_visual || style.position.is_positioned() || keeps_box_geometry || is_list;
+    // A block inside an inline child splits the lines around it: the anonymous
+    // block flow lays out every child from the first on (a list's and a table
+    // row's own layouts take their children).
+    let splits_inline = nesting_depth < 40
+        && !is_list
+        && !has_table_cell_children
+        && inline_children.has_block_in_inline();
     let has_block_kids_for_wrapper = nesting_depth < 40
         && (has_inflow_block_pseudo
             || early_has_visual && has_out_of_flow_children
-            || requires_principal_box && inline_children.has_outside());
+            || requires_principal_box && inline_children.has_outside()
+            || splits_inline);
     let block_pseudo_via_wrapper = has_inflow_block_pseudo && has_block_kids_for_wrapper;
     if let Some(ps) = before_style {
         if pseudo_is_block_like(ps) && !before_is_abs && !block_pseudo_via_wrapper {
@@ -1507,6 +1515,9 @@ pub(crate) fn layout_block_element(
 
             emit_page_break_after(style, output);
             return;
+        } else if splits_inline {
+            // The anonymous block flow lays out every child, and the generated
+            // content, in the wrapper below.
         } else if has_block_kids_for_wrapper {
             // Inline generated boundaries live on opposite sides of the real
             // block children. The leading fragment starts the first anonymous
@@ -2101,7 +2112,8 @@ pub(crate) fn layout_block_element(
         || !layout_padding.is_zero()
         || has_inflow_block_pseudo
         || (positioned_container && (before_is_abs || after_is_abs))
-        || has_abs_children;
+        || has_abs_children
+        || splits_inline;
     let no_inline_content = !had_inline_runs;
 
     let has_abs_pseudo = positioned_container && (before_is_abs || after_is_abs);
@@ -2250,15 +2262,12 @@ pub(crate) fn layout_block_element(
         // Set once that anonymous block flow has laid out the rest of the
         // children, including the trailing generated content.
         let mut tail_laid_out = false;
+        let lays_out_from_start = splits_inline;
         for (child_index, child) in wrapper_children.iter().enumerate() {
             match child {
-                DomNode::Text(text) => {
-                    if text.chars().any(char::is_whitespace) {
-                        pending_inline_space = true;
-                    }
-                }
-                DomNode::Element(_)
-                    if inline_children.is_outside(child_el_idx)
+                _ if lays_out_from_start
+                    || matches!(child, DomNode::Element(_))
+                        && inline_children.is_outside(child_el_idx)
                         && !leading_float_elements.contains(&child_el_idx) =>
                 {
                     if !ib_group_wrapper.is_empty() {
@@ -2273,30 +2282,40 @@ pub(crate) fn layout_block_element(
                             env,
                         );
                     }
-                    AnonymousBlockFlow::new(style, &child_ctx, child_ancestors).layout(
-                        inline_sequence.tail(child_index),
-                        &mut child_elements,
-                        env,
-                        &mut |element: &ElementNode,
-                              child: &InlineFormattingChild,
-                              output: &mut Vec<LayoutNode>,
-                              env: &mut LayoutEnv<'_>| {
-                            flatten_element(
-                                element,
-                                LayoutTreeContext::new(
-                                    child_parent_style,
-                                    &child_ctx,
-                                    child_ancestors,
-                                )
-                                .with_positioned_ancestor_depth(positioned_depth)
-                                .for_element(child.source().as_context()),
-                                output,
-                                env,
-                            );
-                        },
-                    );
+                    AnonymousBlockFlow::new(style, &child_ctx, child_ancestors, positioned_depth)
+                        .layout(
+                            if lays_out_from_start {
+                                inline_sequence
+                            } else {
+                                inline_sequence.tail(child_index)
+                            },
+                            &mut child_elements,
+                            env,
+                            &mut |element: &ElementNode,
+                                  child: &InlineFormattingChild,
+                                  output: &mut Vec<LayoutNode>,
+                                  env: &mut LayoutEnv<'_>| {
+                                flatten_element(
+                                    element,
+                                    LayoutTreeContext::new(
+                                        child_parent_style,
+                                        &child_ctx,
+                                        child_ancestors,
+                                    )
+                                    .with_positioned_ancestor_depth(positioned_depth)
+                                    .for_element(child.source().as_context()),
+                                    output,
+                                    env,
+                                );
+                            },
+                        );
                     tail_laid_out = true;
                     break;
+                }
+                DomNode::Text(text) => {
+                    if text.chars().any(char::is_whitespace) {
+                        pending_inline_space = true;
+                    }
                 }
                 DomNode::Element(child_el) => {
                     if inline_children.atomic_is_emitted(child_el_idx, atomic_inline_emission) {

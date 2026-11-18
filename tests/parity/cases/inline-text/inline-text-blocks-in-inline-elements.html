@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>blocks inside inline elements</title>
+<style>
+  @page { size: 420px 560px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 0; }
+  section { margin: 0 0 8px; border-left: 2px solid #9e9e9e; padding-left: 6px; }
+  table { border-collapse: collapse; }
+  td { border: 1px solid #424242; padding: 1px 4px; }
+  invoice-items td { background: #e3f2fd; }
+  .note { color: #2e7d32; background: #fff59d; border: 2px solid #c62828; padding: 0 6px; }
+  .note > div { background: #c5cae9; }
+  ol { margin: 0; padding-left: 28px; }
+</style>
+</head>
+<body>
+  <section>Lead <span>in <table><tr><td>Qty 2</td><td>Total 40.00</td></tr></table> more</span> tail</section>
+  <section><font><invoice-items><table><tr><td>Row A</td></tr></table></invoice-items></font></section>
+  <section><b>Items:<ol><li>First item</li><li>Second item</li></ol></b></section>
+  <section>Before <span class="note">split <div>Block in the note</div> after</span> end</section>
+  <section><em>A <span>B <div>Deep <span>C <p style="margin: 4px 0; border: 1px solid #6a1b9a">Two levels</p> D</span></div> E</span> F</em></section>
+  <section><table><tr><td><font><table><tr><td>Table in a cell's font</td></tr></table></font></td></tr></table></section>
+  <section><ol><li><b>Marker line:<ol><li>nested</li></ol>after</b> tail</li></ol></section>
+  <section><a href="https://example.com/">Link start <div>Linked block</div> link end</a></section>
+</body>
+</html>

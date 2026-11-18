@@ -4,8 +4,11 @@
 //! (`<span>`, `<a>`, `<strong>`) and the contents of an inline-block reach only the run collector. It dropped every
 //! element there that wasn't text or an inline-block with an inline tag, with everything inside it: an `<img>` in a
 //! link, the `<div>`s in an inline-block, an inline-flex in a `<span>`. Each one is now inline content: an atomic
-//! inline box stays a box in the line, an image becomes an image box, and a block becomes lines of its own (CSS 2.1
-//! §9.2.1.1), without its own background, border or margins.
+//! inline box stays a box in the line and an image becomes an image box. A block inside an inline element is laid out
+//! as a block between the lines by the block that holds them, which records where it goes
+//! ([`crate::layout::inline_formatting::blocks_in_inline`]). Where nothing lays it out that way (an inline-block's
+//! contents), a block becomes lines of its own, as do the blocks inside it, without their own backgrounds, borders or
+//! margins.
 
 use super::{
     AncestorInfo, AtomicInlineKind, ComputedStyle, CounterState, CssRule, ElementNode,
@@ -15,6 +18,7 @@ use super::{
     used_font_size,
 };
 use crate::layout::images::{ElementImage, decode_element_image, raster_image_size};
+use crate::layout::inline_formatting::is_block_in_inline;
 
 use crate::parser::css::SelectorContext;
 use crate::style::computed::Float;
@@ -28,7 +32,8 @@ pub(super) enum CollectedAs {
     FloatBox,
     /// An image inline box
     Image,
-    /// Lines of its own, between forced breaks
+    /// A block inside inline content: laid out between the lines when the collector records blocks, otherwise lines
+    /// of its own, between forced breaks
     Lines,
     /// Nothing: laid out by its formatting context, or not shown
     Skipped,
@@ -55,11 +60,11 @@ impl CollectedAs {
                 AtomicInlineKind::ReplacedImage | AtomicInlineKind::ReplacedSvg,
             ) => Self::Image,
             InlineFormattingRole::Atomic(_) => Self::Runs,
-            InlineFormattingRole::Outside if element.tag == HtmlTag::Svg => Self::Skipped,
+            _ if is_block_in_inline(element, role, style) => Self::Lines,
             InlineFormattingRole::Outside if matches!(style.float, Float::Left | Float::Right) => {
                 Self::FloatBox
             }
-            InlineFormattingRole::Outside => Self::Lines,
+            InlineFormattingRole::Outside => Self::Skipped,
             InlineFormattingRole::Hidden
             | InlineFormattingRole::OutOfFlow
             | InlineFormattingRole::Text => Self::Skipped,
@@ -122,6 +127,8 @@ pub(super) fn collect_block_lines(
     let mut ancestors: Vec<AncestorInfo> = block.selector_context.ancestors.clone();
     ancestors.push(block.selector_context.as_ancestor(block.element));
     let block_start = runs.len();
+    // Blocks inside it are lines of their own too, rather than dropped
+    state.collection.block_lines_depth += 1;
     collect_text_runs_inner(
         InlineContentSequence::with_generated(
             &block.element.children,
@@ -139,6 +146,7 @@ pub(super) fn collect_block_lines(
         state.resources,
         state.collection,
     );
+    state.collection.block_lines_depth -= 1;
     if runs.len() > block_start && !ends_line(runs, block_start) {
         runs.push(line_break(block.style, state.fonts));
     }

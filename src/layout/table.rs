@@ -30,9 +30,10 @@ use super::engine::{
 };
 use super::helpers::{PseudoBoxContext, build_pseudo_block, pseudo_is_block_like};
 use super::inline_formatting::{
-    AnonymousBlockFlow, AnonymousInlineFormattingContext, GeneratedBox, GeneratedContentStyles,
-    GeneratedInlineContent, IndependentFlowLayout, InlineContentSequence, InlineFormattingChild,
-    InlineFormattingContext, InlineFormattingRole, layout_mixed_flow_children,
+    AnonymousBlockFlow, AnonymousInlineFormattingContext, BlockInInline, GeneratedBox,
+    GeneratedContentStyles, GeneratedInlineContent, IndependentFlowLayout, InlineContentSequence,
+    InlineFormattingChild, InlineFormattingContext, InlineFormattingRole,
+    layout_mixed_flow_children, may_hold_block_in_inline,
 };
 #[cfg(test)]
 use super::paginate::estimate_element_height;
@@ -4162,6 +4163,31 @@ impl IndependentFlowLayout for TableCellChildLayout<'_, '_, '_, '_> {
             env,
         );
     }
+
+    /// Measured beside the cell's runs, so the column is as wide as the block.
+    /// When the cell is laid out, its anonymous block flow places the block.
+    fn lays_out_blocks_in_inline(&self) -> bool {
+        self.context.pass == TableCellFlowPass::Measure
+    }
+
+    fn layout_block_in_inline(&mut self, block: &BlockInInline<'_>, env: &mut LayoutEnv<'_>) {
+        let cell_context = self
+            .context
+            .descendant_layout
+            .child_context(self.context.available_width, self.context.style);
+        let selector = &block.selector_context;
+        flatten_element(
+            block.element,
+            LayoutTreeContext::new(&block.parent_style, &cell_context, &selector.ancestors)
+                .with_positioned_ancestor_depth(self.context.descendant_layout.positioned_depth)
+                .for_element(
+                    ElementSiblingContext::new(selector.child_index, selector.sibling_count)
+                        .with_neighbors(&selector.preceding_siblings, &selector.following_siblings),
+                ),
+            self.output,
+            env,
+        );
+    }
 }
 
 /// Lay out a cell's children: its inline content as `runs` for the cell's own
@@ -4209,7 +4235,13 @@ fn layout_table_cell_flow(
     let content = context
         .descendant_layout
         .child_context(context.available_width, context.style);
-    AnonymousBlockFlow::new(context.style, &content, context.ancestors).layout(
+    AnonymousBlockFlow::new(
+        context.style,
+        &content,
+        context.ancestors,
+        context.descendant_layout.positioned_depth,
+    )
+    .layout(
         sequence.tail(start),
         nested_rows,
         env,
@@ -4223,7 +4255,8 @@ fn layout_table_cell_flow(
 }
 
 /// The source index of a cell's first block-level child that inline content
-/// follows, if any.
+/// follows, if any, or the first child when a block-level element inside an
+/// inline child splits the cell's lines.
 fn first_block_before_inline_content(
     sequence: InlineContentSequence<'_>,
     context: TableCellFlowContext<'_, '_, '_>,
@@ -4233,11 +4266,13 @@ fn first_block_before_inline_content(
     let first_element = nodes
         .iter()
         .position(|node| matches!(node, DomNode::Element(_)))?;
-    // Only an element can be a block, so content must follow one.
-    if !nodes[first_element + 1..].iter().any(|node| match node {
+    // Only an element can be a block, so content must follow one, unless the
+    // block is inside an inline element
+    let content_follows = nodes[first_element + 1..].iter().any(|node| match node {
         DomNode::Element(_) => true,
         DomNode::Text(text) => !text.trim().is_empty(),
-    }) {
+    });
+    if !content_follows && !may_hold_block_in_inline(nodes, env.rules) {
         return None;
     }
     let children = InlineFormattingContext::new(
@@ -4247,6 +4282,14 @@ fn first_block_before_inline_content(
         env.font_metrics(),
     )
     .children(sequence);
+    // A block inside an inline element splits the cell's lines around it: the
+    // anonymous block flow lays out all of the cell's content
+    if children.has_block_in_inline() {
+        return Some(0);
+    }
+    if !content_follows {
+        return None;
+    }
     let mut first_block = None;
     let mut element_index = 0;
     for (node_index, node) in nodes.iter().enumerate() {

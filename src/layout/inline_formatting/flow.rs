@@ -10,9 +10,14 @@ use crate::parser::css::{AncestorInfo, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
 use crate::style::computed::{Clear, ComputedStyle, compute_style_with_context_with_font_metrics};
 
+use crate::layout::block::trim_leading_collapsible_space;
+use crate::layout::engine::{
+    ElementSiblingContext, LayoutTreeContext, element_is_empty, flatten_element,
+};
+
 use super::{
-    AnonymousInlineFormattingContext, InlineContentSequence, InlineFormattingChild,
-    InlineFormattingContext, InlineFormattingRole,
+    AnonymousInlineFormattingContext, BlockInInline, InlineContentSequence, InlineFormattingChild,
+    InlineFormattingContext, InlineFormattingRole, blocks_in_inline,
 };
 
 /// Context-specific ownership of boxes outside an inline run sequence.
@@ -33,6 +38,15 @@ pub(crate) trait IndependentFlowLayout {
         child: &InlineFormattingChild,
         env: &mut LayoutEnv<'_>,
     );
+
+    /// Whether this context lays out a block-level element inside an inline
+    /// child with [`Self::layout_block_in_inline`], beside the runs. Otherwise
+    /// the run collector gathers it as lines of its own.
+    fn lays_out_blocks_in_inline(&self) -> bool {
+        false
+    }
+
+    fn layout_block_in_inline(&mut self, _block: &BlockInInline<'_>, _env: &mut LayoutEnv<'_>) {}
 }
 
 /// Route one mixed child sequence through the shared inline collector.
@@ -79,6 +93,30 @@ pub(crate) fn layout_mixed_flow_children<'dom>(
         }
         if independent_layout.lays_out_independently(element, child) {
             independent_layout.layout_independently(element, child, env);
+        } else if child.holds_block && independent_layout.lays_out_blocks_in_inline() {
+            let selector_context = child
+                .source()
+                .as_context()
+                .selector_context(ancestors, element_is_empty(element));
+            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+                .in_context(run_context)
+                .recording_blocks()
+                .collect(
+                    sequence.item(node_index),
+                    parent_style,
+                    runs,
+                    None,
+                    ancestors,
+                );
+            for block in blocks_in_inline(
+                element,
+                &child.style,
+                &selector_context,
+                env.rules,
+                env.font_metrics(),
+            ) {
+                independent_layout.layout_block_in_inline(&block, env);
+            }
         } else {
             InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
                 .in_context(run_context)
@@ -128,11 +166,21 @@ where
 /// its place among the blocks: text after a block stays after it, and inline
 /// elements (`<span>`, `<img>`) in the run are laid out with the text around
 /// them rather than collected elsewhere or dropped.
+///
+/// A block-level element inside an inline child, at any depth, is laid out the
+/// same way: the inline content before it and after it each go in an anonymous
+/// block, and it goes between them as a block ([`super::blocks_in_inline`]).
 pub(crate) struct AnonymousBlockFlow<'a, 'dom> {
     parent_style: &'a ComputedStyle,
     /// The container's content box, which every child is laid out in.
     content: &'a LayoutContext,
     ancestors: &'a [AncestorInfo<'dom>],
+    /// How many positioned boxes contain the container's children.
+    positioned_depth: usize,
+    /// The first child is an inline element holding a block, and its inline
+    /// content before that block is already laid out (on a list item's marker
+    /// line).
+    first_lead_laid_out: bool,
 }
 
 impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
@@ -140,12 +188,22 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
         parent_style: &'a ComputedStyle,
         content: &'a LayoutContext,
         ancestors: &'a [AncestorInfo<'dom>],
+        positioned_depth: usize,
     ) -> Self {
         Self {
             parent_style,
             content,
             ancestors,
+            positioned_depth,
+            first_lead_laid_out: false,
         }
+    }
+
+    /// The first child's inline content before its first block is already
+    /// laid out, on a list item's marker line, when `laid_out`.
+    pub(crate) const fn with_first_lead_laid_out(mut self, laid_out: bool) -> Self {
+        self.first_lead_laid_out = laid_out;
+        self
     }
 
     /// Lay out `sequence` into `output`: anonymous blocks for the inline runs,
@@ -267,6 +325,19 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
                 Some((element, child)) if child.role == InlineFormattingRole::OutOfFlow => {
                     blocks.layout_block(element, child, output, env);
                 }
+                Some((element, child)) if child.holds_block => {
+                    let lead_laid_out = self.first_lead_laid_out && node_index == sequence.start();
+                    self.split_around_blocks(
+                        item,
+                        lead_laid_out,
+                        element,
+                        child,
+                        &mut runs,
+                        &mut floats_in_text,
+                        output,
+                        env,
+                    );
+                }
                 _ => InlineRunCollector::new(
                     env.rules,
                     env.fonts,
@@ -280,6 +351,75 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
             sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
         }
         self.flush(&mut runs, &mut floats_in_text, output, env);
+    }
+
+    /// Collect `element`, an inline child, into `runs`, and lay out each block-level element inside it as a block
+    /// between the runs before it and the runs after it.
+    #[allow(clippy::too_many_arguments)]
+    fn split_around_blocks(
+        &self,
+        item: InlineContentSequence<'_>,
+        lead_laid_out: bool,
+        element: &'dom ElementNode,
+        child: &InlineFormattingChild,
+        runs: &mut Vec<TextRun>,
+        floats_in_text: &mut FloatsInText,
+        output: &mut Vec<LayoutNode>,
+        env: &mut LayoutEnv<'_>,
+    ) {
+        let selector_context = child
+            .source()
+            .as_context()
+            .selector_context(self.ancestors, element_is_empty(element));
+        let blocks = blocks_in_inline(
+            element,
+            &child.style,
+            &selector_context,
+            env.rules,
+            env.font_metrics(),
+        );
+        let runs_before = runs.len();
+        let mut collector =
+            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+                .recording_blocks();
+        collector.collect(item, self.parent_style, runs, None, self.ancestors);
+        let boundaries = collector.block_boundaries();
+        debug_assert_eq!(
+            boundaries.len(),
+            blocks.len(),
+            "the collector passes over the blocks the search finds"
+        );
+        // Split from the end, so each boundary still counts runs from the start
+        let mut after: Vec<Vec<TextRun>> = boundaries
+            .iter()
+            .rev()
+            .map(|&boundary| runs.split_off(boundary.min(runs.len())))
+            .collect();
+        after.reverse();
+        if lead_laid_out {
+            runs.truncate(runs_before);
+        }
+        for (block, mut runs_after) in blocks.iter().zip(after) {
+            self.flush(runs, floats_in_text, output, env);
+            let context = &block.selector_context;
+            flatten_element(
+                block.element,
+                LayoutTreeContext::new(&block.parent_style, self.content, &context.ancestors)
+                    .with_positioned_ancestor_depth(self.positioned_depth)
+                    .for_element(
+                        ElementSiblingContext::new(context.child_index, context.sibling_count)
+                            .with_neighbors(
+                                &context.preceding_siblings,
+                                &context.following_siblings,
+                            ),
+                    ),
+                output,
+                env,
+            );
+            // The space before the next text starts its line, where it collapses away
+            trim_leading_collapsible_space(&mut runs_after);
+            runs.append(&mut runs_after);
+        }
     }
 
     fn flush(

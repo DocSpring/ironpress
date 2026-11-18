@@ -2004,8 +2004,8 @@ fn layout_grid_item_content_inner(
             env,
         );
     };
-    if inline_children.has_outside() {
-        AnonymousBlockFlow::new(item_style, &child_ctx, &child_ancestors).layout(
+    if inline_children.has_block_level() {
+        AnonymousBlockFlow::new(item_style, &child_ctx, &child_ancestors, positioned_depth).layout(
             inline_sequence,
             &mut out,
             env,

@@ -840,5 +840,20 @@
     "depends_on": [
       "probe-text-baseline"
     ]
+    },
+  {
+    "id": "inline-text-blocks-in-inline-elements",
+    "category": "inline-text",
+    "feature": "block-in-inline",
+    "subfeature": "anonymous-block-split",
+    "description": "Tables, lists, divs and paragraphs inside spans, font, b, em, a and a custom element, at up to three levels deep and in a table cell and a list item: each is a block with its own box between the lines, the inline content before and after it shares lines with the text around the inline element, a decorated span opens before the block and closes after it, and the list item's marker shares a line with the text before the block (CSS 2.1 section 9.2.1.1). Catches: blocks dropped with everything inside them, blocks flattened into text lines without their borders or list markers, or a cell too narrow for the table in it.",
+    "file": "cases/inline-text/inline-text-blocks-in-inline-elements.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

@@ -4,7 +4,7 @@
 use crate::layout::elements::{Container, FlexRow, Image, LayoutVisitor, TableRow, TextBlock};
 use crate::layout::engine::{TextLine, visit_layout_tree};
 
-use super::support::layout_pages;
+use super::support::{layout_pages, visible_inline_box_runs};
 
 const PIXEL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
@@ -263,4 +263,204 @@ fn list_item_with_a_box_keeps_it_around_its_block_children() {
             ),
         ]
     );
+}
+
+// A block-level element inside an inline element, at any depth, is a block among the lines: the inline elements
+// around it are split, and the inline content before it and after it each go in an anonymous block (CSS 2.1
+// §9.2.1.1). Each expectation is what Chrome prints for the same markup.
+
+#[derive(Default)]
+struct TableRows(usize);
+
+impl LayoutVisitor for TableRows {
+    fn visit_table_row(&mut self, _row: &TableRow) {
+        self.0 += 1;
+    }
+}
+
+fn table_rows(markup: &str) -> usize {
+    let mut rows = TableRows::default();
+    for page in layout_pages(markup) {
+        for (_, element) in &page.elements {
+            visit_layout_tree(element.as_ref(), &mut rows);
+        }
+    }
+    rows.0
+}
+
+/// Every text block in tree order, with its lines' runs.
+#[derive(Default)]
+struct TextBlocks(Vec<TextBlock>);
+
+impl LayoutVisitor for TextBlocks {
+    fn visit_text_block(&mut self, block: &TextBlock) {
+        self.0.push(block.clone());
+    }
+}
+
+fn text_blocks(markup: &str) -> Vec<TextBlock> {
+    let mut blocks = TextBlocks::default();
+    for page in layout_pages(markup) {
+        for (_, element) in &page.elements {
+            visit_layout_tree(element.as_ref(), &mut blocks);
+        }
+    }
+    blocks.0
+}
+
+fn text_block_with<'a>(blocks: &'a [TextBlock], word: &str) -> &'a TextBlock {
+    blocks
+        .iter()
+        .find(|block| line_words(&block.lines).contains(word))
+        .unwrap_or_else(|| panic!("no text block holds {word:?}"))
+}
+
+#[test]
+fn a_table_in_an_inline_element_is_a_table_at_any_depth() {
+    let table = r#"<table border="1"><tr><td>Cell</td></tr></table>"#;
+    for (markup, rows) in [
+        (format!(r#"<div><font size="2">{table}</font></div>"#), 1),
+        (format!("<div><span><b>{table}</b></span></div>"), 1),
+        (
+            format!("<div><invoice-items>{table}</invoice-items></div>"),
+            1,
+        ),
+        (
+            format!("<div>Lead <a href=\"#x\">{table}</a> tail</div>"),
+            1,
+        ),
+        (
+            format!(r#"<div style="display:grid"><div><span>{table}</span></div></div>"#),
+            1,
+        ),
+        (
+            format!(r#"<table><tr><td><font face="Arial">{table}</font></td></tr></table>"#),
+            2,
+        ),
+    ] {
+        assert_eq!(table_rows(&markup), rows, "{markup}");
+        assert!(
+            content_order(&markup)
+                .iter()
+                .any(|entry| entry.contains("Cell")),
+            "{markup}"
+        );
+    }
+}
+
+#[test]
+fn the_inline_content_around_a_block_in_an_inline_element_shares_its_lines() {
+    let order = content_order("<div>Lead <span>in <div>Block</div> more</span> tail</div>");
+    assert_eq!(order, ["Lead in", "Block", "more tail"]);
+
+    let order = content_order("<div><em>A <span>B <div>Deep</div> C</span> D</em></div>");
+    assert_eq!(order, ["A B", "Deep", "C D"]);
+
+    // A rule or a style attribute can make an inline element's child a block
+    let order = content_order(
+        r#"<style>.b { display: block }</style>
+        <div>Lead <span>in <span class="b">Rule</span> and <i style="display: block">Attribute</i> more</span></div>"#,
+    );
+    assert_eq!(order, ["Lead in", "Rule", "and", "Attribute", "more"]);
+}
+
+#[test]
+fn lists_and_paragraphs_in_inline_elements_keep_their_boxes() {
+    let order = content_order("<div><b>Items:<ol><li>One</li><li>Two</li></ol></b></div>");
+    assert_eq!(order, ["Items:", "1. One", "2. Two"]);
+
+    let blocks = text_blocks(
+        r#"<div><my-card><div><p style="border:2px solid;margin:0">Deep</p></div></my-card></div>"#,
+    );
+    let deep = text_block_with(&blocks, "Deep");
+    assert_eq!(
+        deep.box_model.border.top.width, 1.5,
+        "the paragraph's 2px border"
+    );
+}
+
+#[test]
+fn a_block_in_an_inline_element_inherits_from_it_and_matches_selectors_there() {
+    let blocks = text_blocks(
+        r#"<style>span.note > div { font-weight: bold } p:nth-child(2) { color: rgb(255, 0, 0) }</style>
+        <div><span class="note" style="color: rgb(0, 128, 0)">x <div>Inner</div> y</span><p>Second</p></div>"#,
+    );
+    let inner = &text_block_with(&blocks, "Inner").lines[0].runs[0];
+    assert_eq!(
+        [inner.color.r, inner.color.g, inner.color.b].map(f32::round),
+        [0.0, 128.0, 0.0],
+        "the span's color"
+    );
+    assert!(inner.bold, "span.note > div matches");
+    let second = &text_block_with(&blocks, "Second").lines[0].runs[0];
+    assert_eq!(
+        [second.color.r, second.color.g, second.color.b].map(f32::round),
+        [255.0, 0.0, 0.0],
+        "the paragraph is still its parent's second child"
+    );
+}
+
+#[test]
+fn an_inline_element_split_around_a_block_opens_before_it_and_closes_after_it() {
+    use crate::layout::engine::InlineEdgeSide;
+    let blocks = text_blocks(
+        r#"<div><span style="border:2px solid red;padding:0 6px">in <div>Block</div> more</span></div>"#,
+    );
+    let edges = |word: &str| -> Vec<InlineEdgeSide> {
+        text_block_with(&blocks, word)
+            .lines
+            .iter()
+            .flat_map(|line| &line.runs)
+            .filter_map(|run| run.metadata.inline_edge.map(|edge| edge.side))
+            .collect()
+    };
+    assert_eq!(edges("in"), [InlineEdgeSide::Opening]);
+    assert_eq!(edges("Block"), []);
+    assert_eq!(edges("more"), [InlineEdgeSide::Closing]);
+}
+
+#[test]
+fn a_list_item_puts_the_inline_content_before_a_block_in_an_inline_element_on_its_marker_line() {
+    let order = content_order("<ol><li><b>A:<ol><li>one</li></ol>after</b> tail</li></ol>");
+    assert_eq!(order, ["1. A:", "1. one", "after tail"]);
+}
+
+#[test]
+fn a_table_cell_is_as_wide_as_a_table_in_its_inline_content() {
+    /// Each table cell's lines, as words.
+    #[derive(Default)]
+    struct CellLines(Vec<Vec<String>>);
+
+    impl LayoutVisitor for CellLines {
+        fn visit_table_row(&mut self, row: &TableRow) {
+            for cell in &row.content.cells {
+                let lines = &cell.layout.content.lines;
+                self.0
+                    .push(lines.iter().map(|line| line_words([line])).collect());
+            }
+        }
+    }
+
+    let markup = r#"<table><tr><td><font><table border="1"><tr><td>nested cell text</td></tr></table></font></td></tr></table>"#;
+    let mut cells = CellLines::default();
+    for page in layout_pages(markup) {
+        for (_, element) in &page.elements {
+            visit_layout_tree(element.as_ref(), &mut cells);
+        }
+    }
+    assert!(
+        cells.0.contains(&vec!["nested cell text".to_string()]),
+        "the nested cell's text is on one line: {:?}",
+        cells.0
+    );
+}
+
+#[test]
+fn a_block_in_an_inline_element_inside_an_inline_block_keeps_its_text() {
+    // An inline-block's contents are its own lines: the block is lines of its own there, rather than dropped
+    let runs = visible_inline_box_runs(
+        r#"<div>Lead <span style="display:inline-block"><b>x<table><tr><td>Cell</td></tr></table></b></span></div>"#,
+    );
+    let words: Vec<&str> = runs.iter().map(|run| run.text.trim()).collect();
+    assert_eq!(words, ["x", "Cell"]);
 }

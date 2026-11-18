@@ -158,12 +158,14 @@ impl InlineHorizontalEdges {
 
     /// Add edge advances to the flattened content owned by this inline box.
     /// `bordered`: the box paints a border, whose sides need its edges to find
-    /// the fragments that hold them.
-    fn apply(self, runs: &mut Vec<TextRun>, start: usize, bordered: bool) {
+    /// the fragments that hold them. Returns whether it inserted an opening
+    /// edge at `start`, before the box's runs.
+    fn apply(self, runs: &mut Vec<TextRun>, start: usize, bordered: bool) -> bool {
         let retains_painted_edges = bordered
             || (self.decoration.background_color.is_some()
                 && (!self.decoration.padding.is_zero() || !self.decoration.border_radii.is_zero()));
-        if self.start != 0.0 || retains_painted_edges {
+        let opens = self.start != 0.0 || retains_painted_edges;
+        if opens {
             runs.insert(
                 start,
                 TextRun {
@@ -192,25 +194,27 @@ impl InlineHorizontalEdges {
                 ..Default::default()
             });
         }
+        opens
     }
 }
 
 /// Add one non-replaced inline box's horizontal edges to its run sequence.
+/// Returns whether it inserted an opening edge at `start`.
 fn apply_inline_horizontal_edges(
     runs: &mut Vec<TextRun>,
     start: usize,
     style: &ComputedStyle,
     parent_direction_rtl: bool,
     decoration_id: crate::layout::engine::InlineDecorationId,
-) {
+) -> bool {
     if style.writing_mode.is_vertical() {
-        return;
+        return false;
     }
     InlineHorizontalEdges::from_style(style, parent_direction_rtl, decoration_id).apply(
         runs,
         start,
         inline_border_paints(style),
-    );
+    )
 }
 
 /// Whether a non-replaced inline box paints any side of a border.
@@ -3717,6 +3721,11 @@ pub(crate) struct CollectionState {
     /// positioned element, in source order. The block that lays those
     /// elements out wraps that many runs to find each one's static position.
     out_of_flow_boundaries: Option<Vec<OutOfFlowBoundary>>,
+    /// While recording: the number of runs collected before each block-level element inside an inline element, in
+    /// source order, which the anonymous block flow lays out between the lines (CSS 2.1 §9.2.1.1).
+    block_boundaries: Option<Vec<usize>>,
+    /// How many blocks inside inline content the collector is in, gathering each as lines of its own.
+    block_lines_depth: usize,
 }
 
 /// Where an absolutely positioned element sits among a block's runs.
@@ -3810,6 +3819,21 @@ impl<'a> InlineRunCollector<'a> {
             .out_of_flow_boundaries
             .take()
             .unwrap_or_default()
+    }
+
+    /// Pass over each block-level element inside an inline element, noting how many runs come before it, for
+    /// [`Self::block_boundaries`]: the caller lays each one out as a block between the lines
+    /// ([`crate::layout::inline_formatting::blocks_in_inline`] finds them in the same order). Otherwise the collector
+    /// gathers each one's contents as lines of their own.
+    pub(crate) fn recording_blocks(mut self) -> Self {
+        self.collection.block_boundaries = Some(Vec::new());
+        self
+    }
+
+    /// How many runs come before each block-level element inside an inline element, in source order, when
+    /// recording.
+    pub(crate) fn block_boundaries(&mut self) -> Vec<usize> {
+        self.collection.block_boundaries.take().unwrap_or_default()
     }
 
     pub(crate) fn in_context(mut self, context: InlineRunContext) -> Self {
@@ -4024,8 +4048,9 @@ fn collect_text_runs_inner(
                     FontMetrics::new(fonts),
                 );
                 let role = InlineFormattingRole::of(el, &style);
-                let nested =
-                    inline_parent || matches!(context, InlineRunContext::InlineBlockContent);
+                let nested = inline_parent
+                    || matches!(context, InlineRunContext::InlineBlockContent)
+                    || collection.block_lines_depth > 0;
                 let collected_as = CollectedAs::of(context, nested, role, el, &style);
                 let collected_as_float_box = matches!(collected_as, CollectedAs::FloatBox);
                 match collected_as {
@@ -4065,6 +4090,14 @@ fn collect_text_runs_inner(
                         continue;
                     }
                     CollectedAs::Lines => {
+                        if inline_parent
+                            && !matches!(context, InlineRunContext::InlineBlockContent)
+                            && let Some(boundaries) = &mut collection.block_boundaries
+                        {
+                            // Laid out as a block between the lines by the caller
+                            boundaries.push(runs.len());
+                            continue;
+                        }
                         let counter_scope = counter_state.enter_element(&style);
                         nested_inline::collect_block_lines(
                             NestedBlock {
@@ -4309,6 +4342,7 @@ fn collect_text_runs_inner(
                         let decoration_id =
                             crate::layout::engine::InlineDecorationId::from_index(element_index);
                         collection.next_inline_decoration += 1;
+                        let blocks_before = collection.block_boundaries.as_ref().map(Vec::len);
                         collect_text_runs_inner(
                             InlineContentSequence::with_generated(
                                 &el.children,
@@ -4326,13 +4360,22 @@ fn collect_text_runs_inner(
                             resources,
                             collection,
                         );
-                        apply_inline_horizontal_edges(
+                        let opened = apply_inline_horizontal_edges(
                             runs,
                             element_start,
                             &style,
                             parent_style.direction_rtl,
                             decoration_id,
                         );
+                        // The blocks inside it come after its opening edge
+                        if opened
+                            && let (Some(from), Some(boundaries)) =
+                                (blocks_before, &mut collection.block_boundaries)
+                        {
+                            for boundary in &mut boundaries[from..] {
+                                *boundary += 1;
+                            }
+                        }
                         apply_inline_parent_background(runs, element_start, &style, decoration_id);
                         apply_inline_border(runs, element_start, &style, decoration_id, fonts);
                         resolve_target_attrs(&mut runs[element_start..], el);

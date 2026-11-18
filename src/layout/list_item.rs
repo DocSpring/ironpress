@@ -23,6 +23,9 @@ use crate::style::computed::{ComputedStyle, Display};
 pub(crate) struct ListItemBlocks {
     /// The source index the content after the marker's text block starts at.
     tail_start: usize,
+    /// The child at `tail_start` is an inline element holding a block-level
+    /// element, and its content before that block is on the marker's line.
+    lead_on_marker_line: bool,
     /// Margins of a first block whose text joined the marker's line.
     pub(crate) margin_top: f32,
     pub(crate) margin_bottom: f32,
@@ -65,6 +68,18 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
                 element_index += 1;
                 match child.role {
                     InlineFormattingRole::Hidden | InlineFormattingRole::OutOfFlow => false,
+                    _ if child.holds_block => {
+                        // Its inline content before the block can be on the
+                        // marker's line, and its content after the block
+                        // follows the block
+                        if first_block.is_none() {
+                            first_block = Some((node_index, element, child));
+                            content_after_block = true;
+                        } else {
+                            other_blocks = true;
+                        }
+                        false
+                    }
                     InlineFormattingRole::Outside => {
                         if first_block.is_none() {
                             first_block = Some((node_index, element, child));
@@ -99,6 +114,29 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
         None,
         ancestors,
     );
+    if block_child.holds_block {
+        // The inline element's content up to its first block joins the
+        // marker's line; the item's anonymous block flow lays out the rest
+        let mut collector =
+            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+                .recording_blocks();
+        collector.collect(
+            InlineContentSequence::segment(&item.children, block_index, block_index + 1),
+            style,
+            runs,
+            None,
+            ancestors,
+        );
+        if let Some(&first_block) = collector.block_boundaries().first() {
+            runs.truncate(first_block);
+        }
+        return Some(ListItemBlocks {
+            tail_start: block_index,
+            lead_on_marker_line: true,
+            margin_top: 0.0,
+            margin_bottom: 0.0,
+        });
+    }
     if runs.len() == leading_runs
         && (loose_paragraph || holds_only_text(block, block_child, style, ancestors, env))
     {
@@ -114,12 +152,14 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
             );
         return Some(ListItemBlocks {
             tail_start: block_index + 1,
+            lead_on_marker_line: false,
             margin_top: block_child.style.margin.top,
             margin_bottom: block_child.style.margin.bottom,
         });
     }
     Some(ListItemBlocks {
         tail_start: block_index,
+        lead_on_marker_line: false,
         margin_top: 0.0,
         margin_bottom: 0.0,
     })
@@ -214,7 +254,14 @@ pub(crate) fn layout_list_item_blocks(
     )
     .tail(blocks.tail_start);
     let start = output.len();
-    AnonymousBlockFlow::new(style, content.layout, content.ancestors).layout(
+    AnonymousBlockFlow::new(
+        style,
+        content.layout,
+        content.ancestors,
+        content.positioned_depth,
+    )
+    .with_first_lead_laid_out(blocks.lead_on_marker_line)
+    .layout(
         sequence,
         output,
         env,

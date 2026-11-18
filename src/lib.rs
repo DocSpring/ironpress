@@ -5531,9 +5531,9 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
-    fn blocks_inside_inline_content_take_lines_of_their_own() {
-        // A block in an inline element or an inline-block is laid out as its own lines (CSS 2.1 §9.2.1.1), the same
-        // lines forced breaks make
+    fn blocks_inside_an_inline_block_take_lines_of_their_own() {
+        // A block in an inline-block's contents is laid out as its own lines, the same lines forced breaks make. One
+        // in an inline element of a block's lines is a block between them (`layout::tests::anonymous_blocks`).
         let converter = HtmlConverter::new().compress(false);
         let layout = |html: &str| {
             let pdf = converter.convert(html).unwrap();
@@ -5547,10 +5547,6 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
             (
                 r#"<div><span style="display: inline-block"><div>Alpha</div><div>Beta</div></span></div>"#,
                 r#"<div><span style="display: inline-block">Alpha<br>Beta</span></div>"#,
-            ),
-            (
-                r#"<div>Lead <span>in <span style="display: block">B</span> more</span></div>"#,
-                r#"<div>Lead <span>in<br>B<br>more</span></div>"#,
             ),
         ] {
             assert_eq!(layout(blocks), layout(breaks), "{blocks}");
