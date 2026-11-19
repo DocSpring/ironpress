@@ -1902,16 +1902,9 @@ fn should_break_as_char_tokens(word: &str, keep_all: bool) -> bool {
     if has_cjk {
         return !keep_all;
     }
-    // `line-break:anywhere` is not represented in ComputedStyle yet, but CSS
-    // Text's anywhere behavior is needed for punctuation-heavy unspaced runs.
-    // Restrict arbitrary Latin breaks to runs that carry visible punctuation so
-    // ordinary prose words still keep their normal unbreakable min-content.
-    if word
-        .chars()
-        .any(|ch| matches!(ch, '/' | '+' | '(' | ')' | '[' | ']' | '{' | '}'))
-    {
-        return true;
-    }
+    // Other words break only at the Unicode line breaking algorithm's
+    // opportunities, as in Chrome; `line-break: anywhere` is `overflow-wrap:
+    // anywhere` in the computed style
     false
 }
 
@@ -5529,11 +5522,34 @@ mod indent_tests {
     }
 
     #[test]
+    fn a_word_in_parentheses_or_with_a_slash_breaks_only_where_uax14_allows() {
+        // A word holding `(`, `)`, `/`, `+` or brackets broke after any letter, as with `line-break: anywhere`, so a
+        // label's "(Northland)" came out as "(Northlan" and "d)". Chrome breaks such words only at the Unicode line
+        // breaking algorithm's opportunities: none inside "(Northland)" or "a+b", so the word moves to the next line
+        let fonts = parity_sans_fonts();
+        for (text, fits, expected) in [
+            (
+                "Goods (Northland) Limited",
+                "Goods (Northlan",
+                ["Goods", "(Northland)", "Limited"],
+            ),
+            ("Goods a+b Limited", "Goods a+", ["Goods", "a+b", "Limited"]),
+        ] {
+            let run = parity_run(text);
+            let width = estimate_text_width_for_run(fits, &run, &fonts);
+            let options = TextWrapOptions::new(width, 16.0, 1.2, OverflowWrap::Normal);
+            let lines = wrap_text_runs(vec![run], options, &fonts);
+            let texts = lines.iter().map(line_text).collect::<Vec<_>>();
+            assert_eq!(texts, expected, "{text}");
+        }
+    }
+
+    #[test]
     fn anywhere_tokens_use_the_same_ligature_buffer_as_paint() {
         let fonts = parity_sans_fonts();
         let run = parity_run("verification/path");
         let prefix_width = estimate_text_width_for_run("verification", &run, &fonts);
-        let options = TextWrapOptions::new(prefix_width, 16.0, 1.2, OverflowWrap::Normal);
+        let options = TextWrapOptions::new(prefix_width, 16.0, 1.2, OverflowWrap::Anywhere);
 
         let lines = wrap_text_runs(vec![run], options, &fonts);
 

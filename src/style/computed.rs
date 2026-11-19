@@ -4931,6 +4931,7 @@ fn is_inherited_property(property: &str) -> bool {
             | "overflow-wrap"
             | "word-wrap"
             | "word-break"
+            | "line-break"
             | "hyphens"
             | "border-collapse"
             | "border-spacing"
@@ -7851,6 +7852,14 @@ fn apply_style_map_with_percentage_basis(
         if k == "break-all" && style.overflow_wrap == OverflowWrap::Normal {
             style.overflow_wrap = OverflowWrap::Anywhere;
         }
+    }
+    // `line-break: anywhere` permits a break between any two characters, in
+    // every word: the same per-character split as `word-break: break-all`
+    if let Some(CssValue::Keyword(k)) = get_non_special(map, "line-break")
+        && k == "anywhere"
+        && style.overflow_wrap == OverflowWrap::Normal
+    {
+        style.overflow_wrap = OverflowWrap::Anywhere;
     }
     if let Some(CssValue::Keyword(k)) = get_non_special(map, "hyphens") {
         style.hyphens_manual = k != "none";
@@ -20491,6 +20500,25 @@ mod tests {
 
         let child = compute_style(HtmlTag::Span, None, &parent);
         assert!(child.word_break_keep_all);
+    }
+
+    #[test]
+    fn line_break_anywhere_breaks_between_any_two_characters() {
+        let parent = compute_style(
+            HtmlTag::Div,
+            Some("line-break: anywhere"),
+            &ComputedStyle::default(),
+        );
+        assert_eq!(parent.overflow_wrap, OverflowWrap::Anywhere);
+        let child = compute_style(HtmlTag::Span, None, &parent);
+        assert_eq!(child.overflow_wrap, OverflowWrap::Anywhere);
+
+        let auto = compute_style(
+            HtmlTag::Div,
+            Some("line-break: auto"),
+            &ComputedStyle::default(),
+        );
+        assert_eq!(auto.overflow_wrap, OverflowWrap::Normal);
     }
 
     #[test]
