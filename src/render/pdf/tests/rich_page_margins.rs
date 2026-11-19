@@ -208,3 +208,33 @@ fn page_wide_running_element_in_a_center_box_spans_the_page() {
 
     assert_rect_near(filled_rect(&syntax, "1 0 0"), (0.0, 160.0, 300.0, 40.0));
 }
+
+/// A running element is the containing block of the absolute boxes in it, so
+/// their insets are measured from the element in its margin box, not from the
+/// page area: a header's logo at `left: 20pt; top: 8pt` sits in the top
+/// margin, and a footer's note in the bottom one.
+#[test]
+fn absolute_boxes_in_a_running_element_are_placed_from_the_element() {
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(
+            r#"<html><head><style>
+                @page { size: 300pt 200pt; margin: 40pt 50pt 40pt 60pt;
+                    @top-center { content: element(h) }
+                    @bottom-center { content: element(f) } }
+                .band { width: 300pt; height: 40pt }
+                .band div { position: absolute; width: 20pt; height: 10pt }
+            </style></head><body>
+                <div class="band" style="position: running(h)"><div style="left: 20pt; top: 8pt; background: #ff0000"></div></div>
+                <div class="band" style="position: running(f)"><div style="left: 30pt; top: 4pt; background: #0000ff"></div></div>
+                <p>Body</p>
+            </body></html>"#,
+        )
+        .expect("running bands PDF");
+    let syntax = String::from_utf8_lossy(&pdf);
+
+    // The header band is the page's top 40pt (y 160 to 200).
+    assert_rect_near(filled_rect(&syntax, "1 0 0"), (20.0, 182.0, 20.0, 10.0));
+    // The footer band is its bottom 40pt (y 0 to 40).
+    assert_rect_near(filled_rect(&syntax, "0 0 1"), (30.0, 26.0, 20.0, 10.0));
+}

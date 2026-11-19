@@ -2105,8 +2105,13 @@ pub(crate) fn heading_level(tag: HtmlTag) -> Option<u8> {
 /// a `transform` or non-`none` `filter`. Other triggers (perspective,
 /// will-change, contain) are not modelled here. This is what lets an absolute
 /// box resolve against a transformed or filtered non-positioned ancestor.
+///
+/// A running element (`position: running(name)`) is one too: it's laid out as
+/// the content of a page-margin box, so the absolute boxes in it are placed
+/// from it there, in the margin, not from the page area.
 pub(crate) fn establishes_containing_block(style: &ComputedStyle) -> bool {
     style.position.is_positioned()
+        || style.running_name.is_some()
         || style.transform.is_some()
         || style.filter.establishes_stacking_context
 }
