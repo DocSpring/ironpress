@@ -648,8 +648,7 @@ fn parse_ttf_at_offset(
     let num_h_metrics = read_u16(&data, hhea_off + 34);
 
     let pdf_metrics = FontVerticalMetrics::new(hhea_ascent, hhea_descent, hhea_line_gap);
-    let layout_metrics =
-        parse_os2_layout_metrics(&data, tables.get(b"OS/2")).unwrap_or(pdf_metrics);
+    let layout_metrics = layout_vertical_metrics(&data, pdf_metrics, tables.get(b"OS/2"));
     let typographic_metrics =
         parse_os2_typographic_metrics(&data, tables.get(b"OS/2")).unwrap_or(layout_metrics);
 
@@ -805,21 +804,41 @@ fn measure_glyph_y_max(data: &[u8], face_index: FontFaceIndex, ch: char) -> Opti
     (bbox.y_max > 0).then_some(bbox.y_max as u16)
 }
 
-fn parse_os2_layout_metrics(data: &[u8], os2: Option<&TableRecord>) -> Option<FontVerticalMetrics> {
-    let os2 = os2?;
-    let os2_off = os2.offset as usize;
-    if data.len() < os2_off + 78 {
-        return None;
+/// The ascent, descent and line gap that line layout uses (`line-height: normal`, content areas), chosen as Chrome on
+/// Linux and macOS gets them: FreeType's selection, which Skia's leading and Blink's font metrics read. It is hhea's
+/// three values, or the OS/2 typographic ones when the font sets USE_TYPO_METRICS (fsSelection bit 7) or hhea has no
+/// ascent or descent, or else the Windows ascent and descent with no gap. The Windows metrics alone are what Chrome on
+/// Windows uses: they leave out Liberation Sans's and Liberation Serif's hhea line gaps (one pixel a line from 16px
+/// and 12px), and are far taller than hhea in fonts such as Questrial, Public Sans and Gelasio.
+fn layout_vertical_metrics(
+    data: &[u8],
+    hhea: FontVerticalMetrics,
+    os2: Option<&TableRecord>,
+) -> FontVerticalMetrics {
+    const USE_TYPO_METRICS: u16 = 1 << 7;
+    let typographic = parse_os2_typographic_metrics(data, os2);
+    let os2_off = os2.map(|table| table.offset as usize);
+    let fs_selection = os2_off
+        .filter(|&offset| data.len() >= offset + 64)
+        .map_or(0, |offset| read_u16(data, offset + 62));
+    if fs_selection & USE_TYPO_METRICS != 0
+        && let Some(typographic) = typographic
+    {
+        return typographic;
     }
-
-    // Chromium uses usWinAscent/usWinDescent (not sTypo*) for
-    // line-height:normal unless USE_TYPO_METRICS bit is set in fsSelection.
-    // Match this behavior for visual parity.
-    let win_ascent = read_u16(data, os2_off + 74) as i16;
-    let win_descent = read_u16(data, os2_off + 76) as i16;
-    // Use line_gap=0 with usWin metrics (Chrome doesn't add sTypoLineGap
-    // when using usWin metrics).
-    Some(FontVerticalMetrics::new(win_ascent, -win_descent, 0))
+    if hhea.ascent != 0 || hhea.descent != 0 {
+        return hhea;
+    }
+    if let Some(typographic) = typographic {
+        return typographic;
+    }
+    os2_off
+        .filter(|&offset| data.len() >= offset + 78)
+        .map_or(hhea, |offset| {
+            let win_ascent = read_u16(data, offset + 74) as i16;
+            let win_descent = read_u16(data, offset + 76) as i16;
+            FontVerticalMetrics::new(win_ascent, -win_descent, 0)
+        })
 }
 
 /// Parse the explicit typographic metrics from the `OS/2` table.
@@ -1728,7 +1747,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_ttf_uses_os2_typographic_metrics_for_layout() {
+    fn parse_ttf_keeps_os2_typographic_metrics_apart_from_layout() {
         let head = make_head_table(1000);
         let hhea = make_hhea_table(800, -200, 1);
         let maxp = make_maxp_table(1);
@@ -1754,14 +1773,61 @@ mod tests {
             font.pdf_vertical_metrics(),
             FontVerticalMetrics::new(800, -200, 0)
         );
-        // layout_metrics uses usWinAscent/usWinDescent for Chrome parity
+        // Without USE_TYPO_METRICS, layout follows hhea, as FreeType does
         assert_eq!(
             font.layout_vertical_metrics(),
-            FontVerticalMetrics::new(950, -350, 0)
+            FontVerticalMetrics::new(800, -200, 0)
         );
         assert_eq!(
             font.typographic_vertical_metrics(),
             FontVerticalMetrics::new(900, -300, 50)
+        );
+    }
+
+    /// Layout metrics as Chrome on Linux gets them from FreeType: hhea's ascent, descent and line gap, the OS/2
+    /// typographic ones when USE_TYPO_METRICS is set or hhea has none, and the Windows ones (without a gap) only when
+    /// neither has any.
+    #[test]
+    fn layout_metrics_follow_freetype_table_selection() {
+        let font =
+            |hhea_metrics: (i16, i16, i16), typo: (i16, i16, i16), use_typo_metrics: bool| {
+                let mut hhea = make_hhea_table(hhea_metrics.0, hhea_metrics.1, 1);
+                hhea[8..10].copy_from_slice(&hhea_metrics.2.to_be_bytes());
+                let mut os2 = vec![0u8; 78];
+                os2[62..64]
+                    .copy_from_slice(&(if use_typo_metrics { 1u16 << 7 } else { 0 }).to_be_bytes());
+                os2[68..70].copy_from_slice(&typo.0.to_be_bytes());
+                os2[70..72].copy_from_slice(&typo.1.to_be_bytes());
+                os2[72..74].copy_from_slice(&typo.2.to_be_bytes());
+                os2[74..76].copy_from_slice(&950u16.to_be_bytes());
+                os2[76..78].copy_from_slice(&350u16.to_be_bytes());
+                let data = build_full_ttf(
+                    &make_head_table(1000),
+                    &hhea,
+                    &make_maxp_table(1),
+                    &make_hmtx_table(&[500]),
+                    &make_cmap_format4(65, 65, -64),
+                    &make_name_table_ascii(1, b"Test"),
+                    Some(&os2),
+                );
+                parse_ttf(data).unwrap().layout_vertical_metrics()
+            };
+        // Liberation Sans keeps its 67-unit hhea line gap
+        assert_eq!(
+            font((800, -200, 90), (900, -300, 50), false),
+            FontVerticalMetrics::new(800, -200, 90)
+        );
+        assert_eq!(
+            font((800, -200, 90), (900, -300, 50), true),
+            FontVerticalMetrics::new(900, -300, 50)
+        );
+        assert_eq!(
+            font((0, 0, 90), (900, -300, 50), false),
+            FontVerticalMetrics::new(900, -300, 50)
+        );
+        assert_eq!(
+            font((0, 0, 90), (0, 0, 50), false),
+            FontVerticalMetrics::new(950, -350, 0)
         );
     }
 

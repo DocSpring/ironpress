@@ -466,10 +466,9 @@ pub(crate) fn font_metrics_ratios(
 ) -> (f32, f32) {
     if let FontFamily::Custom(name) = font_family {
         if let Some((_, ttf)) = system_fonts::find_font(custom_fonts, name, bold, italic) {
-            // CSS line-box layout uses the OS/2 usWin* metrics (matching Chrome's
-            // line-height:normal source), NOT the hhea metrics used for PDF font
-            // embedding. Using hhea here mispositions the text baseline within the
-            // line box relative to Chrome.
+            // CSS line-box layout uses the metrics Chrome lays lines out with
+            // (`TtfFont::layout_vertical_metrics`), which can differ from the
+            // ones embedded in the PDF.
             let metrics = ttf.layout_vertical_metrics();
             return (
                 metrics.ascender_ratio(ttf.units_per_em) * ttf.size_adjust_factor(),
@@ -906,6 +905,53 @@ mod tests {
                 metrics.normal_line_height(),
                 expected_height,
                 "font size {font_size}pt"
+            );
+        }
+    }
+
+    /// Liberation Sans and Serif (the Arial and Times New Roman metric fonts) have hhea line gaps, which Chrome on
+    /// Linux adds to `line-height: normal` once a gap rounds to a whole pixel: from 16px and 12px.
+    #[test]
+    fn normal_line_height_keeps_the_liberation_fonts_hhea_line_gaps() {
+        let font = |file: &str| {
+            let bytes = std::fs::read(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets")
+                    .join(file),
+            )
+            .expect("bundled Liberation font");
+            crate::parser::ttf::parse_ttf(bytes).expect("valid Liberation TTF")
+        };
+        let fonts = HashMap::from([
+            (
+                "liberation sans".to_string(),
+                font("LiberationSans-Regular.ttf"),
+            ),
+            (
+                "liberation serif".to_string(),
+                font("LiberationSerif-Regular.ttf"),
+            ),
+        ]);
+        // (family, font size and normal line height in points)
+        for (family, font_size, expected_height) in [
+            ("Liberation Sans", 8.25, 9.0),
+            ("Liberation Sans", 12.0, 13.5),
+            ("Liberation Sans", 16.5, 19.5),
+            ("Liberation Serif", 8.25, 9.0),
+            ("Liberation Serif", 9.0, 11.25),
+            ("Liberation Serif", 12.0, 13.5),
+        ] {
+            let metrics = font_line_metrics(
+                &FontFamily::Custom(family.to_string()),
+                font_size,
+                false,
+                false,
+                &fonts,
+            );
+            assert_eq!(
+                metrics.normal_line_height(),
+                expected_height,
+                "{family} at {font_size}pt"
             );
         }
     }
