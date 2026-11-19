@@ -12,7 +12,7 @@
 //! (or back). That is why unstyled `<code>` and `<pre>` text is 13px, while
 //! `<code>` inside `body { font-size: 12pt }` keeps 12pt.
 
-const PT_PER_PX: f32 = 0.75;
+use crate::fonts::PT_PER_CSS_PX;
 
 /// Chromium's default proportional and monospace font sizes, in px.
 const DEFAULT_PX: f32 = 16.0;
@@ -55,7 +55,7 @@ impl FontSizeKeyword {
         } else {
             &KEYWORD_PX
         };
-        table[usize::from(self.0)] * PT_PER_PX
+        table[usize::from(self.0)] * PT_PER_CSS_PX
     }
 }
 
@@ -159,7 +159,7 @@ mod tests {
 
     fn declared(size_px: f32, origin: FontSizeOrigin) -> DeclaredFontSize {
         DeclaredFontSize {
-            size: size_px * PT_PER_PX,
+            size: size_px * PT_PER_CSS_PX,
             origin,
         }
     }
@@ -167,9 +167,9 @@ mod tests {
     #[test]
     fn keywords_use_blinks_table_for_each_family() {
         let small = FontSizeKeyword::parse("SMALL").expect("a keyword");
-        assert_eq!(small.size(false), 13.0 * PT_PER_PX);
-        assert_eq!(small.size(true), 12.0 * PT_PER_PX);
-        assert_eq!(FontSizeKeyword::MEDIUM.size(true), 13.0 * PT_PER_PX);
+        assert_eq!(small.size(false), 13.0 * PT_PER_CSS_PX);
+        assert_eq!(small.size(true), 12.0 * PT_PER_CSS_PX);
+        assert_eq!(FontSizeKeyword::MEDIUM.size(true), 13.0 * PT_PER_CSS_PX);
         assert_eq!(FontSizeKeyword::parse("smaller"), None);
     }
 
@@ -181,29 +181,29 @@ mod tests {
             true,
             false,
         );
-        assert_eq!(size, 13.0 * PT_PER_PX);
+        assert_eq!(size, 13.0 * PT_PER_CSS_PX);
     }
 
     #[test]
     fn monospace_in_relative_sizes_scales_by_13_16() {
         let h1 = FontSizeOrigin::relative_to(FontSizeOrigin::default());
         let size = size_for_generic_family(declared(32.0, h1), false, true, false);
-        assert_eq!(size, 26.0 * PT_PER_PX);
+        assert_eq!(size, 26.0 * PT_PER_CSS_PX);
         let back = size_for_generic_family(declared(26.0, h1), false, false, true);
-        assert_eq!(back, 32.0 * PT_PER_PX);
+        assert_eq!(back, 32.0 * PT_PER_CSS_PX);
     }
 
     #[test]
     fn an_absolute_size_anywhere_above_keeps_monospace_text_its_size() {
         let size =
             size_for_generic_family(declared(16.0, FontSizeOrigin::ABSOLUTE), false, true, false);
-        assert_eq!(size, 16.0 * PT_PER_PX);
+        assert_eq!(size, 16.0 * PT_PER_CSS_PX);
     }
 
     #[test]
     fn the_same_family_as_the_parent_keeps_the_size() {
         let size =
             size_for_generic_family(declared(13.0, FontSizeOrigin::default()), false, true, true);
-        assert_eq!(size, 13.0 * PT_PER_PX);
+        assert_eq!(size, 13.0 * PT_PER_CSS_PX);
     }
 }

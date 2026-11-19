@@ -348,7 +348,10 @@ fn explicit_run_metadata_drives_decoration_and_drop_cap_state() {
     run.metadata.is_drop_cap = true;
 
     let decoration = &run.decorations[0];
-    assert!(decoration_is_wavy(decoration));
+    assert_eq!(
+        decoration.style,
+        crate::style::computed::TextDecorationStyle::Wavy
+    );
     assert!(decoration_is_emphasis(&run));
     assert_eq!(decoration_thickness(&run, decoration), 1.25);
     assert_eq!(underline_center_y(&run, decoration, 10.0), 6.875);

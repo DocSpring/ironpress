@@ -10,7 +10,7 @@ use crate::types::Color;
 
 use super::support::{layout_pages, visible_runs};
 
-const PT_PER_PX: f32 = 0.75;
+use crate::fonts::PT_PER_CSS_PX;
 
 /// The run holding `word`.
 fn run<'a>(runs: &'a [TextRun], word: &str) -> &'a TextRun {
@@ -29,7 +29,7 @@ fn texts(runs: &[TextRun]) -> Vec<&str> {
 
 /// `word`'s font size in CSS px.
 fn px(runs: &[TextRun], word: &str) -> f32 {
-    run(runs, word).font_size / PT_PER_PX
+    run(runs, word).font_size / PT_PER_CSS_PX
 }
 
 fn assert_px(runs: &[TextRun], word: &str, expected: f32) {
@@ -94,7 +94,7 @@ fn the_font_shorthands_em_line_height_follows_the_monospace_size() {
     // Chrome 157: `font: 1em/2em monospace` is 13px text on a 26px line.
     let runs = visible_runs("<p style=\"font: 1em/2em monospace\">shorthandline</p>");
     let run = run(&runs, "shorthandline");
-    let line_height_px = run.line_height_factor * run.font_size / PT_PER_PX;
+    let line_height_px = run.line_height_factor * run.font_size / PT_PER_CSS_PX;
     assert!(
         (line_height_px - 26.0).abs() < 0.01,
         "expected a 26px line, got {line_height_px}px"
@@ -204,7 +204,7 @@ fn block_margins_match_chrome() {
     let tops: Vec<f32> = pages[0]
         .elements
         .iter()
-        .map(|(top, _)| top / PT_PER_PX)
+        .map(|(top, _)| top / PT_PER_CSS_PX)
         .collect();
     // Chrome's border-box tops for the dt, dd, figure, pre and the three hrs.
     let expected = [16.0, 34.0, 68.0, 102.0, 136.0, 146.0, 156.0];
@@ -216,7 +216,7 @@ fn block_margins_match_chrome() {
     // An `<hr>` with a width is centred (`margin-inline: auto`) unless the
     // author's margins replace the auto ones.
     // Border boxes: half the 390pt content width plus the 1px borders.
-    let half = 390.0 / 2.0 + 2.0 * PT_PER_PX;
+    let half = 390.0 / 2.0 + 2.0 * PT_PER_CSS_PX;
     let boxes: Vec<(f32, f32)> = pages[0].elements[5..]
         .iter()
         .map(|(_, element)| crate::layout::block::child_x_and_width(element.as_ref()))

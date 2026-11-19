@@ -17,13 +17,6 @@ pub(in crate::render::pdf) fn underline_center_y(
     baseline_y - crate::render::text_decoration::underline_distance_from_baseline(run, decoration)
 }
 
-#[cfg(test)]
-pub(in crate::render::pdf) fn decoration_is_wavy(
-    decoration: &crate::style::computed::TextDecoration,
-) -> bool {
-    decoration.style == crate::style::computed::TextDecorationStyle::Wavy
-}
-
 impl DecorationLine {
     fn wavy_axis_offset(self, thickness: f32) -> f32 {
         let offset = thickness + crate::fonts::PT_PER_CSS_PX;
