@@ -1288,6 +1288,20 @@
       "reference_file": "cases/block-box-model/block-subpoint-height-continuation.html",
       "reference_html_sha256": "6f475dc10f0bec74a60c7e43121baf330bdc1cd515e5ad452b3de2bdd66279a9"
     },
+    "block-ua-center-and-hr-attributes": {
+      "category": "block-box-model",
+      "file": "cases/block-box-model/block-ua-center-and-hr-attributes.html",
+      "html_sha256": "8efbd140dc3c5f57cb1d8f9cc38fa96ceddcd66e7d31069aa5320d3646755695",
+      "manifest_sha256": "7acf887df71a43089c0eeb4aff50dca592330624226decd8e1dc4ffdc5b4adf7",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/block-box-model/block-ua-center-and-hr-attributes.pdf",
+        "sha256": "59faa6d4cb2fe98cb445e53b7023189b05ba78763e9730d9fb84e9fbf9761dc8"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/block-box-model/block-ua-center-and-hr-attributes.html",
+      "reference_html_sha256": "8efbd140dc3c5f57cb1d8f9cc38fa96ceddcd66e7d31069aa5320d3646755695"
+    },
     "block-ua-grouping-elements": {
       "category": "block-box-model",
       "file": "cases/block-box-model/block-ua-grouping-elements.html",
@@ -2015,6 +2029,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/backgrounds-borders/border-width-keywords.html",
       "reference_html_sha256": "9a5cea5e6ef10f8e8b6cdea32bfa8f7309b68438bd90c3b0525bc6cc3038ac98"
+    },
+    "border-width-snapped-to-pixels": {
+      "category": "backgrounds-borders",
+      "file": "cases/backgrounds-borders/border-width-snapped-to-pixels.html",
+      "html_sha256": "a436d8c778b22bc1abaaeb51cdb545d578e3e598ca2af185f7278cb79d648283",
+      "manifest_sha256": "7ff70ce307e8f693ba9ac8a15292e598af48122916fdec3f899b33b3a061f113",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/backgrounds-borders/border-width-snapped-to-pixels.pdf",
+        "sha256": "cbb8c475d01f48d12a50eee19f35cb6e70fb930c9bb69114f855d08f42386b89"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/backgrounds-borders/border-width-snapped-to-pixels.html",
+      "reference_html_sha256": "a436d8c778b22bc1abaaeb51cdb545d578e3e598ca2af185f7278cb79d648283"
     },
     "border-x-box-shadow": {
       "category": "backgrounds-borders",
@@ -4050,15 +4078,15 @@
       "category": "flexbox",
       "file": "cases/flexbox/flexbox-display-inline-flex.html",
       "html_sha256": "779e96a93ad1125258595266dfe67d1a01d98536a42f3aa3836152926d2cd618",
-      "manifest_sha256": "c4d8b20910bdd36fab69806a1a5ff8da5886eb55159b15a8160388731f0bd3c2",
+      "manifest_sha256": "86c17f50b799e49ed2c61c63de7054db3e80f169091e17ab01fd3ed20e30f786",
       "oracle": "chrome",
       "pdf": {
         "file": "oracles/flexbox/flexbox-display-inline-flex.pdf",
-        "sha256": "00209f6092e8781ec3745ba46f282229714a5754082a1e05adcee027a0f3ff67"
+        "sha256": "3a25dbc1cacccc98b6a5d9e9ae2eaf3ce1f99a21d8fbc0ed0519c026c4295412"
       },
-      "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
-      "reference_file": "references/flexbox/flexbox-display-inline-flex.html",
-      "reference_html_sha256": "5725a7f5f7083540ce9dacf39f133fed897204eb9d698c15005d86d9e5ffd770"
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/flexbox/flexbox-display-inline-flex.html",
+      "reference_html_sha256": "779e96a93ad1125258595266dfe67d1a01d98536a42f3aa3836152926d2cd618"
     },
     "flexbox-display-inline-flex-two-keyword": {
       "category": "flexbox",
@@ -5865,6 +5893,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/generated-content/generated-content-first-letter-dropcap.html",
       "reference_html_sha256": "4af266cb62375453750ca983e91ee09f9dfd897e6053b3d81e07792c9628c49b"
+    },
+    "generated-content-first-letter-in-list-items": {
+      "category": "generated-content",
+      "file": "cases/generated-content/generated-content-first-letter-in-list-items.html",
+      "html_sha256": "965be0f27681849a121e698109f069374a20ff35b78a633b4baab392b4b93c89",
+      "manifest_sha256": "67ca6b3b0e0e38efda7ba13ddeadfab238e4b135ac53dd68e7662a592a1821cb",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/generated-content/generated-content-first-letter-in-list-items.pdf",
+        "sha256": "a35edcfc6ebcd2ca2ef21e260e800b807de32c2120832cc76568e77f70b3a3e4"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/generated-content/generated-content-first-letter-in-list-items.html",
+      "reference_html_sha256": "965be0f27681849a121e698109f069374a20ff35b78a633b4baab392b4b93c89"
     },
     "generated-content-first-letter-leading-digit": {
       "category": "generated-content",
@@ -7980,6 +8022,48 @@
       "reference_file": "cases/interactions/inline-block-x-vertical-align.html",
       "reference_html_sha256": "79855f2ed8e784f4742b4fc010b45978d6365fe3ea08eebd491f482c86a9847c"
     },
+    "inline-text-atomic-boxes-in-items": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-atomic-boxes-in-items.html",
+      "html_sha256": "cef03e21ed1919b7cb2a88128b2a388f4c8ec0880a2bde133756c70a32aba115",
+      "manifest_sha256": "eadf9831fbe29552d02eae16526f39f005eb70dcd079985b08699bf953b19ee7",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-atomic-boxes-in-items.pdf",
+        "sha256": "7813ea5a0ab8a7de3c05ecc36a91a13881e2eb5b733e7a5de081df7aa31bf83b"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-atomic-boxes-in-items.html",
+      "reference_html_sha256": "cef03e21ed1919b7cb2a88128b2a388f4c8ec0880a2bde133756c70a32aba115"
+    },
+    "inline-text-atomic-boxes-in-lines": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-atomic-boxes-in-lines.html",
+      "html_sha256": "42517ed688cf265553d4bb53b05feb7247463c206cfbdab1faa4a72bbd821887",
+      "manifest_sha256": "bb44108fca359f3a4a069e7660d2dec3a968e2736ebbf667e00138f298907abd",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-atomic-boxes-in-lines.pdf",
+        "sha256": "14025af1a9d25e8a459e411f321d5e51808d6f76fbca7cb9f4a1ce74a73520ff"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-atomic-boxes-in-lines.html",
+      "reference_html_sha256": "42517ed688cf265553d4bb53b05feb7247463c206cfbdab1faa4a72bbd821887"
+    },
+    "inline-text-blocks-in-inline-elements": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-blocks-in-inline-elements.html",
+      "html_sha256": "321cfd4e3bbdb352bb391d9c493ff0cf86f130b7e957ea0b8f2ced4a755659d0",
+      "manifest_sha256": "ba850a12092b501d4377ef6257c416e875e81ff93f472ba5c77f4968e64855f7",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-blocks-in-inline-elements.pdf",
+        "sha256": "252b887ec09d1febba6de58ceb99507532ffcaf5f47015132aefff92361c87bd"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-blocks-in-inline-elements.html",
+      "reference_html_sha256": "321cfd4e3bbdb352bb391d9c493ff0cf86f130b7e957ea0b8f2ced4a755659d0"
+    },
     "inline-text-break-spaces-trailing-wrap": {
       "category": "inline-text",
       "file": "cases/inline-text/inline-text-break-spaces-trailing-wrap.html",
@@ -8134,6 +8218,20 @@
       "reference_file": "cases/inline-text/inline-text-inline-border.html",
       "reference_html_sha256": "159c719a39da349a96fd1520e69355d72ebfbf2f1c27f61f7421a72e0f315959"
     },
+    "inline-text-inline-table-grid-baselines": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-inline-table-grid-baselines.html",
+      "html_sha256": "c1253a8b2f0032ea35070b4895232a44a4153bee9375de9d870a942bc63aae58",
+      "manifest_sha256": "8fb89f1dee43fd49f7590e1ad28337ea97d7bad6bd376c1553fe2d1c3da0f985",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-inline-table-grid-baselines.pdf",
+        "sha256": "7f2b661b3be3cb9997786ea76d5032486bde3365112a0c5a53330d537cd841af"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-inline-table-grid-baselines.html",
+      "reference_html_sha256": "c1253a8b2f0032ea35070b4895232a44a4153bee9375de9d870a942bc63aae58"
+    },
     "inline-text-letter-spacing": {
       "category": "inline-text",
       "file": "cases/inline-text/inline-text-letter-spacing.html",
@@ -8231,6 +8329,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/inline-text/inline-text-overflow-wrap-break-word.html",
       "reference_html_sha256": "6b491bbbffc73a78ad38f3211c1f5a5ee1bb14cb751af9321060435069790b02"
+    },
+    "inline-text-replaced-in-inline-elements": {
+      "category": "inline-text",
+      "file": "cases/inline-text/inline-text-replaced-in-inline-elements.html",
+      "html_sha256": "2f81ed77f3591d11968869d28d020181aaac62bc23b7f46a3cb887e1849346c0",
+      "manifest_sha256": "e670f3efa4a9585e6532cd31eda6547b484e5e722a12f3e12757746bfd4c79cf",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/inline-text/inline-text-replaced-in-inline-elements.pdf",
+        "sha256": "fe390ced845e758e55b378dc6e80eee74ecae76f9408aed3639de01dbdf4c5d2"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/inline-text/inline-text-replaced-in-inline-elements.html",
+      "reference_html_sha256": "2f81ed77f3591d11968869d28d020181aaac62bc23b7f46a3cb887e1849346c0"
     },
     "inline-text-svg-in-span": {
       "category": "inline-text",
@@ -14182,6 +14294,20 @@
       "reference_file": "cases/lists-counters/lists-counters-li-value.html",
       "reference_html_sha256": "59902778d38e434949b1789409eaa2e33d91c498fcf2adfcc7da4a985652a77d"
     },
+    "lists-counters-list-in-columns": {
+      "category": "lists-counters",
+      "file": "cases/lists-counters/lists-counters-list-in-columns.html",
+      "html_sha256": "1774b4554be1e04db3706a2cb42783454a3cd6ba666839314d447b3ebd69f84f",
+      "manifest_sha256": "0dee715d0097d27c87cf9795e604aca10afd20dcbc9f1244e493166a094db241",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/lists-counters/lists-counters-list-in-columns.pdf",
+        "sha256": "d404c2ee35e485b795539fca404ce86c8ebf610785795c7278cac7526609476a"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/lists-counters/lists-counters-list-in-columns.html",
+      "reference_html_sha256": "1774b4554be1e04db3706a2cb42783454a3cd6ba666839314d447b3ebd69f84f"
+    },
     "lists-counters-list-item-increment-step": {
       "category": "lists-counters",
       "file": "cases/lists-counters/lists-counters-list-item-increment-step.html",
@@ -15974,6 +16100,20 @@
       "reference_file": "cases/paged-media/paged-flex-column-fragmentation.html",
       "reference_html_sha256": "c331963a27e58910409c51200b4564b526c735a5710e4d3d86886a830928e8b4"
     },
+    "paged-floats-continue-on-next-page": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-floats-continue-on-next-page.html",
+      "html_sha256": "875f7e4eeccdb28033e4ce41d41d70c25090c4995b23a261d17efa58de40fea8",
+      "manifest_sha256": "05d34274f6010fec17ba9ec3a1e3256c46e271831b97b4c3b71e06ccc19bdff3",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-floats-continue-on-next-page.pdf",
+        "sha256": "854e530ffc63735c3aabb6c0fb95f2124153d3aa003ab5e40e06c1ab924e3df1"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-floats-continue-on-next-page.html",
+      "reference_html_sha256": "875f7e4eeccdb28033e4ce41d41d70c25090c4995b23a261d17efa58de40fea8"
+    },
     "paged-footnote-counter-reset": {
       "category": "paged-media",
       "file": "cases/paged-media/paged-footnote-counter-reset.html",
@@ -16912,6 +17052,20 @@
       "reference_file": "cases/positioning/positioning-float-paint-order.html",
       "reference_html_sha256": "daa4e41158012361c8cad57b82979482f750532373d1a43f90c0b1e64c801d06"
     },
+    "positioning-float-shrink-to-fit": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-float-shrink-to-fit.html",
+      "html_sha256": "a4b0a208c2b89b86bbbaa59a50ea7d2f1197f5fc361353ce464284ce72ad4ff6",
+      "manifest_sha256": "556e3ba403a3910b95a5096371640277d0498712c1c840c068d280246ef70773",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-float-shrink-to-fit.pdf",
+        "sha256": "72e64507ac5b7c1bf236e988879fc9821fe717d4ce0bbfcfb125d14e5e051d39"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-float-shrink-to-fit.html",
+      "reference_html_sha256": "a4b0a208c2b89b86bbbaa59a50ea7d2f1197f5fc361353ce464284ce72ad4ff6"
+    },
     "positioning-float-text-align": {
       "category": "positioning",
       "file": "cases/positioning/positioning-float-text-align.html",
@@ -17233,6 +17387,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/positioning/positioning-relative-percent-offset.html",
       "reference_html_sha256": "490f787562e8f0ed28ae0320832b4a106a521f110840e41751b6bdad476f8c4a"
+    },
+    "positioning-text-beside-absolute-pseudo": {
+      "category": "positioning",
+      "file": "cases/positioning/positioning-text-beside-absolute-pseudo.html",
+      "html_sha256": "d54b1ceeb2707abdc14e618122eddcf6592d2e7f2d01e3ee2977751a00f24c9d",
+      "manifest_sha256": "da08307ad13c179f6de97c9e08a528356d51f0a5aeae4040ee7fcb347ff9b029",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/positioning/positioning-text-beside-absolute-pseudo.pdf",
+        "sha256": "54a84f94fe5eec4f1bd7f900979683a15c83233d3b342a04016bbc53ebfab4a0"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/positioning/positioning-text-beside-absolute-pseudo.html",
+      "reference_html_sha256": "d54b1ceeb2707abdc14e618122eddcf6592d2e7f2d01e3ee2977751a00f24c9d"
     },
     "positioning-transform-establishes-containing-block": {
       "category": "positioning",
@@ -20860,6 +21028,20 @@
       "reference_file": "cases/tables/tables-collapse-cell-over-row.html",
       "reference_html_sha256": "3cb104cc6572ea1bddd6e240a6ff47bebf01390109e96853b6080dfe46dfda17"
     },
+    "tables-collapse-dashed-edges": {
+      "category": "tables",
+      "file": "cases/tables/tables-collapse-dashed-edges.html",
+      "html_sha256": "1a41b56372b868ce69190b466d8f1829086a7b0319a3ed49c086f802692a4568",
+      "manifest_sha256": "e854372d02695a1e59d41ca0ac51b7ef5273ebabf9e6aba0eb76197390878249",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/tables/tables-collapse-dashed-edges.pdf",
+        "sha256": "34818f22e84b67873862569c2a79f7f39ab483bdd01dc0a58ae555ef62bca5ef"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/tables/tables-collapse-dashed-edges.html",
+      "reference_html_sha256": "1a41b56372b868ce69190b466d8f1829086a7b0319a3ed49c086f802692a4568"
+    },
     "tables-collapse-directional-tie": {
       "category": "tables",
       "file": "cases/tables/tables-collapse-directional-tie.html",
@@ -20943,6 +21125,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "references/tables/tables-collapse-span-origin-conflicts.html",
       "reference_html_sha256": "82b8f2d52206beebe5e6cd1ee39a83f1717cd26a5efc4a7ee8c5e9641ff8b2f3"
+    },
+    "tables-collapsed-break-between-rows": {
+      "category": "tables",
+      "file": "cases/tables/tables-collapsed-break-between-rows.html",
+      "html_sha256": "a5a533af9ee853fddf9996a1a4a584d8fd4e4c0585cb039f9a12931eda45c1e4",
+      "manifest_sha256": "221845eb78d9ab2e99c8c6347041966bccc34d94ca39fd5c56801434f13dc4ce",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/tables/tables-collapsed-break-between-rows.pdf",
+        "sha256": "b4dcd4a4d917322402e4443640219cc4e548656f911340517a6778fa2b2f641e"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/tables/tables-collapsed-break-between-rows.html",
+      "reference_html_sha256": "a5a533af9ee853fddf9996a1a4a584d8fd4e4c0585cb039f9a12931eda45c1e4"
     },
     "tables-colspan": {
       "category": "tables",
@@ -21783,6 +21979,20 @@
       "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
       "reference_file": "cases/text-advanced/text-advanced-bidi-mixed-lines.html",
       "reference_html_sha256": "430b2f4d0efbdd46be4904bf7285f859193e6f3d5d58e036f95e0632f02d6259"
+    },
+    "text-advanced-bidi-paragraph-levels": {
+      "category": "text-advanced",
+      "file": "cases/text-advanced/text-advanced-bidi-paragraph-levels.html",
+      "html_sha256": "cc497c72d6375de44b851704162e594b0347b083897d8ce770ec31fdc56ae830",
+      "manifest_sha256": "64a4417e71303cc770f28aef1ee4ffd85a5f889151f03ee82358684324822a30",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/text-advanced/text-advanced-bidi-paragraph-levels.pdf",
+        "sha256": "761e5de6966c1cbecf5b48b22a9086decbdc943005a3ca6afcd1cad7f79e87d8"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/text-advanced/text-advanced-bidi-paragraph-levels.html",
+      "reference_html_sha256": "cc497c72d6375de44b851704162e594b0347b083897d8ce770ec31fdc56ae830"
     },
     "text-advanced-dir-auto": {
       "category": "text-advanced",
@@ -23351,6 +23561,20 @@
       "provenance": "5c78c8ba32f531a87b1ae51ea9c5acc95267d26b5ef1693c973ffd1ed7128a1f",
       "reference_file": "cases/typography/typography-line-height-length.html",
       "reference_html_sha256": "fa01a53793700d0163e861addc465834c91da15e6e73fba0e93f47a69d197545"
+    },
+    "typography-line-height-normal-font-tables": {
+      "category": "typography",
+      "file": "cases/typography/typography-line-height-normal-font-tables.html",
+      "html_sha256": "e57a148b0d44bad1e249c93fb45a4627f10e21d5cf80fd50f20ca2eb66d77121",
+      "manifest_sha256": "13d00cd93c38fc4defe2d2b7edaa69c56bcecacdc81b97793a379501eaecc5cc",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/typography/typography-line-height-normal-font-tables.pdf",
+        "sha256": "2be0fec7e4bdf861754bb7ee3feb8117d70b39843397602de3cc6b117e28fc8b"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/typography/typography-line-height-normal-font-tables.html",
+      "reference_html_sha256": "e57a148b0d44bad1e249c93fb45a4627f10e21d5cf80fd50f20ca2eb66d77121"
     },
     "typography-line-height-numeric": {
       "category": "typography",

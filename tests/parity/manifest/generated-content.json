@@ -644,6 +644,24 @@
     "kind": "feature",
     "oracle": "chrome",
     "expected_support": "implemented",
-    "depends_on": ["probe-fill-box", "probe-block-flow"]
+    "depends_on": [
+      "probe-fill-box",
+      "probe-block-flow"
+    ]
+  },
+  {
+    "id": "generated-content-first-letter-in-list-items",
+    "category": "generated-content",
+    "feature": "first-letter",
+    "subfeature": "list-items-and-line-height",
+    "description": "::first-letter on li styles the item's first letter (after any leading punctuation, inside a strong) but not its marker, and a first letter twice the size makes its line taller. Catches: ::first-letter ignored on list items, applied to the marker, or a large first letter that doesn't grow its line.",
+    "file": "cases/generated-content/generated-content-first-letter-in-list-items.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

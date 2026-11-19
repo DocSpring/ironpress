@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>inline-table, inline-grid and inline-flex baselines</title>
+<style>
+  @page { size: 424px 336px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 0; }
+  p { margin: 0 0 12px; border-bottom: 1px solid #e0e0e0; }
+  .t { display: inline-table; border: 2px solid #5c6bc0; border-spacing: 2px; }
+  .t span { display: table-cell; padding: 2px 6px; background: #c5cae9; }
+  .g { display: inline-grid; grid-template-columns: 30px 30px; gap: 4px; border: 2px solid #26a69a; }
+  .g span { background: #b2dfdb; font-size: 11px; }
+  .f { display: inline-flex; align-items: flex-end; gap: 4px; border: 2px solid #ef6c00; }
+  .f span { background: #ffe0b2; padding: 0 4px; }
+  .big { font-size: 22px; line-height: 30px; }
+</style>
+</head>
+<body>
+  <p>Table <span class="t"><span style="display: table-row"><span>A</span><span>B</span></span><span style="display: table-row"><span>C</span><span>D</span></span></span> after</p>
+  <p>Grid <span class="g"><span>one</span><span>two</span><span>3</span><span>4</span></span> after</p>
+  <p>Flex <span class="f"><span class="big">Big</span><span>small</span></span> after</p>
+  <p>Empty <span class="g" style="height: 30px"></span> <span class="f" style="height: 24px; width: 30px"></span> end</p>
+  <p>Top <span class="t" style="vertical-align: top"><span style="display: table-row"><span>T</span></span><span style="display: table-row"><span>2</span></span></span> middle <span class="g" style="vertical-align: middle"><span>m</span><span>m</span><span>m</span><span>m</span></span> end</p>
+</body>
+</html>

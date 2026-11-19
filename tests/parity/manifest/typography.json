@@ -364,5 +364,19 @@
     "depends_on": [
       "probe-text-baseline"
     ]
+  },
+  {
+    "id": "typography-line-height-normal-font-tables",
+    "category": "typography",
+    "feature": "line-height",
+    "subfeature": "normal-font-tables",
+    "description": "line-height: normal and inline content areas from each font's tables, as Chrome on Linux reads them through FreeType: hhea's ascent, descent and line gap (Liberation Serif and Sans, the generic serif and sans-serif faces, whose gaps round to a pixel from 12px and 16px), and the OS/2 typographic metrics when USE_TYPO_METRICS is set (embedded Questrial and Poppins subsets, whose Windows metrics are much taller). Catches: lines laid out from the Windows metrics, a dropped hhea line gap, and USE_TYPO_METRICS ignored.",
+    "file": "cases/typography/typography-line-height-normal-font-tables.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline"
+    ]
   }
 ]

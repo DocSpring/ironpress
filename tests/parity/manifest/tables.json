@@ -1436,5 +1436,20 @@
       "probe-fill-box",
       "probe-block-flow"
     ]
+  },
+  {
+    "id": "tables-collapsed-break-between-rows",
+    "category": "tables",
+    "feature": "border-collapse",
+    "subfeature": "break-between-rows",
+    "description": "A border-collapse table broken across pages between body rows draws the shared row line at the bottom of the first page and repeats its header on the next. Catches: the last row on a page left open at the bottom.",
+    "file": "cases/tables/tables-collapsed-break-between-rows.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

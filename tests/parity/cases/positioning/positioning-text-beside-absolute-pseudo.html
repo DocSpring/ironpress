@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>text in a positioned box with an absolute pseudo-element</title>
+<style>
+  @page { size: 424px 216px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 0; }
+  .tag { position: relative; padding: 4px 8px 4px 28px; margin-bottom: 12px; background: #e3f2fd; }
+  .tag::before { content: ""; position: absolute; left: 6px; top: 6px; width: 14px; height: 14px; background: #1e88e5; }
+  .tag.after::before { content: none; }
+  .tag.after::after { content: "new"; position: absolute; right: 6px; top: 4px; color: #c62828; }
+  .chip { position: absolute; left: 240px; width: 140px; padding: 4px; background: #fce4ec; }
+  .chip::before { content: "*"; position: absolute; top: 4px; right: 4px; color: #ad1457; }
+</style>
+</head>
+<body>
+  <div class="tag">Text beside a positioned square</div>
+  <div class="tag after">Text with a positioned label after it</div>
+  <div class="tag">Text with <b>bold</b> and <span style="display: inline-block; width: 20px; height: 10px; background: #43a047"></span> a box</div>
+  <div class="chip">Absolute box with an absolute marker</div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>first-letter on list items and line height</title>
+<style>
+  @page { size: 440px 288px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 12px; background: #ffffff; color: #212121; }
+  body { margin: 0; }
+  p { margin: 0; background: #e3f2fd; }
+  ol, ul { margin: 8px 0; }
+  .fl::first-letter, li.fl::first-letter, ol.all li::first-letter { font-size: 200%; font-weight: bold; color: #c2410c; }
+</style>
+</head>
+<body>
+  <p class="fl">Paragraph whose first letter is twice the size makes its first line taller.</p>
+  <p>The next paragraph starts below that taller line.</p>
+  <ol class="all"><li>List item first letter</li><li><strong>Strong</strong> first letter</li><li>"Quoted" first letter</li></ol>
+  <ul><li class="fl">Bullet first letter</li><li>Plain bullet</li></ul>
+</body>
+</html>

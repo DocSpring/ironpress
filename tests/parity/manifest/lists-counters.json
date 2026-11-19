@@ -601,5 +601,20 @@
       "probe-text-baseline",
       "probe-fill-box"
     ]
+  },
+  {
+    "id": "lists-counters-list-in-columns",
+    "category": "lists-counters",
+    "feature": "multicol",
+    "subfeature": "list-in-columns",
+    "description": "columns and column-width on ol and ul lay their items out in columns, numbered in document order (including start and lower-roman), with the column rule between them. Catches: columns on a list ignored, and items renumbered from one in each column.",
+    "file": "cases/lists-counters/lists-counters-list-in-columns.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

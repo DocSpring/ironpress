@@ -855,5 +855,41 @@
       "probe-text-baseline",
       "probe-fill-box"
     ]
+  },
+  {
+    "id": "inline-text-atomic-boxes-in-lines",
+    "category": "inline-text",
+    "feature": "atomic-inline",
+    "subfeature": "in-lines",
+    "description": "Inline-blocks and images sharing lines with text: body-level inline content around a block, two inline-blocks that exactly fill and just overflow a line, an image and an inline-block between words with no spaces in a narrow box (each is a soft wrap opportunity) and the same with white-space:nowrap, and a paragraph with line breaks. Catches: atomic boxes on rows of their own, body text lost or split around blocks, boxes that never wrap or wrap a pixel early, and lines that don't take a box's height.",
+    "file": "cases/inline-text/inline-text-atomic-boxes-in-lines.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-text-baseline", "probe-fill-box"]
+  },
+  {
+    "id": "inline-text-inline-table-grid-baselines",
+    "category": "inline-text",
+    "feature": "atomic-inline",
+    "subfeature": "table-grid-flex-baselines",
+    "description": "An inline-table, inline-grid and inline-flex beside text, aligned by their first line's baseline; empty inline-grid and inline-flex boxes with heights, aligned by their bottom margin edge; and vertical-align top and middle. Catches: inline tables and grids laid out on rows of their own, aligned by their bottom edge or overlapping the next line.",
+    "file": "cases/inline-text/inline-text-inline-table-grid-baselines.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-text-baseline", "probe-fill-box"]
+  },
+  {
+    "id": "inline-text-atomic-boxes-in-items",
+    "category": "inline-text",
+    "feature": "atomic-inline",
+    "subfeature": "in-items",
+    "description": "Inline-blocks holding a block, an image and an inline-flex in table cells, list items, a loose paragraph in a list item, simple flex items (inside a span and in a flex:1 item) and a grid item. Catches: inline-blocks whose contents are flattened into text lines, collapsed to one line's height, or missing from cells and items.",
+    "file": "cases/inline-text/inline-text-atomic-boxes-in-items.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-text-baseline", "probe-fill-box"]
   }
 ]

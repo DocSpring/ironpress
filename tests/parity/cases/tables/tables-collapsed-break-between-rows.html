@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>collapsed table broken between rows</title>
+<style>
+  @page { size: 360px 200px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 12px; line-height: 16px; background: #ffffff; color: #212121; }
+  body { margin: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border: 2px solid #37474f; padding: 4px 6px; }
+  th { background: #cfd8dc; }
+  tr:nth-child(even) td { background: #eceff1; }
+</style>
+</head>
+<body>
+  <table>
+    <thead><tr><th>Item</th><th>Hours</th><th>Amount</th></tr></thead>
+    <tbody>
+      <tr><td>Design review</td><td>2</td><td>240.00</td></tr>
+      <tr><td>Layout changes</td><td>5</td><td>600.00</td></tr>
+      <tr><td>Copy editing</td><td>1</td><td>90.00</td></tr>
+      <tr><td>Proofs</td><td>3</td><td>360.00</td></tr>
+      <tr><td>Print setup</td><td>2</td><td>240.00</td></tr>
+      <tr><td>Delivery</td><td>1</td><td>80.00</td></tr>
+      <tr><td>Revisions</td><td>4</td><td>480.00</td></tr>
+      <tr><td>Archive</td><td>1</td><td>60.00</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

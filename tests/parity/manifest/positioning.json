@@ -640,5 +640,20 @@
       "probe-fill-box",
       "probe-block-flow"
     ]
+  },
+  {
+    "id": "positioning-text-beside-absolute-pseudo",
+    "category": "positioning",
+    "feature": "absolute-position",
+    "subfeature": "pseudo-in-positioned-box",
+    "description": "Text in relatively positioned boxes with an absolutely positioned ::before or ::after, a bold word and an inline-block, and an absolute box with its own absolute ::before. Catches: the box's own text dropped when its pseudo-element is positioned.",
+    "file": "cases/positioning/positioning-text-beside-absolute-pseudo.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": [
+      "probe-text-baseline",
+      "probe-fill-box"
+    ]
   }
 ]

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>atomic inline boxes share lines with text</title>
+<style>
+  @page { size: 424px 400px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 14px; line-height: 20px; background: #ffffff; }
+  body { margin: 0; }
+  p, .box { margin: 0 0 10px; }
+  .ib { display: inline-block; height: 14px; background: #90caf9; }
+  .pair { width: 160px; font-size: 0; border-left: 2px solid #9e9e9e; margin-bottom: 10px; }
+  .pair .ib { width: 80px; }
+  .pair .ib + .ib { background: #f48fb1; }
+  .narrow { width: 120px; border-left: 2px solid #9e9e9e; margin-bottom: 10px; }
+  img { width: 40px; height: 20px; }
+</style>
+</head>
+<body>
+  Body text <span class="ib" style="width: 30px"></span> before a block
+  <div class="box" style="background: #fff3e0">A block between body lines</div>
+  and <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAKklEQVR42u3NoREAAAyDQPZfOt0gJrLc4RBPoMSwE0oICwsLCwsLC/+BD/ci5EbyNw65AAAAAElFTkSuQmCC"> after it.
+  <div class="pair"><span class="ib"></span><span class="ib"></span></div>
+  <div class="pair"><span class="ib" style="width: 80.4px"></span><span class="ib"></span></div>
+  <div class="narrow">Word<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAKklEQVR42u3NoREAAAyDQPZfOt0gJrLc4RBPoMSwE0oICwsLCwsLC/+BD/ci5EbyNw65AAAAAElFTkSuQmCC">word<span class="ib" style="width: 30px"></span>end</div>
+  <div class="narrow" style="white-space: nowrap">Word<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAKklEQVR42u3NoREAAAyDQPZfOt0gJrLc4RBPoMSwE0oICwsLCwsLC/+BD/ci5EbyNw65AAAAAElFTkSuQmCC">word<span class="ib" style="width: 30px"></span>end</div>
+  <p>Line<br>break <br><br>after two</p>
+</body>
+</html>

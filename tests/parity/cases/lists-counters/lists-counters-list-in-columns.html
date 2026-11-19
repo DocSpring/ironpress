@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lists laid out in columns</title>
+<style>
+  @page { size: 440px 304px; margin: 16px; }
+  html { font-family: ParitySans; font-size: 13px; line-height: 18px; background: #ffffff; color: #212121; }
+  body { margin: 0; }
+  ol, ul { margin: 0 0 12px; background: #f1f8e9; }
+  .two { columns: 2; column-gap: 24px; column-rule: 1px solid #9e9e9e; }
+  .wide { column-width: 110px; column-gap: 16px; }
+  li:nth-child(odd) { color: #1b5e20; }
+</style>
+</head>
+<body>
+  <ol class="two"><li>Applicant name</li><li>Date of birth</li><li>Mailing address</li><li>Telephone</li><li>Email address</li><li>Signature</li></ol>
+  <ul class="wide" style="list-style-type: square"><li>Alpha</li><li>Bravo</li><li>Charlie</li><li>Delta</li><li>Echo</li><li>Foxtrot</li><li>Golf</li></ul>
+  <ol class="two" start="4" style="list-style-type: lower-roman"><li>Four</li><li>Five</li><li>Six</li><li>Seven</li></ol>
+</body>
+</html>

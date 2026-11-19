@@ -944,12 +944,8 @@
     "category": "flexbox",
     "feature": "display",
     "subfeature": "inline-flex",
-    "description": "display:inline-flex creates an inline-level flex container that shares the line with surrounding text; catches parsers that only recognize block-level display:flex. The standards-derived Chrome reference corrects Chromium print-to-PDF's separate sub-CSS-pixel atomic-inline paint offset after its live DOM has laid out the same box correctly.",
+    "description": "display:inline-flex creates an inline-level flex container that shares the line with surrounding text; catches parsers that only recognize block-level display:flex. Chromium paints the chip at whole CSS pixels (x=37px, its layout position is 37.375px) as it paints every atomic inline box, and the text after it at its layout position: the oracle is that print output.",
     "file": "cases/flexbox/flexbox-display-inline-flex.html",
-    "reference_file": "references/flexbox/flexbox-display-inline-flex.html",
-    "reference": {
-      "status": "verified"
-    },
     "kind": "feature",
     "expected_support": "implemented",
     "depends_on": [
