@@ -20,6 +20,15 @@ pub(super) struct ResolvedGridEdge {
 }
 
 impl ResolvedGridEdge {
+    /// Both paint, with the same width, style and colour
+    fn looks_like(self, other: Self) -> bool {
+        self.side.paints()
+            && other.side.paints()
+            && self.side.width == other.side.width
+            && self.side.style == other.side.style
+            && self.side.color == other.side.color
+    }
+
     fn compare_for_paint(self, other: Self) -> EdgePaintComparison {
         match (self.side.paints(), other.side.paints()) {
             (false, false) => return EdgePaintComparison::Tie,
@@ -215,7 +224,13 @@ impl GridIntersection {
         let block_comparison = self.over.compare_for_paint(self.under);
         let inline_winner = inline_comparison.winner(self.before, self.after);
         let block_winner = block_comparison.winner(self.over, self.under);
-        let inline_vs_block = inline_winner.compare_for_paint(block_winner);
+        // Edges that look the same both run through the joint, as Chrome draws them; paint order only decides which
+        // colour shows where they differ
+        let inline_vs_block = if inline_winner.looks_like(block_winner) {
+            EdgePaintComparison::Tie
+        } else {
+            inline_winner.compare_for_paint(block_winner)
+        };
         let edge_owns_joint = match (axis, endpoint) {
             (GridEdgeAxis::Horizontal, EdgeEndpoint::Start) => {
                 inline_vs_block != EdgePaintComparison::Second
@@ -246,4 +261,72 @@ impl GridIntersection {
 enum EdgeEndpoint {
     Start,
     End,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::computed::BorderStyle;
+    use crate::types::Color;
+
+    fn dashed(color: Color, row: usize, column: usize) -> ResolvedGridEdge {
+        ResolvedGridEdge {
+            side: LayoutBorderSide {
+                width: 1.5,
+                color,
+                style: BorderStyle::Dashed,
+            },
+            paint_order: Some(BorderPaintOrder {
+                row,
+                column,
+                cell: column,
+            }),
+        }
+    }
+
+    /// Where the vertical edge between the first two cells meets the table's top edge
+    fn top_t_joint(vertical_color: Color) -> GridIntersection {
+        GridIntersection {
+            before: dashed(Color::BLACK, 0, 0),
+            after: dashed(Color::BLACK, 0, 1),
+            over: ResolvedGridEdge::default(),
+            under: dashed(vertical_color, 0, 1),
+        }
+    }
+
+    #[test]
+    fn identical_edges_both_run_through_their_joint() {
+        // Chrome draws an inner edge's dashes from the table's outer edge when the edges meeting there look the
+        // same; paint order decided that only the top edge did, which moved every dash of the inner one
+        let joint = top_t_joint(Color::BLACK);
+        assert!(
+            joint
+                .joint_for(GridEdgeAxis::Vertical, EdgeEndpoint::Start)
+                .inset()
+                < 0.0
+        );
+        assert!(
+            joint
+                .joint_for(GridEdgeAxis::Horizontal, EdgeEndpoint::End)
+                .inset()
+                < 0.0
+        );
+    }
+
+    #[test]
+    fn paint_order_still_decides_a_joint_between_different_colours() {
+        let joint = top_t_joint(Color::rgb(255, 0, 0));
+        assert!(
+            joint
+                .joint_for(GridEdgeAxis::Vertical, EdgeEndpoint::Start)
+                .inset()
+                > 0.0
+        );
+        assert!(
+            joint
+                .joint_for(GridEdgeAxis::Horizontal, EdgeEndpoint::End)
+                .inset()
+                < 0.0
+        );
+    }
 }
