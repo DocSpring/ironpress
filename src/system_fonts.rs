@@ -326,7 +326,14 @@ pub(crate) fn resolve_font_family(
     italic: bool,
     stretch: FontStretch,
 ) -> FontFamily {
-    for family in stack.families() {
+    for (family, name) in stack.families_with_names() {
+        // A named font that stands in for a built-in face is that font when
+        // one by its name is registered or installed
+        if let Some(name) = name
+            && let Some((key, _)) = find_font_with_stretch(fonts, name, bold, italic, stretch)
+        {
+            return FontFamily::Custom(key.to_string());
+        }
         match family {
             FontFamily::Custom(name) => {
                 if let Some((key, _)) = find_font_with_stretch(fonts, name, bold, italic, stretch) {
@@ -727,9 +734,11 @@ fn collect_style_map_family(
         return;
     };
 
-    for entry in parse_font_stack(family).families() {
-        let FontFamily::Custom(name) = entry else {
-            continue;
+    for (entry, alias_name) in parse_font_stack(family).families_with_names() {
+        let name = match (entry, alias_name) {
+            (_, Some(name)) => name,
+            (FontFamily::Custom(name), None) => name.as_str(),
+            _ => continue,
         };
         if should_try_system_font(name) {
             families.insert(name.to_ascii_lowercase());
@@ -1102,6 +1111,33 @@ mod tests {
         let stack = parse_font_stack("Roboto, sans-serif");
         let result = resolve_font_family(&stack, &fonts, false, false, FontStretch::Normal);
         assert_eq!(result, FontFamily::Custom("roboto".to_string()));
+    }
+
+    #[test]
+    fn a_font_named_like_a_builtin_alias_is_used_when_it_is_available() {
+        // Roboto Mono, Ubuntu Mono, Georgia and Lora stand in for Courier or
+        // Times only when no font by that name is registered or installed: a
+        // page design's Roboto Mono, sent with its files, was drawn in Courier
+        for (css, key, alias) in [
+            (
+                "'Roboto Mono', monospace",
+                "roboto mono",
+                FontFamily::Courier,
+            ),
+            ("Ubuntu Mono", "ubuntu mono", FontFamily::Courier),
+            ("Georgia, serif", "georgia", FontFamily::TimesRoman),
+            ("\"Lora\"", "lora", FontFamily::TimesRoman),
+        ] {
+            let mut fonts = HashMap::new();
+            fonts.insert(key.to_string(), stub_font(key));
+            let stack = parse_font_stack(css);
+            let result = resolve_font_family(&stack, &fonts, false, false, FontStretch::Normal);
+            assert_eq!(result, FontFamily::Custom(key.to_string()), "css={css}");
+
+            let none = HashMap::new();
+            let result = resolve_font_family(&stack, &none, false, false, FontStretch::Normal);
+            assert_eq!(result, alias, "css={css} with no font by that name");
+        }
     }
 
     #[test]

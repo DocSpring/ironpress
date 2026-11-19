@@ -5757,6 +5757,31 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn a_registered_font_named_like_a_builtin_alias_is_drawn() {
+        // Roboto Mono and Georgia stood in for Courier and Times by name, before the fonts registered under those
+        // names were looked at, so a page design's Roboto Mono was drawn in Courier
+        for family in ["Roboto Mono", "Georgia"] {
+            let font = include_bytes!("../assets/LiberationSans-Regular.ttf").to_vec();
+            let pdf = HtmlConverter::new()
+                .compress(false)
+                .add_font("ds-registered-regular", font)
+                .convert(&format!(
+                    r#"<style>@font-face {{ font-family: "{family}"; src: local("ds-registered-regular"); }} p {{ font-family: "{family}"; }}</style><p>NTH-RS2</p>"#
+                ))
+                .unwrap();
+            let text = String::from_utf8_lossy(&pdf);
+            let embedded = text
+                .lines()
+                .filter(|line| line.contains("/Subtype /Type0"))
+                .collect::<Vec<_>>();
+            assert!(
+                !embedded.is_empty() && embedded.iter().all(|line| line.contains("LiberationSans")),
+                "{family}: {embedded:?}"
+            );
+        }
+    }
+
+    #[test]
     fn grid_items_take_their_own_heights_with_registered_fonts() {
         // Each grid item's measured height was remembered by its address, and the items were copies that lived only
         // as long as their grid, so a later grid's copy could be allocated where an earlier one was and take its

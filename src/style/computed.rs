@@ -780,6 +780,11 @@ impl FontFamily {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FontStack {
     families: Vec<FontFamily>,
+    /// For each family, the name written for it when it's a named font that
+    /// stands in for a built-in face (`Roboto Mono` for Courier, `Georgia`
+    /// for Times): resolution tries that name first, so a registered or
+    /// installed font by that name is used
+    names: Vec<Option<String>>,
     /// Whether the list is just the generic `monospace`, which Blink sizes
     /// differently (see [`crate::style::font_size`]).
     generic_monospace: bool,
@@ -800,12 +805,20 @@ impl FontStack {
     pub fn from_family(family: FontFamily) -> Self {
         Self {
             families: vec![family],
+            names: vec![None],
             generic_monospace: false,
         }
     }
 
     pub fn families(&self) -> &[FontFamily] {
         &self.families
+    }
+
+    /// Each family with the font name to try before it (see `names`)
+    pub(crate) fn families_with_names(&self) -> impl Iterator<Item = (&FontFamily, Option<&str>)> {
+        self.families
+            .iter()
+            .zip(self.names.iter().map(Option::as_deref))
     }
 
     /// Whether the family list is only the generic `monospace` (Blink's
@@ -887,12 +900,24 @@ pub(crate) fn parse_font_stack(raw: &str) -> FontStack {
     let names = split_font_family_list(raw);
     let generic_monospace =
         matches!(names.as_slice(), [name] if name.eq_ignore_ascii_case("monospace"));
-    let families: Vec<FontFamily> = names.into_iter().map(parse_font_family_name).collect();
+    let (families, names): (Vec<FontFamily>, Vec<Option<String>>) = names
+        .into_iter()
+        .map(|raw| {
+            let family = parse_font_family_name(raw);
+            let cleaned = raw
+                .trim_matches(|c| c == '\'' || c == '"')
+                .to_ascii_lowercase();
+            let named = matches!(family, FontFamily::TimesRoman | FontFamily::Courier)
+                && !matches!(cleaned.as_str(), "serif" | "monospace");
+            (family, named.then_some(cleaned))
+        })
+        .unzip();
     if families.is_empty() {
         FontStack::default()
     } else {
         FontStack {
             families,
+            names,
             generic_monospace,
         }
     }
