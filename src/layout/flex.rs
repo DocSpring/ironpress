@@ -2533,13 +2533,15 @@ pub(crate) fn layout_flex_container(
                     && style.align_items == AlignItems::Stretch));
         let mut intrinsic_text_wrap_width = None;
         let child_w = if let Some(content_basis) = content_basis.filter(|_| !runs.is_empty()) {
-            let natural_text_w = if content_basis == IntrinsicWidthKeyword::MinContent {
-                intrinsic_text_widths
-                    .map(|widths| widths.min_content)
-                    .unwrap_or_default()
-            } else {
-                measure_runs_width(&runs, env.fonts)
-            };
+            let natural_text_w = intrinsic_text_widths
+                .map(|widths| {
+                    if content_basis == IntrinsicWidthKeyword::MinContent {
+                        widths.min_content
+                    } else {
+                        widths.max_content
+                    }
+                })
+                .unwrap_or_default();
             let intrinsic = FlexIntrinsicWidth::from_content(&child_style, natural_text_w);
             intrinsic_text_wrap_width = Some(intrinsic.text_wrap.min(width_for_percentages));
             intrinsic.paint.min(width_for_percentages)
@@ -2548,7 +2550,16 @@ pub(crate) fn layout_flex_container(
             && child_style.flex_grow == 0.0
             && !runs.is_empty()
         {
-            let natural_text_w = measure_runs_width(&runs, env.fonts);
+            // As wide as its lines measure its text, so a font that kerns
+            // across spaces doesn't make it too narrow for them. An empty item
+            // is as wide as its padding and border (css-flexbox-1 §9.2): it
+            // took the container's width, so in a container with none, a page
+            // design's vertical line, its dashed border wasn't drawn. An item
+            // whose aspect ratio and height give its width keeps that width
+            // (§9.2.3 B), in `child_w_initial`
+            let natural_text_w = intrinsic_text_widths
+                .map(|widths| widths.max_content)
+                .unwrap_or_default();
             let pad_h = child_style.padding.horizontal();
             let border_h = child_style.border.horizontal_width();
             // Outer width = text + padding + border (capped at container)

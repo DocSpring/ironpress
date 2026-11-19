@@ -568,11 +568,9 @@ fn flexrow_non_uniform_border() {
     let pages = layout(&nodes, PageSize::A4, Margin::default());
     let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();
     let pdf_str = String::from_utf8_lossy(&pdf);
-    // The flex item shrinks to content; the words may render as separate
-    // text-show operators, so assert each word is present rather than the
-    // joined string.
+    // The flex item shrinks to its content, which stays on one line.
     assert!(
-        pdf_str.contains("(Flex)") && pdf_str.contains("(Borders)"),
+        pdf_str.contains("(Flex Borders)"),
         "Should render flex content"
     );
     // Non-uniform solid borders produce per-side fill bands.

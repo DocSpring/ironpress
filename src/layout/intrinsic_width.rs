@@ -528,7 +528,7 @@ impl<'a> TextMeasurement<'a> {
             };
         }
         let widths = &mut inline.widths;
-        widths.max_content += self.width(&collapsed);
+        widths.max_content += self.line_width(&collapsed);
         for word in collapsed.split(' ').filter(|word| !word.is_empty()) {
             let longest = if self.anywhere {
                 word.char_indices()
@@ -548,15 +548,53 @@ impl<'a> TextMeasurement<'a> {
     }
 
     fn width(&self, text: &str) -> f32 {
-        let raw = estimate_word_width(
+        self.tracked(self.raw_width(text), text)
+    }
+
+    /// `raw` with the tracking after every typographic unit of `text`, the last one too: Chrome sizes a box to
+    /// include the letter spacing after its last letter.
+    fn tracked(&self, raw: f32, text: &str) -> f32 {
+        let trailing = if text.is_empty() {
+            0.0
+        } else {
+            self.spacing.letter
+        };
+        self.spacing.add_internal_advance(raw, text) + trailing
+    }
+
+    /// The width of collapsed text as its lines measure it: each word on its own and a space's advance between
+    /// words. A font that kerns across a space (Liberation Sans before "T" and "Y") makes the text narrower measured
+    /// as one string, and a box sized to that width wraps its last word.
+    fn line_width(&self, text: &str) -> f32 {
+        let space = self.raw_width(" ");
+        let raw = text
+            .split(' ')
+            .enumerate()
+            .map(|(index, word)| {
+                let word_width = if word.is_empty() {
+                    0.0
+                } else {
+                    self.raw_width(word)
+                };
+                if index == 0 {
+                    word_width
+                } else {
+                    space + word_width
+                }
+            })
+            .sum::<f32>();
+        self.tracked(raw, text)
+    }
+
+    fn raw_width(&self, text: &str) -> f32 {
+        estimate_word_width(
             text,
             self.font_size,
             &self.family,
             self.bold,
             self.italic,
             self.fonts,
-        );
-        self.spacing.add_internal_advance(raw, text)
+        )
     }
 }
 

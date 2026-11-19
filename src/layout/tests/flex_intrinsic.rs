@@ -253,3 +253,100 @@ fn intrinsic_constraints_measure_content_not_the_preferred_width() {
         "min-width:max-content must ignore width:70pt: {widths:?}"
     );
 }
+
+/// A shrink-wrapped flex item's text stays on one line in a font that kerns
+/// across spaces (Liberation Sans kerns a space before "T" and "Y"): its
+/// max-content width is measured word by word with a space's advance between
+/// words, as its lines are, not as one kerned string, which came out narrower
+/// than the line and wrapped its last word.
+#[test]
+fn a_flex_items_text_fits_its_max_content_width_when_its_font_kerns_spaces() {
+    let font = crate::parser::ttf::parse_ttf(
+        include_bytes!("../../../assets/LiberationSans-Regular.ttf").to_vec(),
+    )
+    .expect("the bundled Liberation Sans");
+    let fonts = std::collections::HashMap::from([("kernsans".to_string(), font)]);
+    let pages = super::support::layout_pages_at_with_fonts(
+        r#"<!doctype html><html><head><style>
+            .row { display: flex; justify-content: flex-end; width: 400px; font: 16px KernSans; }
+        </style></head><body>
+            <div class="row"><span>A Toy Yacht</span></div>
+            <div class="row"><span>Pay To Yates</span></div>
+            <div class="row" style="letter-spacing: 1px; word-spacing: 2px"><span>A Toy Yacht</span></div>
+        </body></html>"#,
+        PageSize::A4,
+        Margin::default(),
+        &fonts,
+    );
+    let mut line_counts = Vec::new();
+    for (_, element) in &pages[0].elements {
+        element.inspect_flex(|row| {
+            line_counts.extend(row.content.cells.iter().map(|cell| cell.lines.len()));
+        });
+    }
+    assert_eq!(
+        line_counts,
+        vec![1, 1, 1],
+        "each item's text is on one line"
+    );
+}
+
+/// An inline-block, a float and a `width: max-content` box are as wide as
+/// their text's lines measure it too, in a font that kerns across spaces.
+#[test]
+fn shrink_to_fit_boxes_fit_their_text_when_its_font_kerns_spaces() {
+    use crate::layout::elements::{LayoutVisitor, TextBlock};
+
+    #[derive(Default)]
+    struct Lines(Vec<String>);
+    impl Lines {
+        fn take(&mut self, lines: &[crate::layout::engine::TextLine]) {
+            for line in lines {
+                let text = line
+                    .runs
+                    .iter()
+                    .filter(|run| run.inline_box.is_none())
+                    .map(|run| run.text.as_str())
+                    .collect::<String>();
+                self.0.push(text.trim().to_string());
+            }
+        }
+    }
+    impl LayoutVisitor for Lines {
+        fn visit_text_block(&mut self, block: &TextBlock) {
+            self.take(&block.lines);
+        }
+    }
+
+    let font = crate::parser::ttf::parse_ttf(
+        include_bytes!("../../../assets/LiberationSans-Regular.ttf").to_vec(),
+    )
+    .expect("the bundled Liberation Sans");
+    let fonts = std::collections::HashMap::from([("kernsans".to_string(), font)]);
+    let pages = super::support::layout_pages_at_with_fonts(
+        r#"<!doctype html><html><head><style>
+            body { font: 16px KernSans; }
+        </style></head><body>
+            <div><span style="display: inline-block">A Toy Yacht</span></div>
+            <div style="overflow: hidden"><div style="float: right">A Toy Yacht</div></div>
+            <div style="width: max-content">A Toy Yacht</div>
+        </body></html>"#,
+        PageSize::A4,
+        Margin::default(),
+        &fonts,
+    );
+    let mut lines = Lines::default();
+    for (_, element) in &pages[0].elements {
+        crate::layout::engine::visit_layout_tree(element.as_ref(), &mut lines);
+    }
+    let texts = lines
+        .0
+        .into_iter()
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        texts,
+        vec!["A Toy Yacht"; 3],
+        "each box's text is on one line"
+    );
+}
