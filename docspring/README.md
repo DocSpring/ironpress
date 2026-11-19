@@ -101,6 +101,7 @@ includes them, then goes back to the upstream packages.
 | `columns` and `column-width` on a list (`<ol>`, `<ul>`) lay its items out in columns, numbered on from one column to the next: a list laid its items out in its parent's flow and ignored them, where a `<div>` around the items worked | Not sent yet (`docspring-1.7.0.8`) |
 | `::first-letter` applies to a list item's first letter, not its marker, and a first letter in a larger font makes its line taller, its `line-height` taken from its own font size (CSS 2.1 §10.8.1). It did nothing on a list item, and a large first letter overlapped the line above | Not sent yet (`docspring-1.7.0.8`) |
 | An inline element's background is painted on the same whole CSS pixels as its border, as in Chromium: it was painted at its exact position, so a bordered `<span>` that started a fraction of a pixel along had a sliver of background outside its border or a gap inside it | Not sent yet (`docspring-1.7.0.8`) |
+| A `column-rule` is painted on whole CSS pixels, as in Chromium: a 1px rule whose edges fell on half pixels (two equal columns either side of an even gap) was smeared across two pixel columns in a lighter grey | Not sent yet (`docspring-1.7.0.8`) |
 
 The Ruby gems add a fourth part to the version (`1.7.0.2` is 1.7.0 plus our second build), so they never collide with
 an upstream release. `scripts/check-release-versions.sh` ignores that part. Only the native gems are published: the

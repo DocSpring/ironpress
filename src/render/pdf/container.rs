@@ -179,12 +179,15 @@ impl LayoutVisitor for DirectChildRenderer<'_, '_, '_> {
 
     fn visit_column_rule(&mut self, element: &ColumnRule) {
         if self.flow.paint_phase.paints_decoration() {
-            paint_column_rule_line(
-                self.content,
+            let rule = self.ctx.text.pdf_writer.snap_border_box(PdfRect::from_top(
                 self.flow.frame.content_origin.x,
                 self.flow.frame.content_origin.y,
                 element.paint.width,
                 element.height,
+            ));
+            paint_column_rule_line(
+                self.content,
+                rule,
                 &element.paint,
                 self.ctx.page_ext_gstates,
                 self.ctx.bg_alpha_counter,

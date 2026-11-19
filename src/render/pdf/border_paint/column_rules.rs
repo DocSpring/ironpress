@@ -3,21 +3,26 @@ use super::*;
 /// Paint a multi-column `column-rule` as one vertical rule honoring the CSS
 /// border style. Solid rules are filled; dashed and dotted rules share the box
 /// border pattern; double rules retain a hollow middle third.
-#[allow(clippy::too_many_arguments)]
+///
+/// `rule` is the rule's box, which callers snap to the paint grid first, as
+/// Chrome snaps it like a border.
 pub(in crate::render::pdf) fn paint_column_rule_line(
     content: &mut String,
-    x: f32,
-    top_y: f32,
-    width: f32,
-    height: f32,
+    rule: PdfRect,
     side: &crate::layout::engine::LayoutBorderSide,
     page_ext_gstates: &mut Vec<(String, f32)>,
     alpha_counter: &mut usize,
 ) {
-    if width <= 0.0 || height <= 0.0 || !side.style.paints() {
+    if rule.width <= 0.0 || rule.height <= 0.0 || !side.style.paints() {
         return;
     }
-    let bottom_y = top_y - height;
+    let PdfRect {
+        left: x,
+        bottom: bottom_y,
+        width,
+        height,
+    } = rule;
+    let top_y = rule.top();
     if is_bevel_style(side.style) {
         let center_x = x + width / 2.0;
         paint_3d_border_line(

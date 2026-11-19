@@ -211,12 +211,15 @@ struct PageElementRenderer<'call, 'frame, 'page> {
 impl LayoutVisitor for PageElementRenderer<'_, '_, '_> {
     fn visit_column_rule(&mut self, element: &ColumnRule) {
         let offset = element.placement.offset();
-        paint_column_rule_line(
-            self.content,
+        let rule = self.ctx.text.pdf_writer.snap_border_box(PdfRect::from_top(
             self.frame.margin.left + offset.x,
             self.frame.page_size.height - self.frame.margin.top - self.frame.y_pos - offset.y,
             element.paint.width,
             element.height,
+        ));
+        paint_column_rule_line(
+            self.content,
+            rule,
             &element.paint,
             self.ctx.page_ext_gstates,
             self.ctx.bg_alpha_counter,

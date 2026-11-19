@@ -616,3 +616,46 @@ fn an_inline_background_is_snapped_to_whole_pixels_as_its_border_is() {
         );
     }
 }
+
+#[test]
+fn a_column_rule_is_snapped_to_whole_pixels() {
+    // Two 160px columns either side of a 24px gap put the 1px rule's edges at
+    // 171.5px and 172.5px. Chrome pixel-snaps the rule as it does a border, so
+    // it fills one whole pixel instead of half-covering two.
+    let rule = "width: 344px; columns: 2; column-gap: 24px; column-rule: 1px solid #ff0000";
+    let paragraphs = "<p>One</p><p>Two</p><p>Three</p><p>Four</p>";
+    for html in [
+        format!(r#"<div style="{rule}">{paragraphs}</div>"#),
+        format!(r#"<div style="border: 1px solid #000; padding: 3px"><div style="{rule}">{paragraphs}</div></div>"#),
+        format!(r#"<div style="{rule}">{}</div>"#, paragraphs.repeat(40)),
+        format!(r#"<div style="{rule}; column-fill: auto; height: 200px">{}</div>"#, paragraphs.repeat(20)),
+        format!(r#"<ol style="{rule}; padding: 0"><li>One</li><li>Two</li><li>Three</li><li>Four</li></ol>"#),
+    ] {
+        let html = format!(r#"<style>p {{ margin: 0 }} body {{ font: 14px sans-serif }}</style>{html}"#);
+        let nodes = parse_html(&html).unwrap();
+        let pages = layout(&nodes, PageSize::A4, Margin::default());
+        let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();
+        let pdf_str = String::from_utf8_lossy(&pdf);
+        let after_fill = pdf_str
+            .split("1 0 0 rg\n")
+            .nth(1)
+            .unwrap_or_else(|| panic!("a red column rule in {html}"));
+        let rect: Vec<f32> = after_fill
+            .lines()
+            .next()
+            .and_then(|line| line.strip_suffix(" re"))
+            .expect("a rectangle after the fill colour")
+            .split_whitespace()
+            .map(|value| value.parse().unwrap())
+            .collect();
+        let (left, width) = (rect[0], rect[2]);
+        let css_px = |points: f32| points / 0.75;
+        for (edge, value) in [("left", left), ("right", left + width)] {
+            let px = css_px(value);
+            assert!(
+                (px - px.round()).abs() < 0.001,
+                "the rule's {edge} edge is at {px}px, not on a whole pixel, in {html}"
+            );
+        }
+    }
+}
