@@ -65,7 +65,8 @@ use std::collections::HashMap;
 use super::block::layout_block_element;
 use super::context::{LayoutContext, LayoutEnv};
 use super::engine::{
-    ElementSiblingContext, LayoutBorder, LayoutTreeContext, PageBreakSide, flatten_element,
+    ElementSiblingContext, LayoutBorder, LayoutTreeContext, ListScope, PageBreakSide,
+    flatten_element,
 };
 use super::helpers::{PseudoBoxContext, build_pseudo_block};
 use super::inline_formatting::GeneratedContentStyles;
@@ -206,6 +207,9 @@ pub(crate) fn layout_multicol_container(
     // Text and inline-level boxes between the block-level children, laid out as one anonymous block (CSS 2.1
     // §9.2.1.1)
     let mut inline_run: Vec<DomNode> = Vec::new();
+    // A list's items are numbered and given markers as they are outside columns
+    let mut list_scope = matches!(el.tag, HtmlTag::Ol | HtmlTag::Ul)
+        .then(|| ListScope::open(el, style, None, 0.0, env));
     for node in &el.children {
         let child_el = match node {
             DomNode::Text(text) => {
@@ -258,9 +262,11 @@ pub(crate) fn layout_multicol_container(
         };
 
         let mut buf: Vec<LayoutNode> = Vec::new();
+        let item = child_el.tag == HtmlTag::Li;
         flatten_element(
             child_el,
             LayoutTreeContext::new(style, item_ctx, &child_ancestors)
+                .with_list(list_scope.as_ref().filter(|_| item).map(ListScope::context))
                 .with_positioned_ancestor_depth(positioned_depth)
                 .for_element(
                     ElementSiblingContext::new(element_index, element_count)
@@ -269,6 +275,9 @@ pub(crate) fn layout_multicol_container(
             &mut buf,
             env,
         );
+        if item && let Some(scope) = list_scope.as_mut() {
+            scope.advance();
+        }
         items.push(MultiColItem::from_layout(buf, child_info));
 
         preceding_siblings.push((
@@ -290,6 +299,9 @@ pub(crate) fn layout_multicol_container(
             positioned_depth,
             env,
         ));
+    }
+    if let Some(scope) = list_scope {
+        scope.close(env);
     }
     if let Some(pseudo_style) = generated_styles.after() {
         let pseudo = build_pseudo_block(

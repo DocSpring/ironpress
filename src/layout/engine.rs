@@ -4759,6 +4759,9 @@ fn list_lays_out_in_parent_flow(style: &ComputedStyle) -> bool {
         && style.aspect_ratio.is_none()
         && style.overflow_x == crate::style::computed::Overflow::Visible
         && style.overflow_y == crate::style::computed::Overflow::Visible
+        // A list in columns is a multi-column container of its own
+        && style.column_count.is_none_or(|count| count < 2)
+        && style.column_width.is_none_or(|width| width <= 0.0)
 }
 
 /// Where a `<ul>`/`<ol>` lays out its children.
@@ -4795,54 +4798,7 @@ pub(crate) fn layout_list_children(
         positioned_depth,
     } = list;
     let inner_width = available_width - list_indent;
-    // Accumulate indentation from parent list context
-    let parent_indent = match list_ctx {
-        Some(ListContext::Unordered { indent }) => *indent,
-        Some(ListContext::Ordered { indent, .. }) => *indent,
-        None => 0.0,
-    };
-    let total_indent = parent_indent + list_indent;
-    let mut ctx = if el.tag == HtmlTag::Ol {
-        let li_count = el
-            .children
-            .iter()
-            .filter(|c| matches!(c, DomNode::Element(child) if child.tag == HtmlTag::Li))
-            .count() as i32;
-        let reversed = el.attributes.contains_key("reversed");
-        let step = if reversed { -1 } else { 1 };
-        let start = el
-            .attributes
-            .get("start")
-            .and_then(|s| s.trim().parse::<i32>().ok())
-            .unwrap_or(if reversed { li_count } else { 1 });
-        ListContext::Ordered {
-            index: start,
-            step,
-            indent: total_indent,
-        }
-    } else {
-        ListContext::Unordered {
-            indent: total_indent,
-        }
-    };
-    let custom_unordered_counter = el.tag == HtmlTag::Ul
-        && matches!(
-            style.list_style_type,
-            ListStyleType::Custom(_) | ListStyleType::CounterStyle(_)
-        );
-    let auto_list_item_counter = (el.tag == HtmlTag::Ol || custom_unordered_counter)
-        && !style
-            .counter_reset
-            .iter()
-            .any(|(name, _)| name == "list-item");
-    if auto_list_item_counter {
-        match &ctx {
-            ListContext::Ordered { index, step, .. } => {
-                env.counter_state.push_reset("list-item", *index - *step);
-            }
-            ListContext::Unordered { .. } => env.counter_state.push_reset("list-item", 0),
-        }
-    }
+    let mut scope = ListScope::open(el, style, list_ctx, list_indent, env);
     let child_el_count = el
         .children
         .iter()
@@ -4858,15 +4814,13 @@ pub(crate) fn layout_list_children(
                 flatten_element(
                     child_el,
                     LayoutTreeContext::new(style, &child_ctx, child_ancestors)
-                        .with_list(Some(&ctx))
+                        .with_list(Some(scope.context()))
                         .with_positioned_ancestor_depth(positioned_depth)
                         .for_element(ElementSiblingContext::new(child_el_idx, child_el_count)),
                     output,
                     env,
                 );
-                if let ListContext::Ordered { index, step, .. } = &mut ctx {
-                    *index += *step;
-                }
+                scope.advance();
             } else {
                 let child_ctx = layout_ctx
                     .with_parent(inner_width, Some(available_height), style.font_size)
@@ -4883,14 +4837,97 @@ pub(crate) fn layout_list_children(
             child_el_idx += 1;
         }
     }
-    // Pop counters this list pushed via `counter-reset` (e.g. a nested
-    // `<ol counter-reset: sec>` opens its own counter scope). Without this,
-    // the inner level leaks and a following sibling item is numbered against
-    // the stale nested counter (css-lists-3 §4.2 / CSS2 §12.4: the scope ends
-    // with the element). This branch `return`s before `route_element`'s own
-    // `pop_resets`, so it must undo the push applied in `flatten_element`.
-    if auto_list_item_counter {
-        env.counter_state.pop_name("list-item");
+    scope.close(env);
+}
+
+/// The numbering a `<ul>`/`<ol>` gives its items: their marker context and the `list-item` counter it opens.
+pub(crate) struct ListScope {
+    context: ListContext,
+    auto_list_item_counter: bool,
+}
+
+impl ListScope {
+    /// Open the list's numbering, nested in `parent`'s indent, with its items indented by `list_indent`.
+    pub(crate) fn open(
+        el: &ElementNode,
+        style: &ComputedStyle,
+        parent: Option<&ListContext>,
+        list_indent: f32,
+        env: &mut LayoutEnv,
+    ) -> Self {
+        // Accumulate indentation from parent list context
+        let parent_indent = match parent {
+            Some(ListContext::Unordered { indent }) => *indent,
+            Some(ListContext::Ordered { indent, .. }) => *indent,
+            None => 0.0,
+        };
+        let total_indent = parent_indent + list_indent;
+        let ctx = if el.tag == HtmlTag::Ol {
+            let li_count = el
+                .children
+                .iter()
+                .filter(|c| matches!(c, DomNode::Element(child) if child.tag == HtmlTag::Li))
+                .count() as i32;
+            let reversed = el.attributes.contains_key("reversed");
+            let step = if reversed { -1 } else { 1 };
+            let start = el
+                .attributes
+                .get("start")
+                .and_then(|s| s.trim().parse::<i32>().ok())
+                .unwrap_or(if reversed { li_count } else { 1 });
+            ListContext::Ordered {
+                index: start,
+                step,
+                indent: total_indent,
+            }
+        } else {
+            ListContext::Unordered {
+                indent: total_indent,
+            }
+        };
+        let custom_unordered_counter = el.tag == HtmlTag::Ul
+            && matches!(
+                style.list_style_type,
+                ListStyleType::Custom(_) | ListStyleType::CounterStyle(_)
+            );
+        let auto_list_item_counter = (el.tag == HtmlTag::Ol || custom_unordered_counter)
+            && !style
+                .counter_reset
+                .iter()
+                .any(|(name, _)| name == "list-item");
+        if auto_list_item_counter {
+            match &ctx {
+                ListContext::Ordered { index, step, .. } => {
+                    env.counter_state.push_reset("list-item", *index - *step);
+                }
+                ListContext::Unordered { .. } => env.counter_state.push_reset("list-item", 0),
+            }
+        }
+        Self {
+            context: ctx,
+            auto_list_item_counter,
+        }
+    }
+
+    pub(crate) const fn context(&self) -> &ListContext {
+        &self.context
+    }
+
+    /// Move the numbering on past one list item.
+    pub(crate) fn advance(&mut self) {
+        if let ListContext::Ordered { index, step, .. } = &mut self.context {
+            *index += *step;
+        }
+    }
+
+    /// Pop the `list-item` counter this list pushed (css-lists-3 §4.2, CSS2 §12.4: the scope ends with the
+    /// element). Without this, a nested `<ol>`'s level leaks and a following sibling item is numbered against the
+    /// stale nested counter. List layout returns before `route_element`'s own `pop_resets`, so it must undo the
+    /// push here.
+    pub(crate) fn close(self, env: &mut LayoutEnv) {
+        if self.auto_list_item_counter {
+            env.counter_state.pop_name("list-item");
+        }
     }
 }
 

@@ -139,3 +139,45 @@ fn flex_list_without_markers_lays_its_items_out_in_a_row() {
         boxes(r#"<ul style="display:flex;list-style:none;padding:0"><li>a</li><li>b</li></ul>"#);
     assert_eq!(list.flex_rows, 1);
 }
+
+/// The number of columns `markup`'s multi-column boxes were laid out in, and
+/// its list markers in document order.
+fn columns_and_markers(markup: &str) -> (usize, Vec<String>) {
+    #[derive(Default)]
+    struct Columns(usize);
+    impl LayoutVisitor for Columns {
+        fn visit_multicol_column(&mut self, _element: &crate::layout::elements::MulticolColumn) {
+            self.0 += 1;
+        }
+    }
+    let mut columns = Columns::default();
+    for page in layout_pages_at(markup, PageSize::new(400.0, 800.0)) {
+        for (_, element) in page.elements {
+            crate::layout::engine::visit_layout_tree(element.as_ref(), &mut columns);
+        }
+    }
+    let mut markers: Vec<String> = visible_runs(markup)
+        .into_iter()
+        .filter(|run| run.metadata.is_outside_marker)
+        .map(|run| run.text.trim().to_string())
+        .collect();
+    markers.dedup();
+    (columns.0, markers)
+}
+
+#[test]
+fn list_in_columns_lays_its_items_out_in_columns_and_numbers_them() {
+    for columns in ["columns: 2", "column-width: 150px"] {
+        assert_eq!(
+            columns_and_markers(&format!(
+                r#"<ol style="{columns}"><li>One</li><li>Two</li><li>Three</li><li>Four</li></ol>"#
+            )),
+            (2, ["1.", "2.", "3.", "4."].map(String::from).to_vec()),
+            "{columns}"
+        );
+    }
+    assert_eq!(
+        columns_and_markers(r#"<ol style="columns: 2" start="4"><li>Four</li><li>Five</li></ol>"#),
+        (2, ["4.", "5."].map(String::from).to_vec())
+    );
+}
