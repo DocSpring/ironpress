@@ -3734,7 +3734,105 @@ pub(crate) fn paginate_with_context(
         margin_bottom: prev_margin_bottom,
     });
     fit_body_boxes(&mut pages, flow_end);
+    close_table_rows_at_page_breaks(&mut pages);
     pages
+}
+
+/// Give the last row of a table on a page the collapsed grid line it shares with the row that continues the table
+/// on the next page. Each row owns the line above it, so a table broken between rows ended open, where Chromium
+/// draws the line at the bottom of the first page as well as the top of the next. A row cut inside its cells has no
+/// line there (its continuation's line above is open), and a repeated header or footer has its own.
+fn close_table_rows_at_page_breaks(pages: &mut [Page]) {
+    use crate::layout::elements::{
+        CollapsedBorderLine, LayoutVisitor, LayoutVisitorMut, TableGridIdentity, TableRow,
+        visit_layout_tree, visit_layout_tree_mut,
+    };
+
+    fn is_body_row(row: &TableRow) -> bool {
+        !row.fragmentation.repeats_as_header && !row.fragmentation.repeats_as_footer
+    }
+
+    /// The rows of each table on a page, in flow order: how many, and whether the last one is a body row with no
+    /// line below it, and the line above the first body row.
+    #[derive(Default)]
+    struct PageRows {
+        tables: Vec<(TableGridIdentity, usize, bool, Option<CollapsedBorderLine>)>,
+    }
+
+    impl LayoutVisitor for PageRows {
+        fn visit_table_row(&mut self, row: &TableRow) {
+            let open_end = is_body_row(row) && row.collapsed_borders.block_end.is_empty();
+            let index = match self.tables.iter().position(|(grid, ..)| *grid == row.grid) {
+                Some(index) => index,
+                None => {
+                    self.tables.push((row.grid.clone(), 0, false, None));
+                    self.tables.len() - 1
+                }
+            };
+            let table = &mut self.tables[index];
+            table.1 += 1;
+            table.2 = open_end;
+            if table.3.is_none() && is_body_row(row) {
+                table.3 = Some(row.collapsed_borders.block_start.clone());
+            }
+        }
+    }
+
+    struct CloseLastRows<'a> {
+        closing: &'a [(TableGridIdentity, usize, CollapsedBorderLine)],
+        seen: Vec<usize>,
+    }
+
+    impl LayoutVisitorMut for CloseLastRows<'_> {
+        fn visit_table_row(&mut self, row: &mut TableRow) {
+            if let Some(index) = self.closing.iter().position(|(grid, ..)| *grid == row.grid) {
+                self.seen[index] += 1;
+                let (_, count, line) = &self.closing[index];
+                if self.seen[index] == *count {
+                    row.collapsed_borders.close_fragment_end(line);
+                }
+            }
+        }
+    }
+
+    let rows: Vec<PageRows> = pages
+        .iter()
+        .map(|page| {
+            let mut rows = PageRows::default();
+            for (_, element) in &page.elements {
+                visit_layout_tree(element.as_ref(), &mut rows);
+            }
+            rows
+        })
+        .collect();
+    for (index, page) in pages.iter_mut().enumerate() {
+        let Some(next) = rows.get(index + 1) else {
+            break;
+        };
+        let closing: Vec<_> = rows[index]
+            .tables
+            .iter()
+            .filter(|(.., open_end, _)| *open_end)
+            .filter_map(|(grid, count, ..)| {
+                let (.., above) = next
+                    .tables
+                    .iter()
+                    .find(|(next_grid, ..)| next_grid == grid)?;
+                let line = above.as_ref().filter(|line| !line.is_empty())?;
+                Some((grid.clone(), *count, line.clone()))
+            })
+            .collect();
+        if closing.is_empty() {
+            continue;
+        }
+        let mut close = CloseLastRows {
+            seen: vec![0; closing.len()],
+            closing: &closing,
+        };
+        for (_, element) in &mut page.elements {
+            visit_layout_tree_mut(element.as_mut(), &mut close);
+        }
+    }
 }
 
 /// Cut the body's box to each page: it starts on the first page and ends on

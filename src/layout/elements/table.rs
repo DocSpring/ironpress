@@ -574,6 +574,10 @@ impl CollapsedBorderLine {
     fn clear(&mut self) {
         self.edges.clear();
     }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.edges.is_empty()
+    }
 }
 
 /// The non-overlapping slice of a resolved collapsed-border grid painted with
@@ -609,6 +613,14 @@ impl CollapsedTableBorders {
         self.block_end.clear();
         for edge in &mut self.block_axis.edges {
             edge.open_end();
+        }
+    }
+
+    /// Close a fragment that ends between two rows with the grid line it shares with the row that continues the
+    /// table on the next page: Chromium draws that line on both sides of the break.
+    pub(crate) fn close_fragment_end(&mut self, shared: &CollapsedBorderLine) {
+        if self.block_end.is_empty() {
+            self.block_end = shared.clone();
         }
     }
 

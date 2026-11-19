@@ -440,3 +440,53 @@ fn box_taller_than_the_page_fragments_before_a_forced_break() {
     assert_eq!(rows_laid_out.0, expected);
     assert!(pages.len() >= 3, "{} pages", pages.len());
 }
+
+#[test]
+fn a_collapsed_table_broken_between_rows_draws_its_line_at_the_bottom_of_the_page() {
+    // Each row draws the collapsed grid line above it, so a table broken between rows ended open at the bottom of
+    // the first page. Chromium draws the shared line on both sides of the break
+    #[derive(Default)]
+    struct Rows(Vec<(usize, usize, bool)>);
+    impl LayoutVisitor for Rows {
+        fn visit_table_row(&mut self, row: &TableRow) {
+            self.0.push((
+                row.collapsed_borders.block_start.iter().count(),
+                row.collapsed_borders.block_end.iter().count(),
+                row.fragmentation.repeats_as_header,
+            ));
+        }
+    }
+    let rows = (0..30)
+        .map(|i| format!("<tr><td>Row {i}</td><td>value {i}</td></tr>"))
+        .collect::<String>();
+    for head in ["", "<thead><tr><th>A</th><th>B</th></tr></thead>"] {
+        let pages = layout_pages_at(
+            &format!(
+                r#"<table style="border-collapse:collapse;width:100%">{head}<tbody>{rows}</tbody></table>
+                <style>td, th {{ border: 2px solid #c00; padding: 4px }} tr {{ break-inside: avoid }}</style>"#
+            ),
+            PageSize::new(220.0, 300.0),
+        );
+        assert!(pages.len() > 1, "the table breaks");
+        for (index, page) in pages.iter().enumerate() {
+            let mut page_rows = Rows::default();
+            for (_, element) in &page.elements {
+                visit_layout_tree(element.as_ref(), &mut page_rows);
+            }
+            let last = page_rows.0.last().expect("rows on every page");
+            assert_eq!(
+                last.1,
+                2,
+                "page {} ends with both columns' line ({head:?})",
+                index + 1
+            );
+            let first_body = page_rows.0.iter().find(|row| !row.2).expect("a body row");
+            assert_eq!(
+                first_body.0,
+                2,
+                "page {} starts with the line above",
+                index + 1
+            );
+        }
+    }
+}
