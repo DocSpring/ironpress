@@ -291,7 +291,7 @@ fn push_dash_pattern(
     content.push_str(&stroke.color.fill_operator());
 
     if style == crate::style::computed::TextDecorationStyle::Dotted {
-        if unit > 3.0 {
+        if crate::render::borders::dotted_dots_are_round(unit) {
             push_round_dots(content, stroke, line);
             return;
         }

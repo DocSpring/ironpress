@@ -65,12 +65,22 @@ fn paint_patterned_column_rule(
     height: f32,
     style: BorderStyle,
 ) {
+    use crate::render::borders::{DashLayout, DashPattern, StrokePath, dotted_dots_are_round};
+
     let center_x = x + width / 2.0;
     let dotted = style == BorderStyle::Dotted;
-    let (array, phase, cap, segment_top, segment_bottom) = if dotted {
+    let round_dots = dotted && dotted_dots_are_round(width / crate::fonts::PT_PER_CSS_PX);
+    let (array, phase, cap, segment_top, segment_bottom) = if round_dots {
         let half = width / 2.0;
         let (array, phase) = corner_dash_array((height - width).max(0.0), width, true);
         (array, phase, "1 J\n", top_y - half, bottom_y + half)
+    } else if dotted {
+        // Too thin for round dots: dashes a width long
+        let array = match DashPattern::dotted(width).layout(height, StrokePath::Open) {
+            DashLayout::Solid => format!("{height} 0"),
+            DashLayout::Dashes { dash, gap, .. } => format!("{dash} {gap}"),
+        };
+        (array, 0.0, "0 J\n", top_y, bottom_y)
     } else {
         let (array, phase) = corner_dash_array(height, width, false);
         (array, phase, "0 J\n", top_y, bottom_y)

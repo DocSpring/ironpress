@@ -55,6 +55,14 @@ pub(super) fn closed_border_pattern_for_style(
                 DashLayout::Dashes { dash, gap, .. } => format!("[{dash} {gap}] 0 d\n"),
             }
         }
+        BorderStyle::Dotted
+            if !crate::render::borders::dotted_dots_are_round(width / css_pixel) =>
+        {
+            match DashPattern::dotted(width).layout(path_length, StrokePath::Closed) {
+                DashLayout::Solid => String::new(),
+                DashLayout::Dashes { dash, gap, .. } => format!("[{dash} {gap}] 0 d\n"),
+            }
+        }
         BorderStyle::Dotted => {
             let gap = DashPattern::dotted(width).best_gap(path_length, StrokePath::Closed);
             // Blink subtracts 0.01 CSS px so floating-point traversal cannot

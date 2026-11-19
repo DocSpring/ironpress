@@ -247,8 +247,50 @@
     }
 
     #[test]
+    fn thin_dotted_borders_are_square_dots_and_thick_ones_round() {
+        // Blink draws a dotted stroke up to 3px thick as dashes a width long and a width apart (StrokeIsDashed), and
+        // only a thicker one as round dots. Every border painter drew round dots at every width
+        let content = |html: &str| {
+            let nodes = parse_html(html).unwrap();
+            let pages = layout(&nodes, PageSize::A4, Margin::default());
+            let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();
+            String::from_utf8_lossy(&pdf).into_owned()
+        };
+        // Round dots are filled circles or a stroke with round caps. A rounded border's own outline is curved
+        let round = |content: &str, curved_outline: bool| {
+            content.contains("1 J\n") || (!curved_outline && content.contains(" c\n"))
+        };
+        for (name, html) in [
+            ("uniform", r#"<div style="border: {w} dotted red; width: 100pt; height: 30pt"></div>"#),
+            (
+                "one side",
+                r#"<div style="border-top: {w} dotted red; border-bottom: 1px solid blue; width: 100pt; height: 30pt"></div>"#,
+            ),
+            (
+                "rounded",
+                r#"<div style="border: {w} dotted red; border-radius: 8px; width: 100pt; height: 30pt"></div>"#,
+            ),
+            (
+                "column rule",
+                r#"<div style="column-count: 2; column-rule: {w} dotted red; width: 200pt"><div>A</div><div style="break-before: column">B</div></div>"#,
+            ),
+            (
+                "collapsed table",
+                r#"<table style="border-collapse: collapse"><tr><td style="border: {w} dotted red; width: 100pt">&nbsp;</td></tr></table>"#,
+            ),
+        ] {
+            for thin in ["1px", "2px", "3px"] {
+                let content = content(&html.replace("{w}", thin));
+                assert!(!round(&content, name == "rounded"), "{name} {thin} has round dots");
+            }
+            let content = content(&html.replace("{w}", "4px"));
+            assert!(round(&content, name == "rounded"), "{name} 4px has no round dots");
+        }
+    }
+
+    #[test]
     fn render_dotted_border_emits_dash_pattern() {
-        let html = r#"<div style="border: 2px dotted red; width: 100pt">Dotted</div>"#;
+        let html = r#"<div style="border: 4px dotted red; width: 100pt">Dotted</div>"#;
         let nodes = parse_html(html).unwrap();
         let pages = layout(&nodes, PageSize::A4, Margin::default());
         let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();

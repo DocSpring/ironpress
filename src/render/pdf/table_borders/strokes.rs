@@ -178,6 +178,8 @@ fn paint_dotted_border_areas(
         (y2 - y1).signum()
     };
     let step = width * 2.0;
+    // Round dots; a thinner dotted border is square dots a width long
+    let round = crate::render::borders::dotted_dots_are_round(width / crate::fonts::PT_PER_CSS_PX);
     let mut offset = 0.0;
     while offset <= length + 0.001 {
         let center = if horizontal {
@@ -185,7 +187,14 @@ fn paint_dotted_border_areas(
         } else {
             PdfPoint::new(x1, y1 + direction * offset)
         };
-        PdfEllipse::circle(center, width / 2.0).push_path(content);
+        if round {
+            PdfEllipse::circle(center, width / 2.0).push_path(content);
+        } else {
+            let half = width / 2.0;
+            content.push_str(
+                &PdfRect::new(center.x - half, center.y - half, width, width).rect_path(),
+            );
+        }
         offset += step;
     }
     content.push_str("f\n");

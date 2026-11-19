@@ -27,6 +27,13 @@ pub(crate) enum DashLayout {
     Dashes { count: usize, dash: f32, gap: f32 },
 }
 
+/// Whether a dotted stroke `width_px` CSS px thick is drawn as round dots. Blink draws one up to 3px thick as square
+/// dots, dashes a width long ([`DashPattern::dotted`]), and only a thicker one with round caps
+/// (`StrokeData::StrokeIsDashed`).
+pub(crate) fn dotted_dots_are_round(width_px: f32) -> bool {
+    width_px > 3.0
+}
+
 impl DashPattern {
     /// The dashes of a stroke `width` thick, `width_px` CSS px (`StrokeData::DashLengthRatio`, `DashGapRatio`):
     /// dashes three times the width with gaps twice it below 3px, and twice and once the width from 3px.

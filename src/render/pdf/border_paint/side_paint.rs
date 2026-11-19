@@ -165,7 +165,9 @@ pub(super) fn paint_square_patterned_side(
     side: &crate::layout::engine::LayoutBorderSide,
 ) {
     let half = side.width / 2.0;
-    let dotted = side.style == BorderStyle::Dotted;
+    // Round dots; a thinner dotted side is dashes a width long
+    let dotted = side.style == BorderStyle::Dotted
+        && crate::render::borders::dotted_dots_are_round(side.width / crate::fonts::PT_PER_CSS_PX);
     let endpoint_inset = if dotted { half } else { 0.0 };
     let (start, end, length) = match edge {
         PhysicalSide::Top => (
@@ -202,7 +204,11 @@ pub(super) fn paint_square_patterned_side(
     ring.side_region(edge).push_clip(content);
     ring.push_clip(content);
     content.push_str(&PdfRgb::from(side.color).stroke_operator());
-    let (array, phase) = corner_dash_array(length, side.width, dotted);
+    let (array, phase) = if side.style == BorderStyle::Dotted && !dotted {
+        thin_dotted_dash_array(length, side.width)
+    } else {
+        corner_dash_array(length, side.width, dotted)
+    };
     if dotted {
         content.push_str("1 J\n");
     }
@@ -212,6 +218,17 @@ pub(super) fn paint_square_patterned_side(
     ));
     content.push_str(reset_dash_pattern(side.style));
     content.push_str("Q\n");
+}
+
+/// The dash array of a dotted side too thin for round dots: an open stroke of
+/// dashes a width long that starts and ends with one.
+fn thin_dotted_dash_array(length: f32, width: f32) -> (String, f32) {
+    use crate::render::borders::{DashLayout, DashPattern, StrokePath};
+
+    match DashPattern::dotted(width).layout(length, StrokePath::Open) {
+        DashLayout::Solid => (format!("{length} 0"), 0.0),
+        DashLayout::Dashes { dash, gap, .. } => (format!("{dash} {gap}"), 0.0),
+    }
 }
 
 pub(super) fn paint_border_band_side(

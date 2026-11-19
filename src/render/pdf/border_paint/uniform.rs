@@ -192,20 +192,35 @@ fn paint_square_pattern(
     rect: PdfRect,
     side: crate::layout::engine::LayoutBorderSide,
 ) {
+    use crate::render::borders::{DashPattern, dotted_dots_are_round};
+
+    let width_px = side.width / crate::fonts::PT_PER_CSS_PX;
     if side.style == BorderStyle::Dashed {
-        paint_square_dashes(content, rect, side.width);
-    } else {
+        paint_square_dashes(
+            content,
+            rect,
+            side.width,
+            DashPattern::dashed(side.width, width_px),
+        );
+    } else if dotted_dots_are_round(width_px) {
         paint_square_dots(content, rect, side.width);
+    } else {
+        paint_square_dashes(content, rect, side.width, DashPattern::dotted(side.width));
     }
 }
 
-/// The dashes along each side of a dashed border, as Blink lays them out: each
-/// side is an open stroke that starts and ends with a dash
-/// ([`DashPattern::layout`]), and a side no longer than two dashes is solid.
-fn paint_square_dashes(content: &mut String, rect: PdfRect, width: f32) {
-    use crate::render::borders::{DashLayout, DashPattern, StrokePath};
+/// The dashes along each side of a dashed border, or a dotted one too thin for
+/// round dots, as Blink lays them out: each side is an open stroke that starts
+/// and ends with a dash ([`DashPattern::layout`]), and a side no longer than two
+/// dashes is solid.
+fn paint_square_dashes(
+    content: &mut String,
+    rect: PdfRect,
+    width: f32,
+    pattern: crate::render::borders::DashPattern,
+) {
+    use crate::render::borders::{DashLayout, StrokePath};
 
-    let pattern = DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX);
     // How many dashes a side `length` long has, how long and how far apart
     let side = |length: f32| match pattern.layout(length, StrokePath::Open) {
         DashLayout::Solid => (1, length.max(0.0), 0.0),

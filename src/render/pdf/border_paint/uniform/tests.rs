@@ -204,7 +204,12 @@ fn opaque_open_fragment_border_matches_full_span_browser_decomposition() {
 /// The widths of the dashes `paint_square_dashes` draws along the bottom side.
 fn bottom_dash_widths(width: f32) -> Vec<f32> {
     let mut content = String::new();
-    paint_square_dashes(&mut content, PdfRect::new(0.0, 0.0, 120.0, 60.0), width);
+    paint_square_dashes(
+        &mut content,
+        PdfRect::new(0.0, 0.0, 120.0, 60.0),
+        width,
+        crate::render::borders::DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX),
+    );
     content
         .lines()
         .filter_map(|line| line.strip_suffix(" re"))

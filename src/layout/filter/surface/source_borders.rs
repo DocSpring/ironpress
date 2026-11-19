@@ -117,6 +117,13 @@ impl RasterColumnRule {
             BorderStyle::Dashed => {
                 dashed_at(along, self.rect.size.height, width).then_some(self.paint.color)
             }
+            BorderStyle::Dotted if !round_dots(width) => dash_at(
+                along,
+                self.rect.size.height,
+                width,
+                DashPattern::dotted(width),
+            )
+            .then_some(self.paint.color),
             BorderStyle::Dotted => {
                 let radius = width * 0.5;
                 let center = nearest_dot(along, self.rect.size.height, width);
@@ -178,6 +185,9 @@ impl BorderPatternPath {
         let length = *self.lengths.get(side);
         match style {
             BorderStyle::Dashed => dashed_at(nearest.offset, length, width),
+            BorderStyle::Dotted if !round_dots(width) => {
+                dash_at(nearest.offset, length, width, DashPattern::dotted(width))
+            }
             BorderStyle::Dotted => {
                 let center_offset = nearest_dot(nearest.offset, length, width);
                 nearest.distance.hypot(nearest.offset - center_offset) <= radius
@@ -235,10 +245,23 @@ struct PathProjection {
 /// Whether `offset` along a side `length` long falls on one of its dashes: the
 /// same open stroke the PDF painter draws ([`DashPattern::layout`]).
 fn dashed_at(offset: f32, length: f32, width: f32) -> bool {
+    dash_at(
+        offset,
+        length,
+        width,
+        DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX),
+    )
+}
+
+/// Whether a dotted stroke `width` thick paints as round dots rather than dashes a width long
+fn round_dots(width: f32) -> bool {
+    crate::render::borders::dotted_dots_are_round(width / crate::fonts::PT_PER_CSS_PX)
+}
+
+fn dash_at(offset: f32, length: f32, width: f32, pattern: DashPattern) -> bool {
     if length <= 0.0 || width <= 0.0 {
         return false;
     }
-    let pattern = DashPattern::dashed(width, width / crate::fonts::PT_PER_CSS_PX);
     match pattern.layout(length, StrokePath::Open) {
         DashLayout::Solid => true,
         DashLayout::Dashes { count, dash, gap } => {
@@ -404,6 +427,32 @@ mod tests {
             let painted = (0..40).any(|x| paint.sample(Point::new(x as f32 + 0.5, 4.0)).is_some());
             assert!(painted, "{style:?} did not paint");
         }
+    }
+
+    #[test]
+    fn thin_dotted_borders_are_square_dots_and_thick_ones_round() {
+        // As in the PDF painters: up to 3px a dotted border is dashes a width long, so a dot's corner is painted. The
+        // top side's first dot starts (a dash) or is centred (a round dot) where its centreline starts, half a width
+        // in; the sample is near the outer edge, a little under half a width further along
+        let corner_painted = |width_px: f32| {
+            let width = width_px * crate::fonts::PT_PER_CSS_PX;
+            let border = PhysicalEdges::uniform(LayoutBorderSide {
+                width,
+                color: Color::BLACK,
+                style: BorderStyle::Dotted,
+            });
+            let paint = RasterBorder::new(
+                Rect::new(Point::ORIGIN, Size::new(60.0, 60.0)),
+                &border,
+                CornerRadii::ZERO,
+            );
+            paint
+                .sample(Point::new(width * 0.95, width * 0.05))
+                .is_some()
+        };
+        assert!(corner_painted(2.0));
+        assert!(corner_painted(3.0));
+        assert!(!corner_painted(4.0));
     }
 
     #[test]
