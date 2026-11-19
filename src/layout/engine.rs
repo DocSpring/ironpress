@@ -40,8 +40,8 @@ pub(crate) use super::helpers::*;
 use super::images::*;
 pub use super::inline_box::{CenteredStroke, GaugeFill, InlineBox, InlineBoxPaint};
 use super::inline_formatting::{
-    AnonymousBlockFlow, GeneratedContentStyles, InlineContentSequence, InlineFormattingChild,
-    InlineFormattingContext, PrincipalPseudoStyles,
+    AnonymousBlockFlow, InlineContentSequence, InlineFormattingChild, InlineFormattingContext,
+    PrincipalPseudoStyles,
 };
 use super::list_item::{ListItemContent, collect_list_item_marker_line, layout_list_item_blocks};
 use super::list_markers::{
@@ -4078,8 +4078,14 @@ fn flatten_element_with_running_mode(
                 following_siblings: Vec::new(),
                 is_empty: false,
             };
-            let generated_styles =
-                GeneratedContentStyles::resolve(el, &style, env.rules, &li_selector_ctx, env.fonts);
+            let pseudo_styles = super::inline_formatting::PrincipalPseudoStyles::resolve(
+                el,
+                &style,
+                env.rules,
+                &li_selector_ctx,
+                env.fonts,
+            );
+            let generated_styles = pseudo_styles.generated();
             let custom_before = generated_styles
                 .before()
                 .filter(|style| !style.content.is_empty());
@@ -4323,6 +4329,7 @@ fn flatten_element_with_running_mode(
             // Block-level children other than nested lists, and inline content
             // after a block, are laid out after the marker's line, in source
             // order (`layout_list_item_blocks` below).
+            let content_start = runs.len();
             let list_item_blocks = collect_list_item_marker_line(
                 el,
                 &style,
@@ -4367,6 +4374,16 @@ fn flatten_element_with_running_mode(
                     (None, 0.0, 0.0)
                 }
             };
+
+            // `::first-letter` applies to the item's first line of content, not
+            // to its marker (css-pseudo-4 §2.2.1).
+            let drop_cap = pseudo_styles.first_letter().and_then(|fl| {
+                let mut content = runs.split_off(content_start);
+                let drop_cap =
+                    super::block::apply_first_letter_pseudo(&mut content, &style, fl, env.fonts);
+                runs.append(&mut content);
+                drop_cap
+            });
 
             let block_heading_level = heading_level(el.tag);
 
@@ -4439,7 +4456,8 @@ fn flatten_element_with_running_mode(
                     // rendered `text_indent` (which includes `-marker_hang`) here so
                     // wrapping reclaims exactly the marker's width for the first line
                     // (css-lists-3 §6: outside markers sit outside the principal box).
-                    .with_text_indent(text_indent),
+                    .with_text_indent(text_indent)
+                    .with_drop_cap(drop_cap),
                     env.fonts,
                     line_floats.as_ref(),
                 );

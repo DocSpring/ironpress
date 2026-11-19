@@ -1184,6 +1184,9 @@ pub(crate) fn apply_first_letter_style(
     letter_run.font_family = resolve_style_font_family(fl, fonts);
     letter_run.background_color = fl.background_color;
     letter_run.line_height_factor = text_run_line_height_factor(fl, fonts);
+    // Its line-height resolves against its own font size, not the paragraph's (CSS 2.1 §10.8.1), so a larger
+    // first letter makes its line taller
+    letter_run.line_height_basis = letter_run.font_size;
     letter_run.shaping = crate::layout::text::text_run_shaping(fl);
     letter_run.metadata = crate::layout::text::text_run_metadata(fl);
     crate::layout::text::mark_synthetic_weight_run(&mut letter_run, fl.font_weight, fonts);

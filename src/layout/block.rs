@@ -387,6 +387,49 @@ fn shrink_to_fit_content_width(
     }
 }
 
+/// Split off and restyle the first typographic letter unit of `runs` with its `::first-letter` style (css-pseudo-4
+/// §2.2) before line breaking, so its (possibly larger) glyph takes part in wrapping. A dropped initial returns its
+/// complete inline exclusion geometry for the lines it spans.
+pub(crate) fn apply_first_letter_pseudo(
+    runs: &mut Vec<TextRun>,
+    style: &ComputedStyle,
+    fl: &ComputedStyle,
+    fonts: &HashMap<String, TtfFont>,
+) -> Option<crate::layout::helpers::DropCap> {
+    let block_line_height = style.font_size * resolved_line_height_factor(style, fonts);
+    let initial_letter_style;
+    let fl = if fl.initial_letter > 1.0 {
+        initial_letter_style = {
+            let mut s = fl.clone();
+            s.font_size = initial_letter_font_size(
+                &s,
+                style.font_size,
+                block_line_height,
+                fl.initial_letter,
+                fonts,
+            );
+            s
+        };
+        &initial_letter_style
+    } else {
+        fl
+    };
+    let is_drop_cap = fl.initial_letter > 1.0 || matches!(fl.float, Float::Left);
+    // The initial letter's used font size aligns its cap height, while its
+    // inline margin-box bearings follow the spanned line metric: one parent
+    // em plus every additional line-height (css-inline-3 §7.5–7.6).
+    let initial_letter_inline_metric_size = (fl.initial_letter > 1.0)
+        .then_some(style.font_size + (fl.initial_letter - 1.0) * block_line_height);
+    crate::layout::helpers::apply_first_letter_style(
+        runs,
+        fl,
+        fonts,
+        block_line_height,
+        is_drop_cap,
+        initial_letter_inline_metric_size,
+    )
+}
+
 pub(crate) fn layout_block_element(
     el: &ElementNode,
     style: &mut ComputedStyle,
@@ -1569,45 +1612,10 @@ pub(crate) fn layout_block_element(
         inline_sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
     }
 
-    // `::first-letter` (css-pseudo-4 §2.2): split off and restyle the first
-    // typographic letter unit before line breaking so its (possibly larger)
-    // glyph participates in wrapping. A dropped initial returns its complete
-    // inline exclusion geometry for the lines it spans.
-    let mut drop_cap: Option<crate::layout::helpers::DropCap> = None;
-    if let Some(fl) = first_letter_style {
-        let block_line_height = style.font_size * resolved_line_height_factor(style, env.fonts);
-        let initial_letter_style;
-        let fl = if fl.initial_letter > 1.0 {
-            initial_letter_style = {
-                let mut s = fl.clone();
-                s.font_size = initial_letter_font_size(
-                    &s,
-                    style.font_size,
-                    block_line_height,
-                    fl.initial_letter,
-                    env.fonts,
-                );
-                s
-            };
-            &initial_letter_style
-        } else {
-            fl
-        };
-        let is_drop_cap = fl.initial_letter > 1.0 || matches!(fl.float, Float::Left);
-        // The initial letter's used font size aligns its cap height, while its
-        // inline margin-box bearings follow the spanned line metric: one parent
-        // em plus every additional line-height (css-inline-3 §7.5–7.6).
-        let initial_letter_inline_metric_size = (fl.initial_letter > 1.0)
-            .then_some(style.font_size + (fl.initial_letter - 1.0) * block_line_height);
-        drop_cap = crate::layout::helpers::apply_first_letter_style(
-            &mut runs,
-            fl,
-            env.fonts,
-            block_line_height,
-            is_drop_cap,
-            initial_letter_inline_metric_size,
-        );
-    }
+    // `::first-letter` (css-pseudo-4 §2.2): split off and restyle the first typographic letter unit before line
+    // breaking. A dropped initial returns its complete inline exclusion geometry for the lines it spans.
+    let drop_cap = first_letter_style
+        .and_then(|fl| apply_first_letter_pseudo(&mut runs, style, fl, env.fonts));
 
     let had_text_runs = runs.iter().any(|run| has_non_collapsible_text(&run.text));
     let has_inline_box_runs = runs.iter().any(|r| r.inline_box.is_some());

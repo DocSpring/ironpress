@@ -321,3 +321,22 @@ fn inline_block_lays_out_its_before_and_after_content() {
         assert_eq!(inner, expected, "{markup}");
     }
 }
+
+#[test]
+fn a_larger_first_letter_makes_its_line_taller() {
+    // The letter's `line-height: normal` resolves against its own font size
+    // (CSS 2.1 §10.8.1), so the next paragraph starts lower.
+    let next_top = |first_letter: &str| {
+        let pages = layout_pages(&format!(
+            r#"<style>body {{ font-size: 11px }} p {{ margin: 0 }} .fl::first-letter {{ {first_letter} }}</style>
+            <p class="fl">Paragraph</p><p>Next</p>"#
+        ));
+        pages[0].elements[1].0
+    };
+    let plain = next_top("color: red");
+    let large = next_top("font-size: 200%");
+    assert!(
+        large > plain + 6.0,
+        "a 22px first letter should push the next line down past an 11px one: {large} vs {plain}"
+    );
+}

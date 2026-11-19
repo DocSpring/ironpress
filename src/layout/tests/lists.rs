@@ -181,3 +181,28 @@ fn list_in_columns_lays_its_items_out_in_columns_and_numbers_them() {
         (2, ["4.", "5."].map(String::from).to_vec())
     );
 }
+
+#[test]
+fn a_list_items_first_letter_is_styled_but_not_its_marker() {
+    let runs = visible_runs(
+        r#"<style>li::first-letter { font-size: 200%; color: #c2410c }</style>
+        <ol style="font-size: 10px"><li>List item</li></ol>"#,
+    );
+    let font_size = |text: &str| {
+        runs.iter()
+            .find(|run| run.text.trim() == text)
+            .unwrap_or_else(|| {
+                panic!(
+                    "no run {text:?} in {:?}",
+                    runs.iter().map(|r| &r.text).collect::<Vec<_>>()
+                )
+            })
+            .font_size
+    };
+    assert_eq!(font_size("1."), 7.5);
+    assert_eq!(font_size("L"), 15.0);
+    assert!(
+        runs.iter()
+            .any(|run| run.text.starts_with("ist") && run.font_size == 7.5)
+    );
+}
