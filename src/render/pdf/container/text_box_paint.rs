@@ -415,7 +415,9 @@ pub(super) fn paint_text_box(
                     inline_background_y_and_height(run, text_y, run.padding, ctx.text.custom_fonts);
                 content.push_str(&PdfRgb::from((br, bgc, bb)).fill_operator());
                 content.push_str(
-                    &PdfRect::new(rx, ry, rw2, rh)
+                    &ctx.text
+                        .pdf_writer
+                        .snap_border_box(PdfRect::new(rx, ry, rw2, rh))
                         .rounded(run.border_radii)
                         .path_or_rect(),
                 );

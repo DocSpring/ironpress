@@ -583,3 +583,36 @@ fn nested_text_block_padding_top_offsets_text() {
     let with_padding_y = first_td_y(&with_padding).unwrap();
     assert!((without_padding_y - with_padding_y - 12.0).abs() < 0.01);
 }
+
+#[test]
+fn an_inline_background_is_snapped_to_whole_pixels_as_its_border_is() {
+    // "Before " ends at a fractional CSS pixel, so the span's box starts at one.
+    // Chrome paints the box's background and border on the same pixel-snapped
+    // edges, so the background fills the border's inner edge exactly.
+    let html = r#"<p style="margin: 0; font: 14px sans-serif">Before <span style="background: #ffff00; border: 2px solid #ff0000; padding: 0 6px">note</span> end</p>"#;
+    let nodes = parse_html(html).unwrap();
+    let pages = layout(&nodes, PageSize::A4, Margin::default());
+    let pdf = render_pdf(&pages, PageSize::A4, Margin::default()).unwrap();
+    let pdf_str = String::from_utf8_lossy(&pdf);
+    let after_fill = pdf_str
+        .split("1 1 0 rg\n")
+        .nth(1)
+        .expect("the span's yellow background fill");
+    let rect: Vec<f32> = after_fill
+        .lines()
+        .next()
+        .and_then(|line| line.strip_suffix(" re"))
+        .expect("a rectangle after the fill colour")
+        .split_whitespace()
+        .map(|value| value.parse().unwrap())
+        .collect();
+    let (left, width) = (rect[0], rect[2]);
+    let css_px = |points: f32| points / 0.75;
+    for (edge, value) in [("left", left), ("right", left + width)] {
+        let px = css_px(value);
+        assert!(
+            (px - px.round()).abs() < 0.001,
+            "the background's {edge} edge is at {px}px, not on a whole pixel"
+        );
+    }
+}

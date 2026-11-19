@@ -634,7 +634,9 @@ fn paint_inline_background(
         inline_background_y_and_height(run, span.text_y, run.padding, ctx.text.custom_fonts);
     content.push_str(&format!("{br} {bg} {bb} rg\n"));
     content.push_str(
-        &PdfRect::new(span.left, rect_y, span.width, rect_h)
+        &ctx.text
+            .pdf_writer
+            .snap_border_box(PdfRect::new(span.left, rect_y, span.width, rect_h))
             .rounded(run.border_radii)
             .path_or_rect(),
     );

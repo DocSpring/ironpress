@@ -514,7 +514,9 @@ pub(in crate::render::pdf) fn render_flex_row(
                         );
                         content.push_str(&format!("{br} {bgc} {bb} rg\n"));
                         content.push_str(
-                            &PdfRect::new(rx, ry, rw2, rh)
+                            &ctx.text
+                                .pdf_writer
+                                .snap_border_box(PdfRect::new(rx, ry, rw2, rh))
                                 .rounded(run.border_radii)
                                 .path_or_rect(),
                         );

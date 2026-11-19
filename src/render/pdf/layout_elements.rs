@@ -430,7 +430,9 @@ pub(super) fn render_cell_text(
                     "{background_r} {background_g} {background_b} rg\n"
                 ));
                 content.push_str(
-                    &PdfRect::new(rx, ry, rw2, rh)
+                    &ctx.text
+                        .pdf_writer
+                        .snap_border_box(PdfRect::new(rx, ry, rw2, rh))
                         .rounded(run.border_radii)
                         .path_or_rect(),
                 );
