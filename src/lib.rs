@@ -5757,6 +5757,48 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
+    fn grid_items_take_their_own_heights_with_registered_fonts() {
+        // Each grid item's measured height was remembered by its address, and the items were copies that lived only
+        // as long as their grid, so a later grid's copy could be allocated where an earlier one was and take its
+        // height: a receipt's second line moved down by the height of the shop name, a tall row came out short. It
+        // happened with the fonts registered by name, as page designs register theirs, depending on where the
+        // allocator put things. The grids lay out their lines as the same paragraphs in blocks do.
+        let font = include_bytes!("../assets/LiberationSans-Regular.ttf").to_vec();
+        let converter = HtmlConverter::new()
+            .compress(false)
+            .pdf_forms(true)
+            .add_font("ds-sans-regular", font);
+        let document = |inner: &str| {
+            let groups = (0..6)
+                .map(|i| {
+                    format!(
+                        r#"<div><div style="{inner}"><p class="big">Big {i}</p><p>after {i}</p></div></div><div><div style="{inner}"><p>first {i}</p><p>second {i}</p><p>third {i}</p></div></div>"#
+                    )
+                })
+                .collect::<String>();
+            format!(
+                r#"<style>@font-face {{ font-family: "Sans"; src: local("ds-sans-regular"); }} body {{ font-family: "Sans"; }} p {{ margin: 0; line-height: 20px; font-size: 12px; }} .big {{ font-size: 24px; line-height: 36px; }}</style><div style="display: grid; grid-template-columns: 200px; row-gap: 8px">{groups}</div>"#
+            )
+        };
+        let starts = |pdf: Vec<u8>| -> Vec<String> {
+            String::from_utf8_lossy(&pdf)
+                .lines()
+                .filter_map(|line| line.strip_suffix(" Tm"))
+                .map(str::to_string)
+                .collect()
+        };
+        let blocks = starts(converter.convert(&document("width: 200px")).unwrap());
+        for _ in 0..8 {
+            let grids = starts(
+                converter
+                    .convert(&document("display: grid; grid-template-columns: 200px"))
+                    .unwrap(),
+            );
+            assert_eq!(grids, blocks);
+        }
+    }
+
+    #[test]
     fn nested_grids_lay_out_in_polynomial_time() {
         // Row sizing laid out each auto-height item once to measure it and again in its cell, so the work doubled
         // with each nested grid: 24 levels would take hours. They need more than a test thread's 2 MiB of stack.

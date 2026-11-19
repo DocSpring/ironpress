@@ -19,6 +19,7 @@ use crate::style::computed::{
 };
 use crate::style::font_metrics::FontMetrics;
 use crate::types::{EdgeSizes, Point, Size};
+use std::borrow::Cow;
 
 use super::box_model::ResolvedBoxDimensions;
 use super::context::{ContainingBlock, LayoutContext, LayoutEnv};
@@ -1693,13 +1694,15 @@ fn grid_item_outer_height(
     ctx: &LayoutContext,
     env: &mut LayoutEnv,
     child_el: &ElementNode,
+    // Whether its height can be remembered: only the container's own children (borrowed from its node) can. A
+    // generated box is built again for each layout, and its text can come from counters its node doesn't hold
+    rememberable: bool,
     ancestors: &[AncestorInfo],
     content_width: Option<f32>,
 ) -> f32 {
     let content_h = if cs.height.is_some() {
         0.0
     } else if let Some(width) = content_width {
-        let measurement = GridItemMeasurement::new(child_el, width, ctx);
         let measured = |env: &mut LayoutEnv| {
             let content =
                 measure_grid_item_content(child_el, cs, ctx, ancestors, width, None, env, None);
@@ -1710,12 +1713,17 @@ fn grid_item_outer_height(
                     .map(|element| super::paginate::estimate_element_height(element.as_ref()))
                     .sum::<f32>()
         };
-        match env.grid_item_heights.remembered(&measurement) {
-            Some(height) => height,
-            None => {
-                let height = measured(env);
-                env.grid_item_heights.remember(measurement, height);
-                height
+        if !rememberable {
+            measured(env)
+        } else {
+            let measurement = GridItemMeasurement::new(child_el, width, ctx);
+            match env.grid_item_heights.remembered(&measurement) {
+                Some(height) => height,
+                None => {
+                    let height = measured(env);
+                    env.grid_item_heights.remember(measurement, height);
+                    height
+                }
             }
         }
     } else {
@@ -2749,7 +2757,9 @@ fn layout_grid_container_inner(
     let abs_child_indices: Vec<usize> = (0..total_child_count)
         .filter(|&i| all_child_styles[i].position.is_absolute())
         .collect();
-    let mut element_children: Vec<ElementNode> = Vec::new();
+    // The items: the container's own children are borrowed, so each keeps one address for the whole layout and its
+    // measured height can be remembered; generated boxes and anonymous text items are built here
+    let mut element_children: Vec<Cow<'_, ElementNode>> = Vec::new();
     let mut child_styles: Vec<GridItemStyle> = Vec::new();
 
     let container_selector_ctx = SelectorContext {
@@ -2763,7 +2773,7 @@ fn layout_grid_container_inner(
     let generated_styles =
         GeneratedContentStyles::resolve(el, style, env.rules, &container_selector_ctx, env.fonts);
     if let Some(before_style) = generated_styles.before() {
-        element_children.push(pseudo_element_node(before_style));
+        element_children.push(Cow::Owned(pseudo_element_node(before_style)));
         child_styles.push(GridItemStyle::principal_only(before_style.clone()));
     }
 
@@ -2774,7 +2784,7 @@ fn layout_grid_container_inner(
                 if has_non_collapsible_text(text) {
                     let mut node = ElementNode::new(crate::parser::dom::HtmlTag::Span);
                     node.children.push(DomNode::Text(text.clone()));
-                    element_children.push(node);
+                    element_children.push(Cow::Owned(node));
                     child_styles.push(GridItemStyle::principal_only(anonymous_grid_item_style(
                         style,
                     )));
@@ -2835,7 +2845,7 @@ fn layout_grid_container_inner(
                             env.font_metrics(),
                         );
                         if !flat_style.position.is_absolute() {
-                            element_children.push(flat_el.clone());
+                            element_children.push(Cow::Borrowed(flat_el));
                             let table_source = TableSourcePath::new(
                                 flat_selector_context
                                     .ancestors
@@ -2853,7 +2863,7 @@ fn layout_grid_container_inner(
                         }
                     }
                 } else {
-                    element_children.push((*child_el).clone());
+                    element_children.push(Cow::Borrowed(child_el));
                     child_styles.push(direct_style.clone());
                 }
             }
@@ -2861,7 +2871,7 @@ fn layout_grid_container_inner(
     }
 
     if let Some(after_style) = generated_styles.after() {
-        element_children.push(pseudo_element_node(after_style));
+        element_children.push(Cow::Owned(pseudo_element_node(after_style)));
         child_styles.push(GridItemStyle::principal_only(after_style.clone()));
     }
     let auto_column_pattern = matched_grid_track_pattern(
@@ -3126,11 +3136,13 @@ fn layout_grid_container_inner(
             .dimensions
             .content
             .width;
+        let item = &element_children[p.idx];
         let item_h = grid_item_outer_height(
             cs,
             ctx,
             env,
-            &element_children[p.idx],
+            item,
+            matches!(item, Cow::Borrowed(_)),
             &child_ancestors,
             Some(item_width),
         );
@@ -3269,8 +3281,16 @@ fn layout_grid_container_inner(
                     _ => false,
                 });
                 if let Some(baseline) = grid_item_first_baseline(cs, has_text, env) {
-                    let item_h =
-                        grid_item_outer_height(cs, ctx, env, child_el, &child_ancestors, None);
+                    let rememberable = matches!(child_el, Cow::Borrowed(_));
+                    let item_h = grid_item_outer_height(
+                        cs,
+                        ctx,
+                        env,
+                        child_el,
+                        rememberable,
+                        &child_ancestors,
+                        None,
+                    );
                     baselines.push((p.idx, baseline, item_h));
                 }
             }
