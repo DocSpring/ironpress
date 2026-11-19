@@ -256,10 +256,7 @@ impl NestedRowsRenderer<'_, '_> {
                     clip.begin(content, self.stacking);
                 }
                 let cell_inner_w = cell_content_box.width;
-                let mut baseline_cursor = TextBaselineCursor::new(
-                    cell_content_box.top(),
-                    pdf_writer.page_content_transform,
-                );
+                let mut baseline_cursor = pdf_writer.text_baseline_cursor(cell_content_box.top());
                 for line in &cell.layout.content.lines {
                     let metrics = line_box_metrics(line, custom_fonts);
                     let text_y = baseline_cursor.next_horizontal(metrics);
@@ -307,26 +304,40 @@ impl NestedRowsRenderer<'_, '_> {
                             // gauge) paints in its slot on the line.
                             if let Some(inline) = run.inline_box.as_deref() {
                                 if !run.is_inline_edge() {
+                                    let x_height_ratio =
+                                        line_primary_x_height_ratio(&merged, custom_fonts);
+                                    let mut box_ctx = PageRenderContext::new(
+                                        pdf_writer,
+                                        page_images,
+                                        custom_fonts,
+                                        prepared_custom_fonts,
+                                        page_shadings,
+                                        shading_counter,
+                                        page_ext_gstates,
+                                        bg_alpha_counter,
+                                        annotations,
+                                        page_paint_box,
+                                        page_height,
+                                    )
+                                    .with_initial_fixed_origin(initial_fixed_origin);
+                                    box_ctx.stacking = self.stacking.fork();
                                     render_inline_box(
                                         content,
                                         inline,
-                                        lx + inline.margin_left,
-                                        text_y,
-                                        line_top_y,
-                                        line_bottom_y,
-                                        line_text_top_y,
-                                        line_text_bottom_y,
-                                        run.font_size,
-                                        run_line_height_for_vertical_align(run),
-                                        line_primary_x_height_ratio(&merged, custom_fonts),
-                                        custom_fonts,
-                                        prepared_custom_fonts,
-                                        page_ext_gstates,
-                                        bg_alpha_counter,
-                                        page_shadings,
-                                        shading_counter,
-                                        pdf_writer,
-                                        page_images,
+                                        InlineBoxSlot {
+                                            x: lx + inline.margin_left,
+                                            baseline: text_y,
+                                            line: InlineBoxLine {
+                                                top: line_top_y,
+                                                bottom: line_bottom_y,
+                                                text_top: line_text_top_y,
+                                                text_bottom: line_text_bottom_y,
+                                                x_height_ratio,
+                                            },
+                                            font_size: run.font_size,
+                                            line_height: run_line_height_for_vertical_align(run),
+                                        },
+                                        &mut box_ctx,
                                     );
                                 }
                             }

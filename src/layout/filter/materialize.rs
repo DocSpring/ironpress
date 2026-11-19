@@ -6,9 +6,11 @@
 
 use std::collections::HashMap;
 
-use crate::layout::elements::{FlexRow, GridRow, LayoutElement, LayoutNode, LayoutVisitorMut};
+use crate::layout::elements::{
+    FlexRow, GridRow, LayoutElement, LayoutNode, LayoutVisitorMut, TextBlock,
+};
 use crate::parser::ttf::TtfFont;
-use crate::types::{EdgeSizes, Point};
+use crate::types::{EdgeSizes, Point, Vector};
 
 use super::paint_space::{InheritedFilterPaintSpace, PageBoxAnchor};
 
@@ -105,6 +107,52 @@ fn materialize_node_filter(
                 self.fonts,
                 self.filter_dpi,
             );
+        }
+
+        /// The nodes an atomic inline box was laid out as, anchored where the box is painted in its line, so a
+        /// filter's raster lines up with the page's pixels as the box does.
+        fn visit_text_block(&mut self, element: &mut TextBlock) {
+            let box_model = &element.box_model;
+            let content = Vector::new(
+                box_model.border.left.width + box_model.padding.left,
+                box_model.border.top.width + box_model.padding.top,
+            );
+            let content_width = box_model.size.width.fixed_value().map(|width| {
+                width - box_model.border.horizontal_width() - box_model.padding.horizontal()
+            });
+            let content_anchor = self.anchor.offset(content);
+            // On the CSS-pixel grid of the page, as the painter puts baselines
+            let page_top = content_anchor.border_origin().y;
+            let origins = super::surface::inline_box_origins(
+                &element.lines,
+                content_width,
+                element.text.alignment,
+                element.text.indent,
+                self.fonts,
+                |baseline| crate::fonts::round_to_css_pixel(page_top + baseline) - page_top,
+            );
+            let mut origins = origins.into_iter().flatten();
+            for inline in element
+                .lines
+                .iter_mut()
+                .flat_map(|line| line.runs.iter_mut())
+                .filter_map(|run| run.inline_box.as_deref_mut())
+            {
+                // A run that can't be measured leaves the box at its block's content box
+                let origin = origins.next().unwrap_or(Point::ORIGIN);
+                let anchor = content_anchor.offset(Vector::new(origin.x, origin.y));
+                for node in &mut inline.content {
+                    materialize_node_filter(
+                        node,
+                        TraversalFrame {
+                            anchor,
+                            inherited_space: self.inherited_space,
+                        },
+                        self.fonts,
+                        self.filter_dpi,
+                    );
+                }
+            }
         }
     }
 

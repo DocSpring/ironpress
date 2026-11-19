@@ -26,7 +26,6 @@ use super::engine::{
     ElementSiblingContext, ElementSiblingPosition, LayoutBorder, LayoutTreeContext,
     element_is_empty, flatten_element,
 };
-use super::inline::layout_inline_mixed_sequence_with_env;
 use super::inline_formatting::{
     AnonymousBlockFlow, GeneratedContentStyles, GeneratedInlineContent, InlineContentSequence,
     InlineFormattingChild, InlineFormattingContext, InlineFormattingRole,
@@ -1458,15 +1457,17 @@ fn distribute_rows(
     }
 }
 
+/// The item's runs, its atomic inline boxes laid out in `layout`.
 fn collect_grid_item_runs(
     cs: &GridItemStyle,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
     child_el: &ElementNode,
     ancestors: &[AncestorInfo],
 ) -> Vec<super::engine::TextRun> {
     let mut runs = Vec::new();
     let descendant_ancestors = cs.descendant_ancestors(child_el, ancestors);
-    InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources).collect(
+    InlineRunCollector::for_layout(env, layout).collect(
         InlineContentSequence::with_generated(&child_el.children, cs.generated_content(child_el)),
         &cs.principal,
         &mut runs,
@@ -1485,6 +1486,7 @@ fn grid_item_has_block_child(child_el: &ElementNode) -> bool {
 
 fn collect_grid_item_leading_runs(
     cs: &GridItemStyle,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
     child_el: &ElementNode,
     ancestors: &[AncestorInfo],
@@ -1499,7 +1501,7 @@ fn collect_grid_item_leading_runs(
     }
     let mut runs = Vec::new();
     let descendant_ancestors = cs.descendant_ancestors(child_el, ancestors);
-    InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources).collect(
+    InlineRunCollector::for_layout(env, layout).collect(
         InlineContentSequence::with_generated(
             &leading.children,
             GeneratedInlineContent::from_boxes(cs.generated_content(child_el).before(), None),
@@ -1514,6 +1516,7 @@ fn collect_grid_item_leading_runs(
 
 fn grid_item_intrinsic_widths(
     cs: &GridItemStyle,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
     child_el: &ElementNode,
     ancestors: &[AncestorInfo],
@@ -1528,9 +1531,9 @@ fn grid_item_intrinsic_widths(
     let counter_checkpoint = env.counter_state.clone();
     let counter_scope = env.counter_state.enter_element(&cs.principal);
     let runs = if grid_item_has_block_child(child_el) {
-        collect_grid_item_leading_runs(cs, env, child_el, ancestors)
+        collect_grid_item_leading_runs(cs, layout, env, child_el, ancestors)
     } else {
-        collect_grid_item_runs(cs, env, child_el, ancestors)
+        collect_grid_item_runs(cs, layout, env, child_el, ancestors)
     };
     env.counter_state.leave_element(counter_scope);
     *env.counter_state = counter_checkpoint;
@@ -1687,7 +1690,7 @@ fn add_spanning_contribution(
 /// and maximum sizing constraints have resolved against its natural border box.
 fn grid_item_outer_height(
     cs: &GridItemStyle,
-    ctx: Option<&LayoutContext>,
+    ctx: &LayoutContext,
     env: &mut LayoutEnv,
     child_el: &ElementNode,
     ancestors: &[AncestorInfo],
@@ -1695,7 +1698,7 @@ fn grid_item_outer_height(
 ) -> f32 {
     let content_h = if cs.height.is_some() {
         0.0
-    } else if let (Some(ctx), Some(width)) = (ctx, content_width) {
+    } else if let Some(width) = content_width {
         let measurement = GridItemMeasurement::new(child_el, width, ctx);
         let measured = |env: &mut LayoutEnv| {
             let content =
@@ -1718,7 +1721,7 @@ fn grid_item_outer_height(
     } else {
         let counter_checkpoint = env.counter_state.clone();
         let counter_scope = env.counter_state.enter_element(&cs.principal);
-        let runs = collect_grid_item_runs(cs, env, child_el, ancestors);
+        let runs = collect_grid_item_runs(cs, ctx, env, child_el, ancestors);
         env.counter_state.leave_element(counter_scope);
         *env.counter_state = counter_checkpoint;
         if runs.is_empty() {
@@ -1967,23 +1970,6 @@ fn layout_grid_item_content_inner(
         &item_el.children,
         item_style.generated_content(item_el),
     );
-    if InlineFormattingContext::new(item_style, env.rules, &child_ancestors, env.font_metrics())
-        .requires_atomic_layout(inline_sequence)
-        && layout_inline_mixed_sequence_with_env(
-            inline_sequence,
-            item_style,
-            &child_ctx,
-            &mut out,
-            &child_ancestors,
-            env,
-        )
-    {
-        return CellContent {
-            lines: Vec::new(),
-            children: out,
-        };
-    }
-
     // A grid item is a block container (css-grid-1 §6.2). When block-level
     // children sit beside its inline content, each run of that content is an
     // anonymous block box in source order (CSS 2.1 §9.2.1.1).
@@ -2017,7 +2003,7 @@ fn layout_grid_item_content_inner(
         };
     }
 
-    let runs = collect_grid_item_runs(item_style, env, item_el, item_ancestors);
+    let runs = collect_grid_item_runs(item_style, &child_ctx, env, item_el, item_ancestors);
     let lines = wrap_text_runs(
         runs,
         TextWrapOptions::new(
@@ -3048,7 +3034,7 @@ fn layout_grid_container_inner(
     for p in &placed {
         let cs = &child_styles[p.idx];
         let contributions =
-            grid_item_intrinsic_widths(cs, env, &element_children[p.idx], &child_ancestors);
+            grid_item_intrinsic_widths(cs, ctx, env, &element_children[p.idx], &child_ancestors);
         if p.col_span == 1 {
             if p.col < num_cols {
                 intrinsic[p.col].minimum.include(contributions.minimum);
@@ -3142,7 +3128,7 @@ fn layout_grid_container_inner(
             .width;
         let item_h = grid_item_outer_height(
             cs,
-            Some(ctx),
+            ctx,
             env,
             &element_children[p.idx],
             &child_ancestors,
@@ -3284,7 +3270,7 @@ fn layout_grid_container_inner(
                 });
                 if let Some(baseline) = grid_item_first_baseline(cs, has_text, env) {
                     let item_h =
-                        grid_item_outer_height(cs, None, env, child_el, &child_ancestors, None);
+                        grid_item_outer_height(cs, ctx, env, child_el, &child_ancestors, None);
                     baselines.push((p.idx, baseline, item_h));
                 }
             }

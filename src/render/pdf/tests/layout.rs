@@ -826,3 +826,60 @@ fn coalesce_text_runs_border_radii_comparison() {
         "runs with identical corner radii should merge"
     );
 }
+
+/// A block with a definite height keeps it when its line is taller (CSS 2.1 §10.5): the next block starts below that
+/// height, with the line overflowing, in layout and in paint alike.
+#[test]
+fn a_block_after_a_definite_height_with_a_taller_line_starts_below_that_height() {
+    let html = r#"
+        <style>
+            @page { size: 200pt 200pt; margin: 0; }
+            html, body { margin: 0; }
+        </style>
+        <div style="box-sizing: border-box; height: 72pt; line-height: 72pt; border-top: 2pt solid #ff0000">text</div>
+        <div style="height: 10pt; background: #00ff00"></div>
+    "#;
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(html)
+        .unwrap();
+    let pdf_str = String::from_utf8_lossy(&pdf);
+    let next = rect_after_color(&pdf_str, "0 1 0 rg").expect("the next block is painted");
+    let top = 200.0 - (next.1 + next.3);
+    assert!(
+        (top - 72.0).abs() < 0.01,
+        "the next block starts at 72pt, got {top}pt"
+    );
+}
+
+/// Chromium paints an atomic inline box at whole CSS pixels, wherever the text before it ends, and its contents with
+/// it.
+#[test]
+fn an_inline_block_after_text_paints_at_whole_css_pixels() {
+    let html = r#"
+        <style>
+            @page { size: 300px 120px; margin: 0; }
+            html, body { margin: 0; }
+        </style>
+        <div style="padding: 9px; font-size: 22px">Ax<span style="display: inline-block; width: 26px; height: 26px; padding: 3px; background: #00ff00; vertical-align: text-top"><span style="display: block; height: 4px; background: #0000ff"></span></span>yQ</div>
+    "#;
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(html)
+        .unwrap();
+    let pdf_str = String::from_utf8_lossy(&pdf);
+    let whole_px = |pt: f32| ((pt / 0.75) - (pt / 0.75).round()).abs() < 0.001;
+    let (x, y, w, h) = rect_after_color(&pdf_str, "0 1 0 rg").expect("the box is painted");
+    assert!(
+        whole_px(x) && whole_px(y + h),
+        "the box's left and top are whole CSS pixels, got {x}pt, {}pt",
+        y + h
+    );
+    let (inner_x, inner_y, _, inner_h) =
+        rect_after_color(&pdf_str, "0 0 1 rg").expect("the box's block is painted");
+    assert!(
+        (inner_x - (x + 2.25)).abs() < 0.001 && ((y + h) - (inner_y + inner_h) - 2.25).abs() < 0.001,
+        "the block inside sits at the box's padding edge, 3px in from its corner"
+    );
+    assert!((w - 24.0).abs() < 0.001, "the box keeps its 32px width, got {w}pt");
+}

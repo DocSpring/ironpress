@@ -8,27 +8,6 @@ use crate::types::Size;
 
 use super::svg::resolve_svg_size;
 
-/// How an inline replaced element contributes the font's lower baseline extent.
-///
-/// Ordinary replaced-element flow preserves the font's fractional metrics.
-/// An atomic native inline box instead participates in the CSS inline line box,
-/// whose block-end extent is resolved on the CSS-pixel grid.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum InlineBaselineGapRounding {
-    #[default]
-    Fractional,
-    CssPixel,
-}
-
-impl InlineBaselineGapRounding {
-    fn apply(self, gap: f32) -> f32 {
-        match self {
-            Self::Fractional => gap,
-            Self::CssPixel => crate::fonts::ceil_to_css_pixel(gap),
-        }
-    }
-}
-
 /// Placement of replaced-image content inside its box.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ImagePlacement {
@@ -194,7 +173,6 @@ pub(crate) fn add_inline_replaced_baseline_gap(
     mut element: LayoutNode,
     style: &ComputedStyle,
     fonts: &HashMap<String, TtfFont>,
-    rounding: InlineBaselineGapRounding,
 ) -> LayoutNode {
     if style.display != Display::Inline || style.vertical_align != VerticalAlign::Baseline {
         return element;
@@ -207,7 +185,7 @@ pub(crate) fn add_inline_replaced_baseline_gap(
         style.font_style.is_slanted(),
         fonts,
     );
-    let baseline_gap = rounding.apply(descender_ratio * style.font_size);
+    let baseline_gap = descender_ratio * style.font_size;
     if baseline_gap <= 0.0 {
         return element;
     }

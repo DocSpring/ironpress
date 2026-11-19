@@ -66,7 +66,7 @@ pub(crate) struct ProgressBar {
 }
 
 impl ProgressBar {
-    const DEFAULT_WIDTH: f32 = 150.0;
+    pub(crate) const DEFAULT_WIDTH: f32 = 150.0;
     const DEFAULT_HEIGHT: f32 = 12.0;
     const OUTLINE_WIDTH: f32 = 0.5;
     const OUTLINE_GRAY: f32 = 0.6;

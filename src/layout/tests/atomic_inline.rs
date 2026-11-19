@@ -1,7 +1,7 @@
 use crate::layout::elements::{FlexRow, LayoutVisitor, TextBlock};
 use crate::layout::engine::visit_layout_tree;
 
-use super::support::{layout_pages, visible_inline_box_runs, visible_runs};
+use super::support::{inline_boxes, layout_pages, visible_runs};
 
 #[derive(Default)]
 struct AtomicBoxCount {
@@ -60,9 +60,9 @@ fn computed_inline_level_boxes_survive_adjacent_block_siblings() {
                 let markup = format!(
                     r#"<style>.subject {{ display: {display}; }}</style><div>{children}</div>"#
                 );
+                // The tree walk reaches the text of the nodes an inline box was laid out as
                 let visible_text = visible_runs(&markup)
                     .into_iter()
-                    .chain(visible_inline_box_runs(&markup))
                     .map(|run| run.text)
                     .collect::<String>();
                 let case = format!("tag={tag}, display={display}, inline_first={inline_first}");
@@ -79,5 +79,47 @@ fn computed_inline_level_boxes_survive_adjacent_block_siblings() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn an_inline_block_is_as_wide_as_its_widest_line_between_forced_breaks() {
+    let widths = |contents: &str| {
+        let markup = format!(
+            r#"<style>.box {{ display: inline-block; padding: 0 5px; border: 2px solid }}</style>
+            <p>Before <span class="box">{contents}</span> after</p>"#
+        );
+        inline_boxes(&markup)
+            .first()
+            .map(|inline| inline.width)
+            .expect("an inline box")
+    };
+    let one_line = widths("inline block");
+    let broken = widths("inline block<br>two");
+    assert!(
+        (broken - one_line).abs() < 0.01,
+        "a <br> ends a max-content line: {broken} vs {one_line}"
+    );
+    assert!(widths("inline block two") > one_line + 10.0);
+}
+
+#[test]
+fn inline_level_boxes_are_laid_out_as_their_boxes() {
+    for display in ["inline-block", "inline-flex", "inline-grid", "inline-table"] {
+        let markup = format!(
+            r#"<style>.box {{ display: {display}; border: 2px solid; padding: 3px }}</style>
+            <p>Before <span class="box"><span>alpha</span> <span>beta</span></span> after</p>"#
+        );
+        let boxes = inline_boxes(&markup);
+        assert_eq!(boxes.len(), 1, "{display}");
+        assert!(!boxes[0].content.is_empty(), "{display}: laid out as nodes");
+        let text: Vec<String> = visible_runs(&markup)
+            .into_iter()
+            .map(|run| run.text.trim().to_string())
+            .collect();
+        assert!(
+            text.iter().any(|t| t.contains("alpha")) && text.iter().any(|t| t.contains("beta")),
+            "{display}: {text:?}"
+        );
     }
 }

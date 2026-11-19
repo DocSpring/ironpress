@@ -30,13 +30,9 @@ use super::helpers::{
     resolve_padding_box_height, resolve_relative_offsets, selector_attributes_with_has,
     selector_context_from_ancestors,
 };
-use super::inline::{
-    layout_inline_block_group_with_env_and_spacing, layout_inline_mixed_sequence_with_env,
-};
 use super::inline_formatting::{
-    AnonymousBlockFlow, AnonymousInlineFormattingContext, AtomicInlineEmission,
-    GeneratedContentStyles, InlineContentSequence, InlineFormattingChild, InlineFormattingContext,
-    InlineFormattingRole,
+    AnonymousBlockFlow, AnonymousInlineFormattingContext, GeneratedContentStyles,
+    InlineContentSequence, InlineFormattingChild, InlineFormattingContext, InlineFormattingRole,
 };
 use super::paginate::estimate_element_height;
 use super::text::{
@@ -902,7 +898,6 @@ pub(crate) fn layout_block_element(
     let mut leading_floats = crate::layout::floats::FloatsInText::default();
     let mut leading_float_elements: Vec<usize> = Vec::new();
     let mut leading_float_nodes: Vec<LayoutNode> = Vec::new();
-    let mut mixed_inline_row_emitted = false;
     // The runs collected before each absolute box in this box's lines, then
     // each one's static position in them.
     let mut out_of_flow_boundaries: Vec<super::text::OutOfFlowBoundary> = Vec::new();
@@ -1085,14 +1080,13 @@ pub(crate) fn layout_block_element(
                 );
                 continue;
             }
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect(
-                    inline_sequence.item(child_index),
-                    style,
-                    &mut runs,
-                    None,
-                    child_ancestors,
-                );
+            InlineRunCollector::for_layout(env, &ib_ctx).collect(
+                inline_sequence.item(child_index),
+                style,
+                &mut runs,
+                None,
+                child_ancestors,
+            );
         }
         // Flush remaining text runs after math
         flush_runs(
@@ -1220,66 +1214,11 @@ pub(crate) fn layout_block_element(
             if own_float_frame {
                 env.floats.enter(target, inner_width, Default::default());
             }
-            // Atomic inlines need one source-ordered row before a block sibling
-            // splits the surrounding formatting context.
-            let mut atomic_inline_segments =
-                InlineFormattingContext::new(style, env.rules, child_ancestors, env.font_metrics())
-                    .atomic_layout_segments(inline_sequence)
-                    .into_iter()
-                    .peekable();
-            let mut emitted_atomic_until = 0;
             let mut child_el_idx = 0;
             for (child_index, child) in el.children.iter().enumerate() {
-                if atomic_inline_segments
-                    .peek()
-                    .is_some_and(|segment| segment.start() == child_index)
-                {
-                    let anonymous_start = target.len();
-                    flush_runs(
-                        &mut runs,
-                        inner_width,
-                        style,
-                        available_width,
-                        block_w,
-                        effective_height,
-                        auto_offset_left,
-                        el,
-                        target,
-                        env.fonts,
-                        &env.floats,
-                        &mut inline_floats,
-                    );
-                    clear_anonymous_block_margins(&mut target[anonymous_start..]);
-                    let anonymous_start = target.len();
-                    if let Some(segment) = atomic_inline_segments.next()
-                        && layout_inline_mixed_sequence_with_env(
-                            segment,
-                            style,
-                            &ctx.with_parent(inner_width, Some(available_height), style.font_size),
-                            target,
-                            child_ancestors,
-                            env,
-                        )
-                    {
-                        emitted_atomic_until = segment.end();
-                    }
-                    clear_anonymous_block_margins(&mut target[anonymous_start..]);
-                }
-                if child_index < emitted_atomic_until {
-                    if matches!(child, DomNode::Element(_)) {
-                        child_el_idx += 1;
-                    }
-                    continue;
-                }
                 match child {
                     DomNode::Text(_) => {
-                        InlineRunCollector::new(
-                            env.rules,
-                            env.fonts,
-                            env.counter_state,
-                            &mut *env.resources,
-                        )
-                        .collect(
+                        InlineRunCollector::for_layout(env, &ib_ctx).collect(
                             inline_sequence.item(child_index),
                             style,
                             &mut runs,
@@ -1365,13 +1304,7 @@ pub(crate) fn layout_block_element(
                     }
                     DomNode::Element(_) => {
                         // Inline element: collect as text runs
-                        InlineRunCollector::new(
-                            env.rules,
-                            env.fonts,
-                            env.counter_state,
-                            &mut *env.resources,
-                        )
-                        .collect(
+                        InlineRunCollector::for_layout(env, &ib_ctx).collect(
                             inline_sequence.item(child_index),
                             style,
                             &mut runs,
@@ -1578,13 +1511,7 @@ pub(crate) fn layout_block_element(
                     }
                     DomNode::Element(_) if inline_children.is_outside(child_el_idx) => break,
                     DomNode::Text(_) => {
-                        InlineRunCollector::new(
-                            env.rules,
-                            env.fonts,
-                            env.counter_state,
-                            &mut *env.resources,
-                        )
-                        .collect(
+                        InlineRunCollector::for_layout(env, &ib_ctx).collect(
                             inline_sequence.item(child_index),
                             style,
                             &mut runs,
@@ -1592,14 +1519,8 @@ pub(crate) fn layout_block_element(
                             child_ancestors,
                         );
                     }
-                    DomNode::Element(_) if inline_children.is_inline_text(child_el_idx) => {
-                        InlineRunCollector::new(
-                            env.rules,
-                            env.fonts,
-                            env.counter_state,
-                            &mut *env.resources,
-                        )
-                        .collect(
+                    DomNode::Element(_) if inline_children.is_in_lines(child_el_idx) => {
+                        InlineRunCollector::for_layout(env, &ib_ctx).collect(
                             inline_sequence.item(child_index),
                             style,
                             &mut runs,
@@ -1613,24 +1534,6 @@ pub(crate) fn layout_block_element(
                     child_el_idx += 1;
                 }
             }
-        } else if InlineFormattingContext::new(
-            style,
-            env.rules,
-            child_ancestors,
-            env.font_metrics(),
-        )
-        .requires_atomic_layout(inline_sequence)
-            && layout_inline_mixed_sequence_with_env(
-                inline_sequence,
-                style,
-                &ctx.with_parent(inner_width, Some(available_height), style.font_size),
-                output,
-                child_ancestors,
-                env,
-            )
-        {
-            // The mixed inline-row path emitted the inline content as one row.
-            mixed_inline_row_emitted = true;
         } else {
             inline_sequence.append_before(
                 &mut runs,
@@ -1638,12 +1541,7 @@ pub(crate) fn layout_block_element(
                 env.counter_state,
                 &mut *env.resources,
             );
-            let mut collector = InlineRunCollector::new(
-                env.rules,
-                env.fonts,
-                env.counter_state,
-                &mut *env.resources,
-            );
+            let mut collector = InlineRunCollector::for_layout(env, &ib_ctx);
             if has_out_of_flow_children {
                 collector = collector.recording_out_of_flow();
             }
@@ -1651,7 +1549,7 @@ pub(crate) fn layout_block_element(
             out_of_flow_boundaries = collector.out_of_flow_boundaries();
         }
     }
-    if !skip_inline_collection && !mixed_inline_row_emitted && !has_block_kids_for_wrapper {
+    if !skip_inline_collection && !has_block_kids_for_wrapper {
         inline_sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
     }
 
@@ -1697,62 +1595,7 @@ pub(crate) fn layout_block_element(
 
     let had_text_runs = runs.iter().any(|run| has_non_collapsible_text(&run.text));
     let has_inline_box_runs = runs.iter().any(|r| r.inline_box.is_some());
-    // Inline-block boxes that sit *amongst text* are part of the line and are
-    // laid out by the inline TextBlock path; the container must then NOT also
-    // re-run `layout_inline_block_group`. But a *visual* container whose children
-    // are only inline-blocks (no text) keeps the dedicated group path, which
-    // measures shrink-to-fit rows inside the wrapper. When there is no wrapper
-    // (a plain non-visual block), the group path never fires, so the inline-box
-    // runs must stay and render as a TextBlock.
-    // The leading runs of a box with block children hold only its text and
-    // inline elements: its own inline-blocks are laid out beside them.
-    let runs_hold_own_inline_blocks = !has_block_kids_for_wrapper;
-    // The group path lays out only this box's own inline-block children. An
-    // atomic box inside an inline element (`<span><b style="display:
-    // inline-block">`), or a `<progress>` gauge, reaches the line only through
-    // these runs, so they must not be dropped for the group path.
-    let direct_inline_block_runs = if runs_hold_own_inline_blocks {
-        el.children
-            .iter()
-            .filter_map(|child| match child {
-                DomNode::Element(element) => Some(element),
-                DomNode::Text(_) => None,
-            })
-            .zip(inline_children.iter())
-            .filter(|(element, child)| {
-                matches!(child.role, InlineFormattingRole::Atomic(_))
-                    && child.role.uses_text_run_layout(element)
-            })
-            .count()
-    } else {
-        0
-    };
-    let group_path_owns_inline_boxes =
-        runs.iter().filter(|r| r.inline_box.is_some()).count() <= direct_inline_block_runs;
-    let will_use_group_wrapper = has_inline_box_runs
-        && group_path_owns_inline_boxes
-        && !had_text_runs
-        && (early_has_visual
-            || style.height.is_some()
-            || style.aspect_ratio.is_some()
-            || !layout_padding.is_zero())
-        && nesting_depth < 40;
-    let had_inline_runs = mixed_inline_row_emitted
-        || had_text_runs
-        || (has_inline_box_runs && !will_use_group_wrapper)
-        || has_math_children;
-    let atomic_inline_emission = if mixed_inline_row_emitted {
-        AtomicInlineEmission::MixedRow
-    } else if has_inline_box_runs && !will_use_group_wrapper && runs_hold_own_inline_blocks {
-        AtomicInlineEmission::InlineBlockRuns
-    } else {
-        AtomicInlineEmission::Independent
-    };
-    if will_use_group_wrapper {
-        // Pure inline-block group inside a wrapper: drop the placeholder runs so
-        // `layout_inline_block_group` lays them out (unchanged behaviour).
-        runs.clear();
-    }
+    let had_inline_runs = had_text_runs || has_inline_box_runs || has_math_children;
     let mut cb_info = None;
 
     // has_block_kids_for_wrapper is computed earlier (before has_math_children).
@@ -2189,8 +2032,6 @@ pub(crate) fn layout_block_element(
         // Accumulate preceding element siblings so sibling combinators (`+`, `~`)
         // resolve during the cascade (these call sites previously passed `&[]`).
         let mut preceding_siblings: Vec<(String, Vec<String>)> = Vec::new();
-        let mut ib_group_wrapper: Vec<(&ElementNode, bool)> = Vec::new();
-        let mut pending_inline_space = false;
         let wrapper_children = if has_table_cell_children {
             let child_cb = effective_height.map(|height| ContainingBlock {
                 x: 0.0,
@@ -2262,7 +2103,8 @@ pub(crate) fn layout_block_element(
         // Set once that anonymous block flow has laid out the rest of the
         // children, including the trailing generated content.
         let mut tail_laid_out = false;
-        let lays_out_from_start = splits_inline;
+        // Its inline content wasn't collected into lines above: the anonymous block flow lays out all of it
+        let lays_out_from_start = splits_inline || skip_inline_collection;
         for (child_index, child) in wrapper_children.iter().enumerate() {
             match child {
                 _ if lays_out_from_start
@@ -2270,18 +2112,6 @@ pub(crate) fn layout_block_element(
                         && inline_children.is_outside(child_el_idx)
                         && !leading_float_elements.contains(&child_el_idx) =>
                 {
-                    if !ib_group_wrapper.is_empty() {
-                        #[allow(clippy::drain_collect)]
-                        let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
-                        layout_inline_block_group_with_env_and_spacing(
-                            &taken,
-                            style,
-                            &ib_ctx,
-                            &mut child_elements,
-                            child_ancestors,
-                            env,
-                        );
-                    }
                     AnonymousBlockFlow::new(style, &child_ctx, child_ancestors, positioned_depth)
                         .layout(
                             if lays_out_from_start {
@@ -2312,33 +2142,10 @@ pub(crate) fn layout_block_element(
                     tail_laid_out = true;
                     break;
                 }
-                DomNode::Text(text) => {
-                    if text.chars().any(char::is_whitespace) {
-                        pending_inline_space = true;
-                    }
-                }
+                DomNode::Text(_) => {}
                 DomNode::Element(child_el) => {
-                    if inline_children.atomic_is_emitted(child_el_idx, atomic_inline_emission) {
-                        pending_inline_space = false;
-                    } else if inline_children.is_grouped_atomic(child_el_idx) {
-                        ib_group_wrapper.push((child_el, pending_inline_space));
-                        pending_inline_space = false;
-                    } else {
-                        // Flush any pending inline-block group
-                        if !ib_group_wrapper.is_empty() {
-                            #[allow(clippy::drain_collect)]
-                            let taken: Vec<(&ElementNode, bool)> =
-                                ib_group_wrapper.drain(..).collect();
-                            layout_inline_block_group_with_env_and_spacing(
-                                &taken,
-                                style,
-                                &ib_ctx,
-                                &mut child_elements,
-                                child_ancestors,
-                                env,
-                            );
-                        }
-                        pending_inline_space = false;
+                    // Atomic inline boxes are in the lines above
+                    if !inline_children.is_atomic(child_el_idx) {
                         if (recurses_as_layout_child(child_el.tag)
                             || inline_children.requires_independent_layout(child_el_idx))
                             && !leading_float_elements.contains(&child_el_idx)
@@ -2410,19 +2217,6 @@ pub(crate) fn layout_block_element(
                     child_el_idx += 1;
                 }
             }
-        }
-        // Flush remaining inline-block group
-        if !ib_group_wrapper.is_empty() {
-            #[allow(clippy::drain_collect)]
-            let taken: Vec<(&ElementNode, bool)> = ib_group_wrapper.drain(..).collect();
-            layout_inline_block_group_with_env_and_spacing(
-                &taken,
-                style,
-                &ib_ctx,
-                &mut child_elements,
-                child_ancestors,
-                env,
-            );
         }
         if !tail_laid_out {
             let mut generated_inline_after_runs = Vec::new();
@@ -2774,8 +2568,6 @@ pub(crate) fn layout_block_element(
         }
         let mut child_el_idx = 0;
         let mut preceding_siblings: Vec<(String, Vec<String>)> = Vec::new();
-        let mut ib_group: Vec<(&ElementNode, bool)> = Vec::new();
-        let mut pending_inline_space = false;
         let direct_children = if has_table_cell_children {
             flatten_nodes(
                 &el.children,
@@ -2795,59 +2587,36 @@ pub(crate) fn layout_block_element(
         };
         for child in direct_children {
             match child {
-                DomNode::Text(text) => {
-                    if text.chars().any(char::is_whitespace) {
-                        pending_inline_space = true;
-                    }
-                }
+                DomNode::Text(_) => {}
                 DomNode::Element(child_el) => {
-                    if inline_children.atomic_is_emitted(child_el_idx, atomic_inline_emission) {
-                        pending_inline_space = false;
-                    } else if inline_children.is_grouped_atomic(child_el_idx) {
-                        ib_group.push((child_el, pending_inline_space));
-                        pending_inline_space = false;
-                    } else {
-                        // Flush any pending inline-block group
-                        if !ib_group.is_empty() {
-                            #[allow(clippy::drain_collect)]
-                            let taken: Vec<(&ElementNode, bool)> = ib_group.drain(..).collect();
-                            layout_inline_block_group_with_env_and_spacing(
-                                &taken,
-                                style,
-                                &ib_ctx,
-                                output,
-                                child_ancestors,
-                                env,
-                            );
-                        }
-                        pending_inline_space = false;
-                        if recurses_as_layout_child(child_el.tag)
-                            || inline_children.requires_independent_layout(child_el_idx)
-                        {
-                            flatten_element(
-                                child_el,
-                                LayoutTreeContext::new(
-                                    child_parent_style,
-                                    &ctx.with_parent(
-                                        inner_width,
-                                        Some(available_height),
-                                        style.font_size,
-                                    )
-                                    .with_cbs(forward_abs_cb, cb_info),
-                                    child_ancestors,
+                    // Atomic inline boxes are in the lines above
+                    if !inline_children.is_atomic(child_el_idx)
+                        && (recurses_as_layout_child(child_el.tag)
+                            || inline_children.requires_independent_layout(child_el_idx))
+                    {
+                        flatten_element(
+                            child_el,
+                            LayoutTreeContext::new(
+                                child_parent_style,
+                                &ctx.with_parent(
+                                    inner_width,
+                                    Some(available_height),
+                                    style.font_size,
                                 )
-                                .with_positioned_ancestor_depth(positioned_depth)
-                                .for_element(
-                                    ElementSiblingContext::new(child_el_idx, child_el_count)
-                                        .with_neighbors(
-                                            &preceding_siblings,
-                                            forward_siblings(&child_sibling_list, child_el_idx),
-                                        ),
-                                ),
-                                output,
-                                env,
-                            );
-                        }
+                                .with_cbs(forward_abs_cb, cb_info),
+                                child_ancestors,
+                            )
+                            .with_positioned_ancestor_depth(positioned_depth)
+                            .for_element(
+                                ElementSiblingContext::new(child_el_idx, child_el_count)
+                                    .with_neighbors(
+                                        &preceding_siblings,
+                                        forward_siblings(&child_sibling_list, child_el_idx),
+                                    ),
+                            ),
+                            output,
+                            env,
+                        );
                     }
                     preceding_siblings.push((
                         child_el.tag_name().to_string(),
@@ -2860,19 +2629,6 @@ pub(crate) fn layout_block_element(
                     child_el_idx += 1;
                 }
             }
-        }
-        // Flush remaining inline-block group
-        if !ib_group.is_empty() {
-            #[allow(clippy::drain_collect)]
-            let taken: Vec<(&ElementNode, bool)> = ib_group.drain(..).collect();
-            layout_inline_block_group_with_env_and_spacing(
-                &taken,
-                style,
-                &ib_ctx,
-                output,
-                child_ancestors,
-                env,
-            );
         }
     }
 

@@ -3,12 +3,21 @@
 use std::collections::HashMap;
 
 use crate::layout::engine::{FlexCell, TextLine, TextRun};
+use crate::layout::vertical_align::{AlignedBox, AlignmentBasis, LineExtents};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{AlignItems, TextAlign};
 use crate::types::{Color, Point, Size};
 
 use super::canvas::SurfaceRect;
 use super::painter::SourcePainter;
+
+/// A line box in the surface: its top, height and baseline.
+#[derive(Clone, Copy)]
+struct LineSlot {
+    top: f32,
+    height: f32,
+    baseline: f32,
+}
 
 #[derive(Clone, Copy)]
 struct DecorationSpan {
@@ -60,25 +69,29 @@ impl SourcePainter<'_> {
                 .iter()
                 .map(|run| run_width(run, self.fonts))
                 .sum::<Option<f32>>()?;
-            let first_indent = if line_index == 0 { indent } else { 0.0 };
-            let room = content.size.width - line.float_insets.horizontal();
-            let line_x = match alignment {
-                TextAlign::Right => {
-                    content.origin.x + first_indent + (room - first_indent - line_width).max(0.0)
-                }
-                TextAlign::Center => {
-                    content.origin.x
-                        + first_indent
-                        + (room - first_indent - line_width).max(0.0) / 2.0
-                }
-                _ => content.origin.x + first_indent,
-            } + line.x_offset
-                + line.float_insets.left;
+            let line_x = content.origin.x
+                + line_start(
+                    line,
+                    line_index == 0,
+                    Some(content.size.width),
+                    alignment,
+                    indent,
+                    line_width,
+                );
             self.canvas.include_paint_bounds(SurfaceRect::new(
                 Point::new(line_x, line_top),
                 Size::new(line_width, line.height),
             ));
-            self.paint_text_runs(&runs, parent_font_size, line_x, baseline)?;
+            self.paint_text_runs(
+                &runs,
+                parent_font_size,
+                line_x,
+                LineSlot {
+                    top: line_top,
+                    height: line.height,
+                    baseline,
+                },
+            )?;
             line_top += line.height;
         }
         Some(())
@@ -89,10 +102,16 @@ impl SourcePainter<'_> {
         runs: &[TextRun],
         parent_font_size: f32,
         mut run_x: f32,
-        baseline: f32,
+        line: LineSlot,
     ) -> Option<()> {
+        let baseline = line.baseline;
         for run in runs {
-            if run.inline_box.is_some() || run.background_color.is_some() || run.text.is_empty() {
+            if let Some(inline) = run.inline_box.as_deref() {
+                self.paint_inline_box(run, inline, runs, parent_font_size, run_x, line)?;
+                run_x += run.atomic_inline_advance()?;
+                continue;
+            }
+            if run.background_color.is_some() || run.text.is_empty() {
                 return None;
             }
             let (_, font) = crate::text::resolve_custom_font(
@@ -139,6 +158,31 @@ impl SourcePainter<'_> {
             run_x += advance;
         }
         Some(())
+    }
+
+    /// An atomic inline box laid out as its box, in its slot on the line (CSS 2.1 §10.8.1). A box approximated from
+    /// its text has no content to paint here, so the surface can't be drawn.
+    fn paint_inline_box(
+        &mut self,
+        run: &TextRun,
+        inline: &crate::layout::engine::InlineBox,
+        runs: &[TextRun],
+        parent_font_size: f32,
+        run_x: f32,
+        line: LineSlot,
+    ) -> Option<()> {
+        if run.is_inline_edge() {
+            return Some(());
+        }
+        if inline.content.is_empty() {
+            return None;
+        }
+        let border_box = SurfaceRect::new(
+            inline_box_origin(run, inline, runs, parent_font_size, run_x, line, self.fonts),
+            Size::new(inline.width, inline.height),
+        );
+        self.canvas.include_paint_bounds(border_box);
+        self.paint_inline_box_content(&inline.content, border_box)
     }
 
     fn paint_text_shadows(
@@ -310,43 +354,7 @@ pub(super) fn flex_line_max_baseline(
         .reduce(f32::max)
 }
 
-pub(crate) fn table_row_baseline_shifts(
-    cells: &[crate::layout::cells::TableCell],
-    fonts: &HashMap<String, TtfFont>,
-) -> Vec<f32> {
-    let baselines = cells
-        .iter()
-        .map(|cell| {
-            (cell.layout.alignment.block == crate::style::computed::VerticalAlign::Baseline)
-                .then(|| {
-                    let line = cell
-                        .layout
-                        .content
-                        .lines
-                        .iter()
-                        .find(|line| line.runs.iter().any(|run| !run.text.is_empty()))?;
-                    Some(
-                        cell.layout.box_model.content_insets.top
-                            + line_baseline_ascent(line, fonts),
-                    )
-                })
-                .flatten()
-        })
-        .collect::<Vec<_>>();
-    let common = baselines
-        .iter()
-        .filter_map(|baseline| *baseline)
-        .reduce(f32::max);
-    baselines
-        .into_iter()
-        .map(|baseline| match (baseline, common) {
-            (Some(own), Some(common)) => (common - own).max(0.0),
-            _ => 0.0,
-        })
-        .collect()
-}
-
-pub(super) fn line_baseline_ascent(line: &TextLine, fonts: &HashMap<String, TtfFont>) -> f32 {
+pub(crate) fn line_baseline_ascent(line: &TextLine, fonts: &HashMap<String, TtfFont>) -> f32 {
     line.baseline_ascent.unwrap_or_else(|| {
         let (ascent, descent) = line
             .runs
@@ -368,9 +376,117 @@ pub(super) fn line_baseline_ascent(line: &TextLine, fonts: &HashMap<String, TtfF
     })
 }
 
+/// Where a line's runs start, from its block's content-box left edge: moved by `text-align` in a content box
+/// `content_width` wide (without one, as `start`), and on the first line by `text-indent`.
+fn line_start(
+    line: &TextLine,
+    first: bool,
+    content_width: Option<f32>,
+    alignment: TextAlign,
+    indent: f32,
+    line_width: f32,
+) -> f32 {
+    let first_indent = if first { indent } else { 0.0 };
+    let free = content_width.map_or(0.0, |width| {
+        (width - line.float_insets.horizontal() - first_indent - line_width).max(0.0)
+    });
+    let aligned = match alignment {
+        TextAlign::Right => free,
+        TextAlign::Center => free / 2.0,
+        _ => 0.0,
+    };
+    first_indent + aligned + line.x_offset + line.float_insets.left
+}
+
+/// The top-left of an atomic inline box's border box in its line (CSS 2.1 §10.8.1), where `run_x` is where its run
+/// starts.
+fn inline_box_origin(
+    run: &TextRun,
+    inline: &crate::layout::engine::InlineBox,
+    runs: &[TextRun],
+    parent_font_size: f32,
+    run_x: f32,
+    line: LineSlot,
+    fonts: &HashMap<String, TtfFont>,
+) -> Point {
+    // As the painter takes it (`run_line_height_for_vertical_align`)
+    let factor = if run.line_height_factor.is_finite() {
+        run.line_height_factor.max(0.0)
+    } else {
+        1.2
+    };
+    let basis = AlignmentBasis {
+        parent_font_size,
+        parent_x_height: crate::layout::text::line_primary_x_height_ratio(runs, fonts)
+            * parent_font_size,
+        line_height: run.line_height_font_size() * factor,
+    };
+    let extents = LineExtents {
+        above: line.baseline - line.top,
+        below: line.top + line.height - line.baseline,
+    };
+    let margin_top = line.top + extents.top_of(AlignedBox::of(inline), basis);
+    Point::new(
+        run_x + inline.margin_left + inline.rel_offset_x,
+        margin_top + inline.margin_top + inline.rel_offset_y,
+    )
+}
+
+/// The border-box top-left of every atomic inline box in `lines`, from the top-left of their block's content box, in
+/// the order the lines hold them: where they're painted. `snap_baseline` puts a baseline on the pixel grid the
+/// painter puts it on. `None` when a run can't be measured.
+pub(crate) fn inline_box_origins(
+    lines: &[TextLine],
+    content_width: Option<f32>,
+    alignment: TextAlign,
+    indent: f32,
+    fonts: &HashMap<String, TtfFont>,
+    snap_baseline: impl Fn(f32) -> f32,
+) -> Option<Vec<Point>> {
+    let mut origins = Vec::new();
+    let mut line_top = 0.0;
+    for (line_index, line) in lines.iter().enumerate() {
+        let slot = LineSlot {
+            top: line_top,
+            height: line.height,
+            baseline: snap_baseline(line_top + line_baseline_ascent(line, fonts)),
+        };
+        let runs = merged_runs(&line.runs);
+        let parent_font_size = crate::layout::text::line_primary_font_size(&runs);
+        let line_width = runs
+            .iter()
+            .map(|run| run_width(run, fonts))
+            .sum::<Option<f32>>()?;
+        let mut run_x = line_start(
+            line,
+            line_index == 0,
+            content_width,
+            alignment,
+            indent,
+            line_width,
+        );
+        for run in &runs {
+            if let Some(inline) = run.inline_box.as_deref() {
+                origins.push(inline_box_origin(
+                    run,
+                    inline,
+                    &runs,
+                    parent_font_size,
+                    run_x,
+                    slot,
+                    fonts,
+                ));
+            }
+            run_x += run_width(run, fonts)?;
+        }
+        line_top += line.height;
+    }
+    Some(origins)
+}
+
 fn run_width(run: &TextRun, fonts: &HashMap<String, TtfFont>) -> Option<f32> {
     if run.inline_box.is_some() {
-        return None;
+        return run.atomic_inline_advance();
     }
     let authored_spacing = || run.metadata.spacing.add_internal_advance(0.0, &run.text);
     crate::text::measure_text_width_with_shaping(

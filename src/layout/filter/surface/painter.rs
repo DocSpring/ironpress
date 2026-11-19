@@ -249,6 +249,24 @@ impl<'a> SourcePainter<'a> {
         self.paint_children(children, area)
     }
 
+    /// An atomic inline box's laid-out content, whose border box is `border_box` (the box's own, so its content
+    /// starts at its top).
+    pub(super) fn paint_inline_box_content(
+        &mut self,
+        content: &[crate::layout::elements::LayoutNode],
+        border_box: SurfaceRect,
+    ) -> Option<()> {
+        self.paint_children(
+            content,
+            DescendantPaintArea {
+                padding_box: border_box,
+                content_box: border_box,
+                absolute_containing_block: self.space.inherited_containing_block,
+                direct_child_effects: RootEffectHandling::Paint,
+            },
+        )
+    }
+
     pub(super) fn paint_children(
         &mut self,
         children: &[crate::layout::elements::LayoutNode],

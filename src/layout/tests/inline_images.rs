@@ -18,7 +18,9 @@ fn inline_replaced_sizes(markup: &str) -> Vec<(f32, f32)> {
                 let Some(inline) = run.inline_box.as_deref() else {
                     continue;
                 };
-                if inline.image.is_some() || inline.svg.is_some() {
+                // A replaced box is drawn from its image or SVG, or from the replaced node it was laid out as
+                let replaced_node = matches!(inline.content.as_slice(), [node] if node.replaced_element().is_some());
+                if inline.image.is_some() || inline.svg.is_some() || replaced_node {
                     self.0.push((inline.width, inline.height));
                 }
                 self.visit_lines(&inline.lines);

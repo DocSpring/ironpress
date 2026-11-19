@@ -362,6 +362,18 @@ fn smoke_form_controls() {
 }
 
 #[test]
+fn smoke_form_controls_in_a_line() {
+    // A text field and a select in a paragraph are boxes in its line, as in Chrome: as inline elements the text field
+    // drew nothing and the select drew every option's text
+    let html = r#"<p>Name: <input type="text" value="John Doe"> Country: <select><option>France</option><option>Spain</option></select></p>"#;
+    let pdf = smoke_html_to_pdf(html);
+    assert!(pdf_is_valid(&pdf));
+    assert!(pdf_has_text(&pdf, "John Doe"));
+    assert!(pdf_has_text(&pdf, "France"));
+    assert!(!pdf_has_text(&pdf, "Spain"));
+}
+
+#[test]
 fn smoke_media_elements() {
     let html = r#"
         <video width="320" height="240"></video>

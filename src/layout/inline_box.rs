@@ -87,6 +87,11 @@ pub struct InlineBox {
     pub(crate) image_sampling: crate::layout::elements::ImageSampling,
     /// An inline `<svg>` drawn into the content box.
     pub(crate) svg: Option<Box<InlineSvg>>,
+    /// The atomic inline's own box laid out as a block lays out its box: an inline-flex, inline-grid, inline-table
+    /// or inline-block with its contents, or a replaced element. Its border box is this box's, so the line paints it
+    /// where the box goes, with everything a block's box paints (backgrounds, borders, shadows, filters, blending,
+    /// its children).
+    pub(crate) content: Vec<crate::layout::elements::LayoutNode>,
     /// A replaced element inside an inline element, sized again against its block's width when its line is wrapped.
     pub(crate) replaced_sizing:
         Option<Box<crate::layout::text::nested_inline::InlineReplacedSizing>>,

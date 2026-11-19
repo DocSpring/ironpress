@@ -9,9 +9,8 @@ pub(crate) use loader::{
     raster_image_size, svg_image_box, try_parse_svg_bytes,
 };
 pub(crate) use placement::{
-    ImagePlacement, InlineBaselineGapRounding, add_inline_replaced_baseline_gap,
-    compute_image_placement, compute_replaced_content_placement, float_box_around_replaced,
-    svg_intrinsic_size,
+    ImagePlacement, add_inline_replaced_baseline_gap, compute_image_placement,
+    compute_replaced_content_placement, float_box_around_replaced, svg_intrinsic_size,
 };
 pub(crate) use raster::{
     RasterCrop, crop_raster_asset, decode_asset_to_rgba, png_bytes_for_decoding,

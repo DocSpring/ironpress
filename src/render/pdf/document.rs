@@ -1068,10 +1068,8 @@ pub(super) fn render_page_footnotes(
         end_border_alpha(content, applied_alpha);
     }
 
-    let mut baseline_cursor = TextBaselineCursor::new(
-        margin.bottom + area.padding.bottom + total_h,
-        pdf_writer.page_content_transform,
-    );
+    let mut baseline_cursor =
+        pdf_writer.text_baseline_cursor(margin.bottom + area.padding.bottom + total_h);
     for line in &lines {
         // `wrapped_footnote_lines` established this fresh inline formatting
         // context at the page foot. Reuse its resolved baseline instead of

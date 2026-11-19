@@ -19,9 +19,9 @@ use super::text::{
     used_font_size,
 };
 
+pub(crate) mod atomic_box;
 mod blocks_in_inline;
 mod flow;
-mod inline_content;
 mod out_of_flow;
 pub(crate) use blocks_in_inline::{
     BlockInInline, blocks_in_inline, collects_contents, is_block_in_inline,
@@ -431,21 +431,6 @@ impl<'a> InlineContentSequence<'a> {
         }
     }
 
-    /// This segment of `outer` with the generated boundaries it touches:
-    /// `outer`'s `::before` when it starts `outer`, its `::after` when it
-    /// ends it.
-    pub(crate) fn bounded_by(self, outer: Self) -> Self {
-        Self {
-            generated: outer.generated.map(|generated| {
-                GeneratedInlineContent::from_boxes(
-                    generated.before().filter(|_| self.start == outer.start),
-                    generated.after().filter(|_| self.end == outer.end),
-                )
-            }),
-            ..self
-        }
-    }
-
     pub(crate) fn nodes(self) -> &'a [DomNode] {
         self.source_nodes
             .get(self.start..self.end)
@@ -604,32 +589,6 @@ pub(crate) enum InlineFormattingRole {
     Outside,
 }
 
-/// Which parent inline-layout path owns the paint for atomic children.
-///
-/// Child traversal must not independently lay out a box already embedded in a
-/// text run or mixed inline row. Keeping that ownership explicit avoids
-/// tag-specific duplicate-suppression rules.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum AtomicInlineEmission {
-    #[default]
-    Independent,
-    InlineBlockRuns,
-    MixedRow,
-}
-
-impl AtomicInlineEmission {
-    const fn owns(self, role: InlineFormattingRole) -> bool {
-        match self {
-            Self::Independent => false,
-            Self::InlineBlockRuns => matches!(
-                role,
-                InlineFormattingRole::Atomic(AtomicInlineKind::InlineBlock)
-            ),
-            Self::MixedRow => matches!(role, InlineFormattingRole::Atomic(_)),
-        }
-    }
-}
-
 /// Computed participation of one element child in an inline formatting context.
 pub(crate) struct InlineFormattingChild {
     pub(crate) style: ComputedStyle,
@@ -690,36 +649,25 @@ impl InlineFormattingChildren {
         })
     }
 
-    pub(crate) fn is_grouped_atomic(&self, element_index: usize) -> bool {
-        self.0.get(element_index).is_some_and(|child| {
-            matches!(
-                child.role,
-                InlineFormattingRole::Atomic(
-                    AtomicInlineKind::InlineBlock
-                        | AtomicInlineKind::InlineFlex
-                        | AtomicInlineKind::InlineGrid
-                        | AtomicInlineKind::InlineTable
-                )
-            )
-        })
-    }
-
-    pub(crate) fn atomic_is_emitted(
-        &self,
-        element_index: usize,
-        emission: AtomicInlineEmission,
-    ) -> bool {
-        self.0
-            .get(element_index)
-            .is_some_and(|child| emission.owns(child.role))
-    }
-
     pub(crate) fn is_outside(&self, element_index: usize) -> bool {
         self.0.get(element_index).map(|child| child.role) == Some(InlineFormattingRole::Outside)
     }
 
-    pub(crate) fn is_inline_text(&self, element_index: usize) -> bool {
-        self.0.get(element_index).map(|child| child.role) == Some(InlineFormattingRole::Text)
+    /// Whether the child is an atomic inline box, which its line lays out as its box.
+    pub(crate) fn is_atomic(&self, element_index: usize) -> bool {
+        self.0
+            .get(element_index)
+            .is_some_and(|child| matches!(child.role, InlineFormattingRole::Atomic(_)))
+    }
+
+    /// Whether the child goes in the lines: inline text, or an atomic inline box laid out as its box.
+    pub(crate) fn is_in_lines(&self, element_index: usize) -> bool {
+        self.0.get(element_index).is_some_and(|child| {
+            matches!(
+                child.role,
+                InlineFormattingRole::Text | InlineFormattingRole::Atomic(_)
+            )
+        })
     }
 }
 
@@ -735,27 +683,17 @@ pub(crate) enum AtomicInlineKind {
     InlineTable,
 }
 
-impl AtomicInlineKind {
-    const fn requires_environment_aware_layout(self) -> bool {
-        !matches!(self, Self::InlineBlock)
-    }
-}
-
 impl InlineFormattingRole {
     /// Whether this role participates in a table cell's text flow.
     pub(crate) const fn participates_in_table_cell_text_flow(self) -> bool {
-        matches!(
-            self,
-            Self::Text | Self::Atomic(AtomicInlineKind::InlineBlock)
-        )
+        matches!(self, Self::Text | Self::Atomic(_))
     }
 
     /// Text and the established embedded inline-block path are collected as
     /// runs. Other atomic boxes are owned by their source-ordered row segment.
     pub(crate) fn uses_text_run_layout(self, element: &ElementNode) -> bool {
-        matches!(self, Self::Text)
-            || matches!(self, Self::Atomic(AtomicInlineKind::InlineBlock))
-                && element.tag.is_inline()
+        let _ = element;
+        matches!(self, Self::Text | Self::Atomic(_))
     }
 
     pub(crate) fn of(element: &ElementNode, style: &ComputedStyle) -> Self {
@@ -866,135 +804,5 @@ impl<'a> InlineFormattingContext<'a> {
             })
             .collect();
         InlineFormattingChildren(roles)
-    }
-
-    /// Returns true only when every visible child can share one inline
-    /// formatting context and at least one child requires an atomic cell.
-    pub(crate) fn requires_atomic_layout(&self, sequence: InlineContentSequence<'_>) -> bool {
-        let nodes = sequence.nodes();
-        let mut siblings = InlineSiblingCursor::starting_at(
-            sequence.source_nodes(),
-            sequence.starting_element_index(),
-        );
-        let mut saw_atomic = false;
-
-        for node in nodes {
-            let DomNode::Element(element) = node else {
-                continue;
-            };
-            let classes = element.class_list();
-            let selector_context = siblings.next_context(element, self.ancestors);
-            let style = compute_style_with_context_with_font_metrics(
-                element.tag,
-                element.style_attr(),
-                self.parent_style,
-                self.rules,
-                element.tag_name(),
-                &classes,
-                element.id(),
-                &element.attributes,
-                &selector_context,
-                self.font_metrics,
-            );
-
-            match InlineFormattingRole::of(element, &style) {
-                InlineFormattingRole::Atomic(kind) => {
-                    saw_atomic |= kind.requires_environment_aware_layout();
-                }
-                // Out-of-flow inline children are laid out independently, but
-                // their static source position does not split the surrounding
-                // inline formatting context.
-                InlineFormattingRole::OutOfFlow
-                | InlineFormattingRole::Hidden
-                | InlineFormattingRole::Text => {}
-                InlineFormattingRole::Outside => return false,
-            }
-        }
-
-        saw_atomic
-    }
-
-    /// Maximal source-order ranges that contain any atomic inline and remain
-    /// inside one inline formatting context.
-    pub(crate) fn atomic_layout_segments<'b>(
-        &self,
-        sequence: InlineContentSequence<'b>,
-    ) -> Vec<InlineContentSequence<'b>> {
-        self.atomic_layout_segments_requiring(sequence, |_| true)
-    }
-
-    /// Maximal source-order ranges that contain an atomic inline requiring
-    /// access to the layout environment.
-    pub(crate) fn environment_aware_atomic_layout_segments<'b>(
-        &self,
-        sequence: InlineContentSequence<'b>,
-    ) -> Vec<InlineContentSequence<'b>> {
-        self.atomic_layout_segments_requiring(sequence, |kind| {
-            kind.requires_environment_aware_layout()
-        })
-    }
-
-    /// Block/table participants split ranges without forcing later inline
-    /// content onto the legacy per-element path. Each returned sequence keeps
-    /// the complete sibling list for selector matching.
-    fn atomic_layout_segments_requiring<'b>(
-        &self,
-        sequence: InlineContentSequence<'b>,
-        requires_segment: impl Fn(AtomicInlineKind) -> bool,
-    ) -> Vec<InlineContentSequence<'b>> {
-        let source = sequence.source_nodes();
-        let mut siblings =
-            InlineSiblingCursor::starting_at(source, sequence.starting_element_index());
-        let mut segment_start = sequence.start();
-        let mut segment_has_atomic = false;
-        let mut segments = Vec::new();
-
-        for node_index in sequence.start()..sequence.end() {
-            let Some(DomNode::Element(element)) = source.get(node_index) else {
-                continue;
-            };
-            let classes = element.class_list();
-            let selector_context = siblings.next_context(element, self.ancestors);
-            let style = compute_style_with_context_with_font_metrics(
-                element.tag,
-                element.style_attr(),
-                self.parent_style,
-                self.rules,
-                element.tag_name(),
-                &classes,
-                element.id(),
-                &element.attributes,
-                &selector_context,
-                self.font_metrics,
-            );
-
-            match InlineFormattingRole::of(element, &style) {
-                InlineFormattingRole::Atomic(kind) => {
-                    segment_has_atomic |= requires_segment(kind);
-                }
-                InlineFormattingRole::OutOfFlow => {}
-                InlineFormattingRole::Outside => {
-                    if segment_has_atomic && segment_start < node_index {
-                        segments.push(InlineContentSequence::segment(
-                            source,
-                            segment_start,
-                            node_index,
-                        ));
-                    }
-                    segment_start = node_index + 1;
-                    segment_has_atomic = false;
-                }
-                InlineFormattingRole::Hidden | InlineFormattingRole::Text => {}
-            }
-        }
-
-        if segment_has_atomic && segment_start < sequence.end() {
-            segments.push(InlineContentSequence::segment(
-                source,
-                segment_start,
-                sequence.end(),
-            ));
-        }
-        segments
     }
 }

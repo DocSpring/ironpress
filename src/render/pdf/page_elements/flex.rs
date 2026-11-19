@@ -249,7 +249,6 @@ pub(in crate::render::pdf) fn render_flex_row(
     let stacking_scope = StackingScope::for_element(element);
     let mut stacking_plan = StackingPaintPlan::default();
     for cell in cells {
-        let mut prior_box_paint_grid = None;
         let marker = ctx.stacking.marker();
         let mut cell_content = String::new();
         'paint_cell: {
@@ -295,12 +294,6 @@ pub(in crate::render::pdf) fn render_flex_row(
                 cell.padding,
                 cell.paint.border_image.as_ref(),
             );
-            if cell.role.is_atomic_inline() {
-                prior_box_paint_grid = ctx
-                    .text
-                    .pdf_writer
-                    .enter_atomic_inline_paint_grid(cell_geometry.border_box.top_left());
-            }
             let cell_box_geometry = ctx.text.pdf_writer.resolve_box_geometry(cell_geometry);
             let cell_paint_geometry = cell_box_geometry.painting();
             let cell_fragment_geometry =
@@ -422,9 +415,8 @@ pub(in crate::render::pdf) fn render_flex_row(
             }
 
             // Render cell text
-            let mut baseline_cursor = TextBaselineCursor::new(
+            let mut baseline_cursor = ctx.text.pdf_writer.text_baseline_cursor(
                 text_area_top - cell_y_shift - cell.border.top.width - cell.padding.top,
-                ctx.text.pdf_writer.page_content_transform,
             );
             for line in &cell.lines {
                 let metrics = line_box_metrics(line, ctx.text.custom_fonts);
@@ -472,23 +464,20 @@ pub(in crate::render::pdf) fn render_flex_row(
                             render_inline_box(
                                 content,
                                 inline,
-                                x + inline.margin_left,
-                                text_y,
-                                inline_box_line.top,
-                                inline_box_line.bottom,
-                                inline_box_line.text_top,
-                                inline_box_line.text_bottom,
-                                run.font_size,
-                                run_line_height_for_vertical_align(run),
-                                inline_box_line.x_height_ratio,
-                                ctx.text.custom_fonts,
-                                ctx.text.prepared_custom_fonts,
-                                ctx.page_ext_gstates,
-                                ctx.bg_alpha_counter,
-                                ctx.shadings,
-                                ctx.shading_counter,
-                                ctx.text.pdf_writer,
-                                ctx.text.page_images,
+                                InlineBoxSlot {
+                                    x: x + inline.margin_left,
+                                    baseline: text_y,
+                                    line: InlineBoxLine {
+                                        top: inline_box_line.top,
+                                        bottom: inline_box_line.bottom,
+                                        text_top: inline_box_line.text_top,
+                                        text_bottom: inline_box_line.text_bottom,
+                                        x_height_ratio: inline_box_line.x_height_ratio,
+                                    },
+                                    font_size: run.font_size,
+                                    line_height: run_line_height_for_vertical_align(run),
+                                },
+                                ctx,
                             );
                         }
                         x += advance;
@@ -641,9 +630,6 @@ pub(in crate::render::pdf) fn render_flex_row(
             cell_group.finish(content, ctx);
         }
         let descendants = ctx.stacking.take_since(marker);
-        if let Some(prior) = prior_box_paint_grid {
-            ctx.text.pdf_writer.restore_box_paint_grid(prior);
-        }
         ctx.stacking.commit(
             stacking_scope,
             content,

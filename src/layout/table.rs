@@ -1274,10 +1274,12 @@ fn collapsed_outer_vertical_border_extent(rows: &[LayoutNode]) -> f32 {
     first_top.unwrap_or(0.0) + last_bottom.unwrap_or(0.0)
 }
 
+/// A cell's alignment in its row (CSS 2.1 §17.5.3): `baseline`, `top`, `middle` or `bottom`, with any other value
+/// as `baseline`.
 fn table_cell_vertical_align(value: VerticalAlign) -> VerticalAlign {
     match value {
         VerticalAlign::Middle | VerticalAlign::Bottom | VerticalAlign::Top => value,
-        _ => VerticalAlign::Top,
+        _ => VerticalAlign::Baseline,
     }
 }
 
@@ -2565,6 +2567,9 @@ pub(crate) fn flatten_table(
                                     &cell_style,
                                     &text_ancestors,
                                     inner_width,
+                                    &descendant_layout
+                                        .within(&cell_style)
+                                        .child_context(inner_width, &cell_style),
                                     &mut measurement_env,
                                 );
                             }
@@ -3952,9 +3957,10 @@ fn cell_flow_block_widths(
     style: &ComputedStyle,
     ancestors: &[AncestorInfo],
     available_width: f32,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
 ) -> FlowWidths {
-    cell_flow_widths(nodes, style, ancestors, available_width, false, env)
+    cell_flow_widths(nodes, style, ancestors, available_width, layout, false, env)
 }
 
 /// The content widths of a flow of nodes: the inline content between its
@@ -3965,6 +3971,7 @@ fn cell_flow_widths(
     style: &ComputedStyle,
     ancestors: &[AncestorInfo],
     available_width: f32,
+    layout: &LayoutContext,
     with_inline: bool,
     env: &mut LayoutEnv,
 ) -> FlowWidths {
@@ -3983,13 +3990,7 @@ fn cell_flow_widths(
             return FlowWidths::default();
         }
         let mut runs = Vec::new();
-        super::text::InlineRunCollector::new(
-            env.rules,
-            env.fonts,
-            env.counter_state,
-            &mut *env.resources,
-        )
-        .collect(
+        super::text::InlineRunCollector::for_layout(env, layout).collect(
             super::inline_formatting::InlineContentSequence::segment(nodes, start, end),
             style,
             &mut runs,
@@ -4039,6 +4040,7 @@ fn cell_flow_widths(
                 &selector,
                 ancestors,
                 available_width,
+                layout,
                 env,
             )
         } else {
@@ -4067,6 +4069,7 @@ fn cell_block_widths(
     selector: &SelectorContext,
     ancestors: &[AncestorInfo],
     available_width: f32,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
 ) -> FlowWidths {
     let extra = style.padding.horizontal() + style.border.horizontal_width();
@@ -4083,11 +4086,13 @@ fn cell_block_widths(
     }
     let mut child_ancestors = ancestors.to_vec();
     child_ancestors.push(selector.as_ancestor(element));
+    let content_layout = layout.with_parent(available_width, style.height, style.font_size);
     let mut widths = cell_flow_widths(
         &element.children,
         style,
         &child_ancestors,
         available_width,
+        &content_layout,
         true,
         env,
     )
@@ -4105,13 +4110,13 @@ fn cell_block_widths(
 }
 
 fn table_cell_child_should_flatten(el: &ElementNode, style: &ComputedStyle) -> bool {
-    if matches!(el.tag, HtmlTag::Table | HtmlTag::Img | HtmlTag::Svg)
+    let participates_in_text_flow =
+        InlineFormattingRole::of(el, style).participates_in_table_cell_text_flow();
+    if !participates_in_text_flow && matches!(el.tag, HtmlTag::Table | HtmlTag::Img | HtmlTag::Svg)
         || style.position.is_absolute()
     {
         return true;
     }
-    let participates_in_text_flow =
-        InlineFormattingRole::of(el, style).participates_in_table_cell_text_flow();
     !participates_in_text_flow
         && ((recurses_as_layout_child(el.tag) && !collects_as_inline_text(el.tag))
             || style.display != Display::Inline)
@@ -4143,6 +4148,12 @@ struct TableCellChildLayout<'output, 'style, 'ancestors, 'dom> {
 impl IndependentFlowLayout for TableCellChildLayout<'_, '_, '_, '_> {
     fn inline_run_context(&self) -> InlineRunContext {
         InlineRunContext::TableCell
+    }
+
+    fn inline_layout(&self) -> LayoutContext {
+        self.context
+            .descendant_layout
+            .child_context(self.context.available_width, self.context.style)
     }
 
     fn lays_out_independently(&self, element: &ElementNode, child: &InlineFormattingChild) -> bool {
@@ -5332,10 +5343,19 @@ mod border_tests {
                     let two_cells = table
                         .inspect_table(|row| row.content.cells.len() == 2)
                         .unwrap_or(false);
-                    let one_replaced_cell = replaced
-                        .inspect_flex(|row| row.content.cells.len() == 1)
+                    // The image's line, after the anonymous table
+                    let one_replaced_box = replaced
+                        .inspect_text(|block| {
+                            block
+                                .lines
+                                .iter()
+                                .flat_map(|line| &line.runs)
+                                .filter(|run| run.inline_box.is_some())
+                                .count()
+                                == 1
+                        })
                         .unwrap_or(false);
-                    two_cells && one_replaced_cell
+                    two_cells && one_replaced_box
                 })
                 .unwrap_or(false)
             {

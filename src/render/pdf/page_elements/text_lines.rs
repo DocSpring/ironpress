@@ -60,8 +60,7 @@ pub(super) fn render_text_block_lines(
     // Text content is inset from the border-box top by the top
     // border width and the top padding.
     let content_top = block_y - border.top.width - padding.top;
-    let mut baseline_cursor =
-        TextBaselineCursor::new(content_top, ctx.text.pdf_writer.page_content_transform);
+    let mut baseline_cursor = ctx.text.pdf_writer.text_baseline_cursor(content_top);
 
     // Horizontal insets: `block_x` / `render_width` are the
     // border-box left / width, so the content area starts after
@@ -383,23 +382,23 @@ pub(super) fn render_text_block_lines(
                         render_inline_box(
                             content,
                             inline,
-                            ibx,
-                            text_y,
-                            line_top_y,
-                            line_bottom_y,
-                            line_text_top_y,
-                            line_text_bottom_y,
-                            run.font_size,
-                            run_line_height,
-                            line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
-                            ctx.text.custom_fonts,
-                            ctx.text.prepared_custom_fonts,
-                            ctx.page_ext_gstates,
-                            ctx.bg_alpha_counter,
-                            ctx.shadings,
-                            ctx.shading_counter,
-                            ctx.text.pdf_writer,
-                            ctx.text.page_images,
+                            InlineBoxSlot {
+                                x: ibx,
+                                baseline: text_y,
+                                line: InlineBoxLine {
+                                    top: line_top_y,
+                                    bottom: line_bottom_y,
+                                    text_top: line_text_top_y,
+                                    text_bottom: line_text_bottom_y,
+                                    x_height_ratio: line_primary_x_height_ratio(
+                                        &merged,
+                                        ctx.text.custom_fonts,
+                                    ),
+                                },
+                                font_size: run.font_size,
+                                line_height: run_line_height,
+                            },
+                            ctx,
                         );
                     }
                 }
@@ -485,23 +484,20 @@ pub(super) fn render_text_block_lines(
             render_inline_box(
                 content,
                 inline,
-                ibx,
-                text_y,
-                line_top_y,
-                line_bottom_y,
-                line_text_top_y,
-                line_text_bottom_y,
-                fs,
-                run_line_height,
-                line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
-                ctx.text.custom_fonts,
-                ctx.text.prepared_custom_fonts,
-                ctx.page_ext_gstates,
-                ctx.bg_alpha_counter,
-                ctx.shadings,
-                ctx.shading_counter,
-                ctx.text.pdf_writer,
-                ctx.text.page_images,
+                InlineBoxSlot {
+                    x: ibx,
+                    baseline: text_y,
+                    line: InlineBoxLine {
+                        top: line_top_y,
+                        bottom: line_bottom_y,
+                        text_top: line_text_top_y,
+                        text_bottom: line_text_bottom_y,
+                        x_height_ratio: line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
+                    },
+                    font_size: fs,
+                    line_height: run_line_height,
+                },
+                ctx,
             );
         }
 

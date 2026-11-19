@@ -14,7 +14,7 @@ use crate::parser::css::{AncestorInfo, CssRule, SelectorContext};
 use crate::parser::dom::{DomNode, ElementNode};
 use crate::parser::ttf::TtfFont;
 use crate::style::computed::{
-    BoxSizing, ComputedStyle, Display, FontFamily, FontWeight, IntrinsicWidthKeyword,
+    BoxSizing, ComputedStyle, Display, FontFamily, FontWeight, GridTrack, IntrinsicWidthKeyword,
     compute_style_with_context,
 };
 use std::collections::{HashMap, VecDeque};
@@ -54,6 +54,8 @@ struct InlineWidths {
     has_content: bool,
     /// The width of a collapsible space the run ended with, owed if more content follows
     pending_space: f32,
+    /// The widest max-content line a forced break has ended
+    ended_lines_max: f32,
 }
 
 impl InlineWidths {
@@ -66,6 +68,22 @@ impl InlineWidths {
         self.widths.max_content += box_widths.max_content;
         self.has_content = true;
         self.pending_space = 0.0;
+    }
+
+    /// End the line at a `<br>`: the content after it starts a new max-content line.
+    fn forced_break(&mut self) {
+        self.ended_lines_max = self.ended_lines_max.max(self.widths.max_content);
+        self.widths.max_content = 0.0;
+        self.has_content = false;
+        self.pending_space = 0.0;
+    }
+
+    /// The run's widths: its min-content and its widest line
+    fn finished(&self) -> IntrinsicWidths {
+        IntrinsicWidths {
+            min_content: self.widths.min_content,
+            max_content: self.widths.max_content.max(self.ended_lines_max),
+        }
     }
 }
 
@@ -244,6 +262,17 @@ fn content_intrinsic_widths(
     style: &ComputedStyle,
     measurement: IntrinsicMeasurement<'_, '_>,
 ) -> IntrinsicWidths {
+    // A gauge is replaced: its fallback content isn't shown
+    if matches!(
+        el.tag,
+        crate::parser::dom::HtmlTag::Progress | crate::parser::dom::HtmlTag::Meter
+    ) {
+        let width = crate::layout::elements::ProgressBar::DEFAULT_WIDTH;
+        return IntrinsicWidths {
+            min_content: width,
+            max_content: width,
+        };
+    }
     let mut contributions = Vec::new();
     let mut inline = InlineWidths::default();
     let text = TextMeasurement::new(style, measurement.fonts);
@@ -270,6 +299,10 @@ fn content_intrinsic_widths(
                     .selector_context(&child_ancestors, child_el.children.is_empty());
                 let child_style = child_style(child_el, style, measurement.rules, &child_selector);
                 if child_style.display == Display::None || child_style.position.is_absolute() {
+                    continue;
+                }
+                if child_el.tag == crate::parser::dom::HtmlTag::Br {
+                    inline.forced_break();
                     continue;
                 }
 
@@ -360,6 +393,10 @@ fn combine_contributions(
             min_content,
             max_content,
         }
+    } else if matches!(style.display, Display::Grid | Display::InlineGrid)
+        && !style.grid_template_columns.is_empty()
+    {
+        grid_columns_widths(style, contributions)
     } else {
         IntrinsicWidths {
             min_content: contributions
@@ -371,6 +408,36 @@ fn combine_contributions(
                 .map(|width| width.max_content)
                 .fold(0.0, f32::max),
         }
+    }
+}
+
+/// A grid's widths across its explicit columns (css-grid-1 §11.5): a fixed column is its length, and any other column
+/// as wide as the widest item in it, with the items placed in order a row at a time.
+fn grid_columns_widths(style: &ComputedStyle, items: &[IntrinsicWidths]) -> IntrinsicWidths {
+    let columns = &style.grid_template_columns;
+    let widest = |column: usize, of: fn(&IntrinsicWidths) -> f32| {
+        items
+            .iter()
+            .skip(column)
+            .step_by(columns.len())
+            .map(of)
+            .fold(0.0, f32::max)
+    };
+    let sum = |of: fn(&IntrinsicWidths) -> f32| {
+        columns
+            .iter()
+            .enumerate()
+            .map(|(column, track)| match *track {
+                GridTrack::Fixed(length) => length,
+                GridTrack::Minmax(min, max) => widest(column, of).clamp(min, max.max(min)),
+                GridTrack::Fr(_) | GridTrack::Auto | GridTrack::Percent(_) => widest(column, of),
+            })
+            .sum::<f32>()
+            + style.column_gap.max(style.gap) * columns.len().saturating_sub(1) as f32
+    };
+    IntrinsicWidths {
+        min_content: sum(|widths| widths.min_content),
+        max_content: sum(|widths| widths.max_content),
     }
 }
 
@@ -409,7 +476,7 @@ fn child_style(
 }
 
 fn flush_inline(contributions: &mut Vec<IntrinsicWidths>, inline: &mut InlineWidths) {
-    let widths = inline.widths;
+    let widths = inline.finished();
     if widths.min_content > 0.0 || widths.max_content > 0.0 {
         contributions.push(widths);
     }
@@ -423,6 +490,8 @@ struct TextMeasurement<'a> {
     italic: bool,
     /// `letter-spacing` and `word-spacing`, added as layout adds them to a run
     spacing: crate::layout::elements::TextSpacing,
+    /// `overflow-wrap: anywhere`, which lets min-content break between any two characters (CSS Text 3 §5.5)
+    anywhere: bool,
     fonts: &'a HashMap<String, TtfFont>,
 }
 
@@ -434,6 +503,7 @@ impl<'a> TextMeasurement<'a> {
             bold: style.font_weight == FontWeight::Bold,
             italic: style.font_style.is_slanted(),
             spacing: crate::layout::elements::TextSpacing::from_style(style),
+            anywhere: style.overflow_wrap == crate::style::computed::OverflowWrap::Anywhere,
             fonts,
         }
     }
@@ -460,7 +530,14 @@ impl<'a> TextMeasurement<'a> {
         let widths = &mut inline.widths;
         widths.max_content += self.width(&collapsed);
         for word in collapsed.split(' ').filter(|word| !word.is_empty()) {
-            widths.min_content = widths.min_content.max(self.width(word));
+            let longest = if self.anywhere {
+                word.char_indices()
+                    .map(|(at, c)| self.width(&word[at..at + c.len_utf8()]))
+                    .fold(0.0, f32::max)
+            } else {
+                self.width(word)
+            };
+            widths.min_content = widths.min_content.max(longest);
         }
         inline.has_content = true;
         inline.pending_space = if ends_with_space {
@@ -510,6 +587,12 @@ fn accumulate_inline_element(
                     .as_context()
                     .selector_context(&child_ancestors, child_el.children.is_empty());
                 let child_style = child_style(child_el, style, measurement.rules, &child_selector);
+                if child_el.tag == crate::parser::dom::HtmlTag::Br {
+                    if child_style.display != Display::None {
+                        inline.forced_break();
+                    }
+                    continue;
+                }
                 accumulate_inline_element(
                     child_el,
                     &child_style,

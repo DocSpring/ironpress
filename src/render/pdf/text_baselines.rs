@@ -4,7 +4,7 @@
 //! that fractional position intact prevents paint-time rounding from changing
 //! a line's glyph coverage without changing its layout geometry.
 
-use super::{LineBoxMetrics, transforms::PageContentTransform};
+use super::{LineBoxMetrics, geometry::BoxPaintGrid, transforms::PageContentTransform};
 
 /// Advances a text block's fractional flow position and resolves individual
 /// horizontal baselines for PDF painting.
@@ -12,13 +12,19 @@ use super::{LineBoxMetrics, transforms::PageContentTransform};
 pub(super) struct TextBaselineCursor {
     flow_y: f32,
     page_content: PageContentTransform,
+    grid: BoxPaintGrid,
 }
 
 impl TextBaselineCursor {
-    pub(super) const fn new(content_top: f32, page_content: PageContentTransform) -> Self {
+    pub(super) const fn new(
+        content_top: f32,
+        page_content: PageContentTransform,
+        grid: BoxPaintGrid,
+    ) -> Self {
         Self {
             flow_y: content_top,
             page_content,
+            grid,
         }
     }
 
@@ -34,7 +40,13 @@ impl TextBaselineCursor {
     /// geometry at paint time.
     pub(super) fn next_horizontal(&mut self, metrics: LineBoxMetrics) -> f32 {
         let baseline = self.next_raw(metrics);
-        self.page_content.snap_horizontal_baseline(baseline)
+        match self.grid {
+            BoxPaintGrid::Page => self.page_content.snap_horizontal_baseline(baseline),
+            // Inside an atomic inline box, on the grid its boxes snap to, so its text moves with them
+            BoxPaintGrid::AtomicInline(origin) => self
+                .page_content
+                .snap_horizontal_baseline_from(baseline, origin.y),
+        }
     }
 }
 
@@ -45,7 +57,7 @@ mod tests {
     #[test]
     fn print_paint_snaps_each_baseline_without_changing_line_advance() {
         let page = PageContentTransform::print(crate::render::pdf::PdfVector::new(150.0, 150.0));
-        let mut cursor = TextBaselineCursor::new(103.5, page);
+        let mut cursor = TextBaselineCursor::new(103.5, page, BoxPaintGrid::Page);
         let metrics = LineBoxMetrics {
             ascender: 16.5,
             descender: 6.6,

@@ -1583,6 +1583,8 @@ pub(crate) fn layout_flex_container(
     // `block_w` is normalized to the border box for both box-sizing modes.
     let inner_width =
         (block_w - style.border.horizontal_width() - style.padding.horizontal()).max(0.0);
+    // Where a simple item's atomic inline boxes are laid out before its width is known: the container's content box
+    let item_lines = ctx.with_parent(inner_width, ctx.parent.content_height, style.font_size);
     // A row places each item's cell by the item's margins (after its main-start
     // margin, down by its cross-start one), so the item's own box must not be
     // offset by them again.
@@ -1784,10 +1786,14 @@ pub(crate) fn layout_flex_container(
     // Subtract total gap space so that percentage widths + gaps fit within the container.
     let total_gaps = style.gap * (child_count.saturating_sub(1)) as f32;
     let width_for_percentages = (inner_width - total_gaps).max(0.0);
+    // An item's percentages resolve against the container's content box: an authored `border-box` width includes
+    // the container's padding and border
     let mut parent_for_children = style.clone();
-    if parent_for_children.width.is_none() {
-        parent_for_children.width = Some(width_for_percentages);
-    }
+    parent_for_children.width = Some(if style.width.is_none() {
+        width_for_percentages
+    } else {
+        inner_width
+    });
 
     let generated_flex_item =
         |generated: GeneratedBox<'_>, source_order: usize, env: &mut LayoutEnv| {
@@ -2219,14 +2225,13 @@ pub(crate) fn layout_flex_container(
             let mut in_flow_runs = Vec::new();
             let live_counters = env.counter_state.clone();
             let counter_scope = env.counter_state.enter_element(&child_style);
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect(
-                    InlineContentSequence::with_generated(&child_el.children, generated_children),
-                    &child_style,
-                    &mut in_flow_runs,
-                    None,
-                    &child_ancestors,
-                );
+            InlineRunCollector::for_layout(env, &item_lines).collect(
+                InlineContentSequence::with_generated(&child_el.children, generated_children),
+                &child_style,
+                &mut in_flow_runs,
+                None,
+                &child_ancestors,
+            );
             env.counter_state.leave_element(counter_scope);
             *env.counter_state = live_counters;
             (!in_flow_runs.is_empty()).then(|| {
@@ -2480,14 +2485,13 @@ pub(crate) fn layout_flex_container(
         // Simple flex items: collect text runs and wrap
         let mut runs = Vec::new();
         let counter_scope = env.counter_state.enter_element(&child_style);
-        InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-            .collect(
-                InlineContentSequence::with_generated(&child_el.children, generated_children),
-                &child_style,
-                &mut runs,
-                None,
-                &child_ancestors,
-            );
+        InlineRunCollector::for_layout(env, &item_lines).collect(
+            InlineContentSequence::with_generated(&child_el.children, generated_children),
+            &child_style,
+            &mut runs,
+            None,
+            &child_ancestors,
+        );
         env.counter_state.leave_element(counter_scope);
         // Automatic minimum sizing and `flex-basis:min-content` must use the
         // same tokenization as line layout. In particular, a forced `<br>`
@@ -3009,6 +3013,7 @@ pub(crate) fn layout_flex_container(
                     ancestors,
                     &parent_for_children,
                     resolved.target,
+                    ctx,
                     env,
                 );
                 *env.counter_state = live_counters;
@@ -3736,6 +3741,7 @@ pub(crate) fn layout_flex_container(
                                 ancestors,
                                 &parent_for_children,
                                 final_w,
+                                ctx,
                                 env,
                             );
                         }

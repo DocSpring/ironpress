@@ -460,7 +460,16 @@ impl PageContentTransform {
         let Some(page_size) = self.page_size else {
             return baseline;
         };
-        page_size.y - crate::fonts::round_to_css_pixel(page_size.y - baseline)
+        self.snap_horizontal_baseline_from(baseline, page_size.y)
+    }
+
+    /// Snap a horizontal text baseline to a CSS-pixel grid rooted at `origin_y`, as `snap_layout_box_from` snaps a
+    /// box's edges.
+    pub(super) fn snap_horizontal_baseline_from(self, baseline: f32, origin_y: f32) -> f32 {
+        if self.page_size.is_none() {
+            return baseline;
+        }
+        origin_y - crate::fonts::round_to_css_pixel(origin_y - baseline)
     }
 
     /// Enclose a layout rectangle in the physical print-device grid.

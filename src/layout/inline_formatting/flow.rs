@@ -1,14 +1,11 @@
-use std::collections::HashMap;
-
 use crate::layout::context::{LayoutContext, LayoutEnv};
 use crate::layout::elements::LayoutNode;
 use crate::layout::engine::TextRun;
 use crate::layout::floats::FloatsInText;
-use crate::layout::inline::layout_inline_mixed_sequence_with_env;
 use crate::layout::text::{InlineRunCollector, InlineRunContext};
-use crate::parser::css::{AncestorInfo, SelectorContext};
-use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
-use crate::style::computed::{Clear, ComputedStyle, compute_style_with_context_with_font_metrics};
+use crate::parser::css::AncestorInfo;
+use crate::parser::dom::{DomNode, ElementNode};
+use crate::style::computed::{Clear, ComputedStyle};
 
 use crate::layout::block::trim_leading_collapsible_space;
 use crate::layout::engine::{
@@ -29,6 +26,9 @@ pub(crate) trait IndependentFlowLayout {
     fn inline_run_context(&self) -> InlineRunContext {
         InlineRunContext::Standard
     }
+
+    /// Where the lines go, for laying out their atomic inline boxes as their boxes.
+    fn inline_layout(&self) -> LayoutContext;
 
     fn lays_out_independently(&self, element: &ElementNode, child: &InlineFormattingChild) -> bool;
 
@@ -67,10 +67,11 @@ pub(crate) fn layout_mixed_flow_children<'dom>(
             .children(sequence);
     let mut element_index = 0;
     let run_context = independent_layout.inline_run_context();
+    let inline_layout = independent_layout.inline_layout();
 
     for (node_index, node) in sequence.nodes().iter().enumerate() {
         let DomNode::Element(element) = node else {
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+            InlineRunCollector::for_layout(env, &inline_layout)
                 .in_context(run_context)
                 .collect(
                     sequence.item(node_index),
@@ -98,7 +99,7 @@ pub(crate) fn layout_mixed_flow_children<'dom>(
                 .source()
                 .as_context()
                 .selector_context(ancestors, element_is_empty(element));
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+            InlineRunCollector::for_layout(env, &inline_layout)
                 .in_context(run_context)
                 .recording_blocks()
                 .collect(
@@ -118,7 +119,7 @@ pub(crate) fn layout_mixed_flow_children<'dom>(
                 independent_layout.layout_block_in_inline(&block, env);
             }
         } else {
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
+            InlineRunCollector::for_layout(env, &inline_layout)
                 .in_context(run_context)
                 .collect(
                     sequence.item(node_index),
@@ -223,71 +224,15 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
             env.font_metrics(),
         );
         let children = formatting.children(sequence);
-        let mut atomic_segments = formatting
-            .atomic_layout_segments(sequence)
-            .into_iter()
-            .peekable();
         let mut runs = Vec::new();
         let mut floats_in_text = FloatsInText::default();
-        // A row of atomic inlines at either end of the sequence lays out the
-        // generated content at that end; otherwise the runs carry it.
-        let mut before_pending = true;
-        let mut after_pending = true;
-        if atomic_segments
-            .peek()
-            .is_none_or(|segment| segment.start() != sequence.start())
-        {
-            before_pending = false;
-            sequence.append_before(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
-        }
+        sequence.append_before(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
 
-        // The row's box is the anonymous block's: it inherits from the
-        // container, but the container's own box (border, padding, background,
-        // margins, size) stays on the container.
-        let anonymous_style = atomic_segments.peek().map(|_| {
-            compute_style_with_context_with_font_metrics(
-                HtmlTag::Div,
-                None,
-                self.parent_style,
-                &[],
-                "",
-                &[],
-                None,
-                &HashMap::new(),
-                &SelectorContext::default(),
-                env.font_metrics(),
-            )
-        });
-
-        let mut atomic_segment_end = sequence.start();
         let mut element_index = 0;
         for node_index in sequence.start()..sequence.end() {
             let Some(node) = sequence.source_nodes().get(node_index) else {
                 break;
             };
-            if let Some(segment) = atomic_segments.next_if(|segment| segment.start() == node_index)
-            {
-                self.flush(&mut runs, &mut floats_in_text, output, env);
-                if layout_inline_mixed_sequence_with_env(
-                    segment.bounded_by(sequence),
-                    anonymous_style.as_ref().unwrap_or(self.parent_style),
-                    self.content,
-                    output,
-                    self.ancestors,
-                    env,
-                ) {
-                    atomic_segment_end = segment.end();
-                    after_pending &= segment.end() != sequence.end();
-                } else if before_pending {
-                    sequence.append_before(
-                        &mut runs,
-                        env.fonts,
-                        env.counter_state,
-                        &mut *env.resources,
-                    );
-                }
-                before_pending = false;
-            }
             let child = match node {
                 DomNode::Text(_) => None,
                 DomNode::Element(element) => {
@@ -296,9 +241,6 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
                     child
                 }
             };
-            if node_index < atomic_segment_end {
-                continue;
-            }
             let item =
                 InlineContentSequence::segment(sequence.source_nodes(), node_index, node_index + 1);
             match child {
@@ -338,18 +280,16 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
                         env,
                     );
                 }
-                _ => InlineRunCollector::new(
-                    env.rules,
-                    env.fonts,
-                    env.counter_state,
-                    &mut *env.resources,
-                )
-                .collect(item, self.parent_style, &mut runs, None, self.ancestors),
+                _ => InlineRunCollector::for_layout(env, self.content).collect(
+                    item,
+                    self.parent_style,
+                    &mut runs,
+                    None,
+                    self.ancestors,
+                ),
             }
         }
-        if after_pending {
-            sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
-        }
+        sequence.append_after(&mut runs, env.fonts, env.counter_state, &mut *env.resources);
         self.flush(&mut runs, &mut floats_in_text, output, env);
     }
 
@@ -379,9 +319,7 @@ impl<'a, 'dom> AnonymousBlockFlow<'a, 'dom> {
             env.font_metrics(),
         );
         let runs_before = runs.len();
-        let mut collector =
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .recording_blocks();
+        let mut collector = InlineRunCollector::for_layout(env, self.content).recording_blocks();
         collector.collect(item, self.parent_style, runs, None, self.ancestors);
         let boundaries = collector.block_boundaries();
         debug_assert_eq!(

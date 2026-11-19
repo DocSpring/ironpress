@@ -248,6 +248,20 @@ impl LayoutElement for TextBlock {
         Some(self)
     }
 
+    /// The nodes each atomic inline box in its lines was laid out as: they paint where the line puts the box.
+    fn visit_children(&self, visitor: &mut dyn FnMut(&dyn LayoutElement)) {
+        for inline in self
+            .lines
+            .iter()
+            .flat_map(|line| &line.runs)
+            .filter_map(|run| run.inline_box.as_deref())
+        {
+            for node in &inline.content {
+                visitor(node.as_ref());
+            }
+        }
+    }
+
     fn inline_flow_extent(&self) -> Option<&dyn InlineFlowExtent> {
         Some(self)
     }

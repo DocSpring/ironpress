@@ -1,5 +1,4 @@
 use super::*;
-use crate::layout::elements::{LayoutNode, LayoutVisitor, TextBlock};
 use crate::layout::vertical_align::{AlignedBox, AlignmentBasis, LineExtents};
 
 /// Glyph baseline shift (PDF points, up positive) for a text run.
@@ -457,67 +456,6 @@ pub(crate) fn sanitize_pdf_name(name: &str) -> String {
 
 pub(super) fn line_text_content(line: &TextLine) -> String {
     line.runs.iter().map(|r| r.text.as_str()).collect()
-}
-
-pub(super) fn fixed_textblock_flow_adjustments(elements: &[(f32, LayoutNode)]) -> Vec<f32> {
-    let mut adjustment = 0.0;
-    elements
-        .iter()
-        .map(|(_, element)| {
-            let current = adjustment;
-            if !element.is_page_paint_continuation() {
-                adjustment += fixed_textblock_flow_overage(element);
-            }
-            current
-        })
-        .collect()
-}
-
-pub(super) fn element_uses_flow_y_adjustment(element: &dyn LayoutElement) -> bool {
-    if element.is_page_paint_continuation() {
-        return false;
-    }
-
-    struct UsesAdjustment(bool);
-
-    impl LayoutVisitor for UsesAdjustment {
-        fn visit_text_block(&mut self, element: &TextBlock) {
-            self.0 = !element.positioning.scheme.is_absolute();
-        }
-    }
-
-    let mut uses = UsesAdjustment(true);
-    element.accept(&mut uses);
-    uses.0
-}
-
-pub(super) fn fixed_textblock_flow_overage(element: &dyn LayoutElement) -> f32 {
-    #[derive(Default)]
-    struct Overage(f32);
-
-    impl LayoutVisitor for Overage {
-        fn visit_text_block(&mut self, element: &TextBlock) {
-            if !element.box_model.size.height.is_definite() {
-                return;
-            }
-            let Some(block_height) = element.box_model.size.height.used() else {
-                return;
-            };
-            if element.positioning.scheme.is_absolute()
-                || element.flow.float != Float::None
-                || element.clipping.rect.is_some()
-            {
-                return;
-            }
-            let text_height = element.lines.iter().map(|line| line.height).sum::<f32>();
-            let content_height = element.box_model.padding.vertical() + text_height;
-            self.0 = (content_height - block_height).max(0.0);
-        }
-    }
-
-    let mut overage = Overage::default();
-    element.accept(&mut overage);
-    overage.0
 }
 
 pub(super) fn text_block_total_height(

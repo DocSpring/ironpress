@@ -236,6 +236,9 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             style.set("font-weight", CssValue::Keyword("bold".into()));
         }
         HtmlTag::Input => {
+            // An inline-level box of its own in the line, as in Chrome's UA stylesheet: as an inline element, a text
+            // field drew nothing and a select drew every option's text
+            style.set("display", CssValue::Keyword("inline-block".into()));
             style.set("padding-top", CssValue::Length(2.0));
             style.set("padding-right", CssValue::Length(4.0));
             style.set("padding-bottom", CssValue::Length(2.0));
@@ -247,6 +250,9 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             );
         }
         HtmlTag::Select => {
+            // An inline-level box of its own in the line, as in Chrome's UA stylesheet: as an inline element, a text
+            // field drew nothing and a select drew every option's text
+            style.set("display", CssValue::Keyword("inline-block".into()));
             style.set("padding-top", CssValue::Length(2.0));
             style.set("padding-right", CssValue::Length(4.0));
             style.set("padding-bottom", CssValue::Length(2.0));
@@ -286,10 +292,14 @@ pub fn default_style(tag: HtmlTag) -> StyleMap {
             );
         }
         HtmlTag::Progress => {
+            // Chromium's UA sheet: a gauge is an inline-block
+            style.set("display", CssValue::Keyword("inline-block".into()));
             style.set("margin-top", CssValue::Length(2.0));
             style.set("margin-bottom", CssValue::Length(2.0));
         }
         HtmlTag::Meter => {
+            // Chromium's UA sheet: a gauge is an inline-block
+            style.set("display", CssValue::Keyword("inline-block".into()));
             style.set("margin-top", CssValue::Length(2.0));
             style.set("margin-bottom", CssValue::Length(2.0));
         }

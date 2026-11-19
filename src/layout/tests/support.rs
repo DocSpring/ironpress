@@ -118,15 +118,60 @@ pub(super) fn visible_runs(markup: &str) -> Vec<TextRun> {
         .collect()
 }
 
+/// The visible text runs inside the atomic inline boxes of `markup`'s outermost lines: a box's own lines, or the text
+/// of the nodes it was laid out as.
 pub(super) fn visible_inline_box_runs(markup: &str) -> Vec<TextRun> {
-    collected_runs(markup)
+    // A text block's children are the nodes its inline boxes were laid out as, which their own box counts
+    fn walk(element: &dyn crate::layout::elements::LayoutElement, boxes: &mut InlineBoxCollector) {
+        element.accept(boxes);
+        if crate::layout::elements::LayoutElementTestExt::inspect_text(element, |_| ()).is_none() {
+            element.visit_children(&mut |child| walk(child, boxes));
+        }
+    }
+    let mut boxes = InlineBoxCollector::default();
+    for page in layout_pages(markup) {
+        for (_, element) in page.elements {
+            walk(element.as_ref(), &mut boxes);
+        }
+    }
+    boxes
+        .0
         .into_iter()
-        .flat_map(|run| {
-            run.inline_box
+        .flat_map(|inline| {
+            let mut collector = RunCollector::default();
+            for node in &inline.content {
+                visit_layout_tree(node.as_ref(), &mut collector);
+            }
+            inline
+                .lines
                 .into_iter()
-                .flat_map(|inline| inline.lines.into_iter())
                 .flat_map(|line| line.runs)
+                .chain(collector.0)
         })
         .filter(|run| !run.text.trim().is_empty())
+        .collect()
+}
+
+/// The inline boxes in the lines it visits.
+#[derive(Default)]
+struct InlineBoxCollector(Vec<crate::layout::engine::InlineBox>);
+
+impl LayoutVisitor for InlineBoxCollector {
+    fn visit_text_block(&mut self, block: &TextBlock) {
+        self.0.extend(
+            block
+                .lines
+                .iter()
+                .flat_map(|line| &line.runs)
+                .filter_map(|run| run.inline_box.as_deref().cloned()),
+        );
+    }
+}
+
+/// The atomic inline boxes in `markup`'s lines, in order.
+pub(super) fn inline_boxes(markup: &str) -> Vec<crate::layout::engine::InlineBox> {
+    collected_runs(markup)
+        .into_iter()
+        .filter_map(|run| run.inline_box.map(|inline| *inline))
         .collect()
 }

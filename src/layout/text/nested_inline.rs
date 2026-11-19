@@ -49,8 +49,14 @@ impl CollectedAs {
         element: &ElementNode,
         style: &ComputedStyle,
     ) -> Self {
+        let image = matches!(
+            role,
+            InlineFormattingRole::Atomic(
+                AtomicInlineKind::ReplacedImage | AtomicInlineKind::ReplacedSvg
+            )
+        );
         if context.accepts(role, element) {
-            return Self::Runs;
+            return if image { Self::Image } else { Self::Runs };
         }
         if !nested {
             return Self::Skipped;
@@ -97,12 +103,12 @@ pub(super) struct NestedBlock<'a, 'dom> {
 }
 
 /// The collector's state shared by every element it visits.
-pub(super) struct CollectorState<'a, 'r> {
+pub(super) struct CollectorState<'a, 'r, 'c> {
     pub(super) rules: &'a [CssRule],
     pub(super) fonts: &'a HashMap<String, TtfFont>,
     pub(super) counter_state: &'r mut CounterState,
     pub(super) resources: &'r mut crate::security::resources::ResourceLoader,
-    pub(super) collection: &'r mut super::CollectionState,
+    pub(super) collection: &'r mut super::CollectionState<'c>,
 }
 
 /// Collect a block's contents as lines of their own: a forced break before them unless a line has just ended (or
@@ -112,7 +118,7 @@ pub(super) fn collect_block_lines(
     parent_style: &ComputedStyle,
     first_run: usize,
     runs: &mut Vec<TextRun>,
-    state: CollectorState<'_, '_>,
+    state: CollectorState<'_, '_, '_>,
 ) {
     if !ends_line(runs, first_run) {
         runs.push(line_break(parent_style, state.fonts));

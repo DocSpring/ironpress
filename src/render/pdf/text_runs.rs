@@ -624,38 +624,5 @@ pub(super) fn render_text_combine_run(
 pub(crate) const SUPER_SHIFT_RATIO: f32 = 0.38;
 pub(crate) const SUB_SHIFT_RATIO: f32 = 0.23;
 
-/// The x-height (as a fraction of em) of the parent text a `vertical-align:
-/// middle` box aligns its centre against (CSS2 §10.8.1: centre at
-/// `baseline + x-height/2`). Read from the largest baseline-aligned text run's
-/// font; falls back to 0.5em when the line carries no measurable custom-font
-/// text.
-pub(super) fn line_primary_x_height_ratio(
-    runs: &[TextRun],
-    custom_fonts: &HashMap<String, TtfFont>,
-) -> f32 {
-    let pick = runs
-        .iter()
-        .filter(|r| {
-            r.inline_box.is_none()
-                && matches!(r.vertical_align, VerticalAlign::Baseline)
-                && !r.text.trim().is_empty()
-        })
-        .max_by(|a, b| {
-            a.font_size
-                .partial_cmp(&b.font_size)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .or_else(|| runs.iter().find(|r| r.inline_box.is_none()));
-    if let Some(run) = pick
-        && let FontFamily::Custom(name) = &run.font_family
-        && let Some((_, ttf)) = crate::system_fonts::find_font(
-            custom_fonts,
-            name,
-            run.bold,
-            run.font_style.is_slanted(),
-        )
-    {
-        return ttf.x_height_ratio();
-    }
-    0.5
-}
+/// The x-height a `vertical-align: middle` box centres on, as the line layout reads it
+pub(super) use crate::layout::text::line_primary_x_height_ratio;

@@ -10,7 +10,10 @@ use super::support::layout_pages;
 struct Gauges {
     /// Inline boxes in text lines, with the text of the line they sit on.
     inline: Vec<(InlineBox, String)>,
+    /// Gauges laid out as blocks, not as the content of an inline box.
     blocks: usize,
+    /// Every gauge, inline boxes' content included.
+    bars: usize,
 }
 
 impl LayoutVisitor for Gauges {
@@ -28,7 +31,7 @@ impl LayoutVisitor for Gauges {
     }
 
     fn visit_progress_bar(&mut self, _bar: &ProgressBar) {
-        self.blocks += 1;
+        self.bars += 1;
     }
 }
 
@@ -39,11 +42,35 @@ fn gauges(markup: &str) -> Gauges {
             visit_layout_tree(element.as_ref(), &mut gauges);
         }
     }
+    let inline_bars = gauges
+        .inline
+        .iter()
+        .filter(|(inline, _)| gauge(inline).is_some())
+        .count();
+    gauges.blocks = gauges.bars - inline_bars;
     gauges
 }
 
+/// The gauge an inline box was laid out as.
+fn gauge(inline: &InlineBox) -> Option<ProgressBar> {
+    #[derive(Default)]
+    struct Found(Option<ProgressBar>);
+    impl LayoutVisitor for Found {
+        fn visit_progress_bar(&mut self, bar: &ProgressBar) {
+            self.0.get_or_insert_with(|| bar.clone());
+        }
+    }
+    let mut found = Found::default();
+    for node in &inline.content {
+        visit_layout_tree(node.as_ref(), &mut found);
+    }
+    found.0
+}
+
 fn fill_fraction(inline: &InlineBox) -> Option<f32> {
-    inline.paint.gauge_fill.map(|fill| fill.fraction)
+    gauge(inline)
+        .map(|bar| bar.fraction)
+        .filter(|fraction| *fraction > 0.0)
 }
 
 #[test]
@@ -73,7 +100,8 @@ fn empty_progress_keeps_its_track() {
     assert_eq!(found.inline.len(), 1);
     let (inline, _) = &found.inline[0];
     assert_eq!(fill_fraction(inline), None);
-    assert!(inline.paint.background_color.is_some());
+    let bar = gauge(inline).expect("the box is the gauge");
+    assert_eq!((bar.size.width, bar.size.height), (150.0, 12.0));
 }
 
 #[test]
@@ -102,12 +130,32 @@ fn inline_block_inside_an_inline_element_of_a_painted_box_is_kept() {
         r#"<div style="background:#eee"><span><b style="display:inline-block">nested</b></span><p>y</p></div>"#,
     ] {
         let found = gauges(markup);
+        // Its text is in its lines, or in the nodes its box was laid out as
         let inner: Vec<String> = found
             .inline
             .iter()
-            .flat_map(|(inline, _)| &inline.lines)
-            .flat_map(|line| &line.runs)
-            .map(|run| run.text.clone())
+            .flat_map(|(inline, _)| {
+                #[derive(Default)]
+                struct Words(Vec<String>);
+                impl LayoutVisitor for Words {
+                    fn visit_text_block(&mut self, block: &TextBlock) {
+                        let runs = block.lines.iter().flat_map(|line| &line.runs);
+                        self.0.extend(runs.map(|run| run.text.clone()));
+                    }
+                }
+                let mut nested = Words::default();
+                for node in &inline.content {
+                    visit_layout_tree(node.as_ref(), &mut nested);
+                }
+                inline
+                    .lines
+                    .iter()
+                    .flat_map(|line| &line.runs)
+                    .map(|run| run.text.clone())
+                    .chain(nested.0)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|text| !text.trim().is_empty())
             .collect();
         assert_eq!(inner, ["nested"], "{markup}");
     }

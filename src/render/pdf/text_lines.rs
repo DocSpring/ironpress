@@ -117,66 +117,54 @@ impl InlineBoxLine {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Where an atomic inline box goes in its line: `x` is its border box's left edge (PDF), `baseline` the line's
+/// baseline, `line` the edges it can align to, and `font_size` and `line_height` its run's, for `vertical-align`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct InlineBoxSlot {
+    pub(super) x: f32,
+    pub(super) baseline: f32,
+    pub(super) line: InlineBoxLine,
+    pub(super) font_size: f32,
+    pub(super) line_height: f32,
+}
+
 pub(super) fn render_inline_box(
     content: &mut String,
     inline: &crate::layout::engine::InlineBox,
-    box_x: f32,
-    baseline_y: f32,
-    line_top_y: f32,
-    line_bottom_y: f32,
-    line_text_top_y: f32,
-    line_text_bottom_y: f32,
-    line_font_size: f32,
-    line_height: f32,
-    parent_x_height_ratio: f32,
-    custom_fonts: &HashMap<String, TtfFont>,
-    prepared_custom_fonts: &PreparedCustomFonts,
-    page_ext_gstates: &mut Vec<(String, f32)>,
-    bg_alpha_counter: &mut usize,
-    page_shadings: &mut Vec<ShadingEntry>,
-    shading_counter: &mut usize,
-    pdf_writer: &mut PdfWriter,
-    page_images: &mut Vec<ImageRef>,
+    slot: InlineBoxSlot,
+    ctx: &mut PageRenderContext<'_>,
 ) {
-    // The box is aligned by its margin box (CSS 2.1 §10.8): `h` is its
-    // height, and its own baseline sits `box_ascent` below its top margin
-    // edge, at its last line box's baseline or with none at its bottom margin
-    // edge (§10.8.1). `box_bottom` below is the margin box's bottom.
-    let h = inline.outer_height();
-    let box_ascent = inline.outer_baseline_ascent();
-    // Bottom edge of the box (PDF, y-up) for each vertical-align mode. The box
-    // baseline sits at `box_top - box_ascent = box_bottom + h - box_ascent`;
-    // aligning it to a target line baseline gives
-    // `box_bottom = target_baseline - h + box_ascent`.
-    let align_baseline = |target: f32| target - h + box_ascent;
-    let box_bottom = match inline.vertical_align {
-        VerticalAlign::Top => line_top_y - h,
-        VerticalAlign::Bottom => line_bottom_y,
-        // text-top: box top aligns to the parent's text content-area top
-        // (parent baseline + parent ascent), which is below the line-box top by
-        // the strut's half-leading (css2 §10.8.1).
-        VerticalAlign::TextTop => line_text_top_y - h,
-        // text-bottom: box bottom aligns to the parent's text content-area
-        // bottom (parent baseline - parent descent).
-        VerticalAlign::TextBottom => line_text_bottom_y,
-        // Middle: box centre aligns roughly to the parent's mid-x-height, i.e.
-        // a quarter-em above the baseline.
-        // Middle: align the box centre to the parent's mid-x-height (CSS2
-        // §10.8.1: baseline + x-height/2), read from the parent font — not a flat
-        // 0.25em (which assumes x-height == 0.5em).
-        VerticalAlign::Middle => {
-            baseline_y + line_font_size * parent_x_height_ratio * 0.5 - h / 2.0
-        }
-        // Sub/super shift the box's baseline below/above the line baseline by a
-        // fraction of the parent font size (css-inline-3; CSS2 §10.8.1). The
-        // fractions match Chromium's measured subscript/superscript offsets.
-        VerticalAlign::Sub => align_baseline(baseline_y - line_font_size * SUB_SHIFT_RATIO),
-        VerticalAlign::Super => align_baseline(baseline_y + line_font_size * SUPER_SHIFT_RATIO),
-        VerticalAlign::Length(v) => align_baseline(baseline_y + v),
-        VerticalAlign::Percent(p) => align_baseline(baseline_y + line_height * p),
-        // Baseline: align the box's baseline to the line baseline.
-        VerticalAlign::Baseline => align_baseline(baseline_y),
+    let InlineBoxSlot {
+        x: box_x,
+        baseline: baseline_y,
+        line,
+        font_size: line_font_size,
+        line_height,
+    } = slot;
+    let (line_top_y, line_bottom_y, line_text_top_y, line_text_bottom_y, parent_x_height_ratio) = (
+        line.top,
+        line.bottom,
+        line.text_top,
+        line.text_bottom,
+        line.x_height_ratio,
+    );
+    // The box is aligned by its margin box (CSS 2.1 §10.8). Boxes placed against the baseline reach `above` it, as
+    // the line box's metrics placed them; the others sit at the line box's or the parent's text edges.
+    let aligned = crate::layout::vertical_align::AlignedBox::of(inline);
+    let h = aligned.height;
+    let basis = crate::layout::vertical_align::AlignmentBasis {
+        parent_font_size: line_font_size,
+        parent_x_height: line_font_size * parent_x_height_ratio,
+        line_height,
+    };
+    // Bottom edge of the box (PDF, y-up)
+    let box_bottom = match (inline.vertical_align, aligned.baseline_extents(basis)) {
+        (_, Some((above, _))) => baseline_y + above - h,
+        (VerticalAlign::Top, None) => line_top_y - h,
+        (VerticalAlign::Bottom, None) => line_bottom_y,
+        // text-top and text-bottom: the parent's text content area (CSS 2.1 §10.8.1)
+        (VerticalAlign::TextTop, None) => line_text_top_y - h,
+        (_, None) => line_text_bottom_y,
     };
 
     // CSS `position: relative` shifts the painted box (and its inner content)
@@ -190,7 +178,12 @@ pub(super) fn render_inline_box(
         inline.padding,
         inline.paint.border_image.as_ref(),
     );
-    let box_geometry = pdf_writer.resolve_box_geometry(geometry);
+    // The box and everything in it are one paint unit, snapped from its own position in the line
+    let prior_grid = ctx
+        .text
+        .pdf_writer
+        .enter_atomic_inline_paint_grid(geometry.border_box.top_left());
+    let box_geometry = ctx.text.pdf_writer.resolve_box_geometry(geometry);
     let paint_geometry = box_geometry.painting();
     let fragment_geometry = box_geometry.fragment(Default::default());
     let background_box =
@@ -202,8 +195,8 @@ pub(super) fn render_inline_box(
             content,
             background,
             background_box,
-            page_ext_gstates,
-            bg_alpha_counter,
+            ctx.page_ext_gstates,
+            ctx.bg_alpha_counter,
         );
     }
     if let Some(fill) = inline.paint.gauge_fill {
@@ -218,8 +211,8 @@ pub(super) fn render_inline_box(
             content,
             fill.color,
             RoundedRect::new(filled, CornerRadii::default()),
-            page_ext_gstates,
-            bg_alpha_counter,
+            ctx.page_ext_gstates,
+            ctx.bg_alpha_counter,
         );
     }
 
@@ -231,8 +224,8 @@ pub(super) fn render_inline_box(
             image,
             paint_geometry.content_box(),
             inline.image_sampling,
-            pdf_writer,
-            page_images,
+            ctx.text.pdf_writer,
+            ctx.text.page_images,
         );
     }
 
@@ -243,13 +236,13 @@ pub(super) fn render_inline_box(
             svg.replaced,
             paint_geometry.content_box(),
             super::svg_drawing::SvgDrawResources {
-                shadings: page_shadings,
-                shading_counter,
-                ext_gstates: page_ext_gstates,
-                pdf_writer,
-                page_images,
-                custom_fonts,
-                prepared_custom_fonts,
+                shadings: ctx.shadings,
+                shading_counter: ctx.shading_counter,
+                ext_gstates: ctx.page_ext_gstates,
+                pdf_writer: ctx.text.pdf_writer,
+                page_images: ctx.text.page_images,
+                custom_fonts: ctx.text.custom_fonts,
+                prepared_custom_fonts: ctx.text.prepared_custom_fonts,
             },
         );
     }
@@ -262,12 +255,12 @@ pub(super) fn render_inline_box(
         inline.paint.border_radii,
         inline.paint.border_image.as_ref(),
         BorderPaintResources {
-            shadings: page_shadings,
-            shading_counter,
-            page_ext_gstates,
-            alpha_counter: bg_alpha_counter,
-            pdf_writer,
-            page_images,
+            shadings: ctx.shadings,
+            shading_counter: ctx.shading_counter,
+            page_ext_gstates: ctx.page_ext_gstates,
+            alpha_counter: ctx.bg_alpha_counter,
+            pdf_writer: ctx.text.pdf_writer,
+            page_images: ctx.text.page_images,
         },
     );
     if let Some(stroke) = inline.paint.centered_stroke {
@@ -275,26 +268,47 @@ pub(super) fn render_inline_box(
             content,
             paint_geometry.rounded_border_box(inline.paint.border_radii),
             stroke,
-            page_ext_gstates,
-            bg_alpha_counter,
+            ctx.page_ext_gstates,
+            ctx.bg_alpha_counter,
+        );
+    }
+
+    if !inline.content.is_empty() {
+        let top = box_bottom + inline.height;
+        let origin = PdfPoint::new(box_x, top);
+        render_container_children(
+            content,
+            &inline.content,
+            ContainerFrame::new(
+                origin,
+                crate::types::Size::new(inline.width, inline.height),
+                origin,
+            ),
+            &mut HashMap::new(),
+            ctx,
+            ContainerRenderOptions {
+                // Painted as one unit, as an inline-block is, with its positioned descendants and those that make a
+                // stacking context in its parent's stacking context (CSS 2.1 Appendix E)
+                stacking_scope: StackingScope::Ancestor,
+                ..Default::default()
+            },
         );
     }
 
     // Inner text lines, laid out from the content-box top downward.
     let content_box = geometry.content_box();
-    let mut baseline_cursor =
-        TextBaselineCursor::new(content_box.top(), pdf_writer.page_content_transform);
+    let mut baseline_cursor = ctx.text.pdf_writer.text_baseline_cursor(content_box.top());
     for line in &inline.lines {
-        let metrics = line_box_metrics(line, custom_fonts);
+        let metrics = line_box_metrics(line, ctx.text.custom_fonts);
         let inner_y = baseline_cursor.next_horizontal(metrics);
         let merged = crate::text::coalesce_text_runs(&line.runs);
         let parent_font_size = crate::layout::text::line_primary_font_size(&merged);
-        let line_ascender = line_text_top(line, custom_fonts);
+        let line_ascender = line_text_top(line, ctx.text.custom_fonts);
         // Line-box and parent text content-area edges for the vertical
         // alignment of nested atomic inline boxes, as in a block's lines.
         let line_top_y = inner_y + metrics.ascender + metrics.half_leading;
         let line_bottom_y = inner_y - metrics.descender - metrics.half_leading;
-        let (text_ascent, text_descent) = line_text_content_extents(line, custom_fonts);
+        let (text_ascent, text_descent) = line_text_content_extents(line, ctx.text.custom_fonts);
         let line_text_top_y = if text_ascent > 0.0 {
             inner_y + text_ascent
         } else {
@@ -314,23 +328,23 @@ pub(super) fn render_inline_box(
                         render_inline_box(
                             content,
                             nested,
-                            x + nested.margin_left,
-                            inner_y,
-                            line_top_y,
-                            line_bottom_y,
-                            line_text_top_y,
-                            line_text_bottom_y,
-                            run.font_size,
-                            run_line_height_for_vertical_align(run),
-                            line_primary_x_height_ratio(&merged, custom_fonts),
-                            custom_fonts,
-                            prepared_custom_fonts,
-                            page_ext_gstates,
-                            bg_alpha_counter,
-                            page_shadings,
-                            shading_counter,
-                            pdf_writer,
-                            page_images,
+                            InlineBoxSlot {
+                                x: x + nested.margin_left,
+                                baseline: inner_y,
+                                line: InlineBoxLine {
+                                    top: line_top_y,
+                                    bottom: line_bottom_y,
+                                    text_top: line_text_top_y,
+                                    text_bottom: line_text_bottom_y,
+                                    x_height_ratio: line_primary_x_height_ratio(
+                                        &merged,
+                                        ctx.text.custom_fonts,
+                                    ),
+                                },
+                                font_size: run.font_size,
+                                line_height: run_line_height_for_vertical_align(run),
+                            },
+                            ctx,
                         );
                     }
                 }
@@ -340,23 +354,28 @@ pub(super) fn render_inline_box(
             if run.text.is_empty() {
                 continue;
             }
-            let run_y = inner_y + drop_cap_baseline_shift(run, line_ascender, custom_fonts);
-            let run_width = estimate_run_width_with_fonts(run, custom_fonts);
+            let run_y =
+                inner_y + drop_cap_baseline_shift(run, line_ascender, ctx.text.custom_fonts);
+            let run_width = estimate_run_width_with_fonts(run, ctx.text.custom_fonts);
             let previous = merged[..run_index]
                 .iter()
                 .rev()
                 .find(|previous| previous.inline_box.is_none() && !previous.text.is_empty());
-            let decoration = HorizontalRunDecorations::new(run, x, run_width, run_y, custom_fonts)
-                .continuing_after(previous);
+            let decoration =
+                HorizontalRunDecorations::new(run, x, run_width, run_y, ctx.text.custom_fonts)
+                    .continuing_after(previous);
             x += decoration.paint_text(
                 content,
                 parent_font_size,
-                prepared_custom_fonts,
+                ctx.text.prepared_custom_fonts,
                 0.0,
-                pdf_writer,
-                page_images,
+                ctx.text.pdf_writer,
+                ctx.text.page_images,
             );
         }
+    }
+    if let Some(prior) = prior_grid {
+        ctx.text.pdf_writer.restore_box_paint_grid(prior);
     }
 }
 

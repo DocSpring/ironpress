@@ -24,8 +24,6 @@ use crate::style::computed::{BorderCollapse, Clear, Float, Position};
 use crate::types::Color;
 
 use super::block::layout_block_element;
-#[cfg(test)]
-use super::cells::CellBoxHolder;
 pub use super::cells::{GridCell, TableCell};
 pub(crate) use super::elements::{
     AvoidPageBreak, BackgroundBox, BackgroundBoxGeometry, BoxFragmentation, BoxModel, Container,
@@ -40,13 +38,10 @@ pub(crate) use super::flow_metrics::BlockMargins;
 use super::grid::layout_grid_container;
 pub(crate) use super::helpers::*;
 use super::images::*;
-use super::inline::{
-    layout_inline_block_group_with_env_and_spacing, layout_inline_mixed_sequence_with_env,
-};
 pub use super::inline_box::{CenteredStroke, GaugeFill, InlineBox, InlineBoxPaint};
 use super::inline_formatting::{
-    AtomicInlineKind, GeneratedContentStyles, InlineContentSequence, InlineFormattingContext,
-    InlineFormattingRole, PrincipalPseudoStyles,
+    AnonymousBlockFlow, GeneratedContentStyles, InlineContentSequence, InlineFormattingChild,
+    InlineFormattingContext, PrincipalPseudoStyles,
 };
 use super::list_item::{ListItemContent, collect_list_item_marker_line, layout_list_item_blocks};
 use super::list_markers::{
@@ -447,24 +442,6 @@ pub(crate) enum FlexNestedOrigin {
     TableBorderBox,
 }
 
-/// Semantic role of one cell in the formatting context that produced it.
-///
-/// Inline formatting stores atomic boxes in flex-shaped rows, but their
-/// subpixel text advance remains authoritative for the box and all of its
-/// descendants. Ordinary flex items use the browser-compatible paint grid.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum FlexItemRole {
-    #[default]
-    FlexItem,
-    AtomicInline(AtomicInlineKind),
-}
-
-impl FlexItemRole {
-    pub(crate) const fn is_atomic_inline(self) -> bool {
-        matches!(self, Self::AtomicInline(_))
-    }
-}
-
 impl FlexItemFragmentation {
     pub(crate) const fn definite() -> Self {
         Self {
@@ -522,7 +499,6 @@ pub struct FlexCell {
     /// Nested layout elements for complex flex items (tables, images, etc.)
     pub nested_elements: Vec<LayoutNode>,
     pub(crate) nested_origin: FlexNestedOrigin,
-    pub(crate) role: FlexItemRole,
     /// The composited output of a `filter: url(#...)` on a simple flex item.
     /// Keeping the bitmap with the cell makes the filter's SourceGraphic an
     /// atomic paint result instead of independently recolouring child vectors.
@@ -648,7 +624,6 @@ impl Default for FlexCell {
             positioning: Default::default(),
             nested_elements: Vec::new(),
             nested_origin: FlexNestedOrigin::default(),
-            role: FlexItemRole::default(),
             y_offset: 0.0,
             line_cross_size: 0.0,
             cross_margins: 0.0,
@@ -3405,78 +3380,46 @@ pub(crate) fn flatten_nodes(
     let list_ctx = tree.list();
     let ancestors = tree.ancestors();
     let positioned_ancestor_depth = tree.positioned_ancestor_depth();
-    let ib_ctx = *ctx;
-
-    // Count element children for sibling context
     let element_count = nodes
         .iter()
         .filter(|n| matches!(n, DomNode::Element(_)))
         .count();
     let inline_sequence = InlineContentSequence::new(nodes);
-    if InlineFormattingContext::new(parent_style, env.rules, ancestors, env.font_metrics())
-        .requires_atomic_layout(inline_sequence)
-        && layout_inline_mixed_sequence_with_env(
-            inline_sequence,
-            parent_style,
-            ctx,
-            output,
-            ancestors,
-            env,
-        )
-    {
-        return;
-    }
-    let atomic_inline_segments =
+    let children =
         InlineFormattingContext::new(parent_style, env.rules, ancestors, env.font_metrics())
-            .environment_aware_atomic_layout_segments(inline_sequence);
-    let mut atomic_inline_segments = atomic_inline_segments.into_iter().peekable();
-    let mut element_index = 0;
-    let mut preceding_siblings: Vec<(String, Vec<String>)> = Vec::new();
-    let all_element_siblings = element_sibling_list(nodes);
-
-    // Accumulator for consecutive inline-block elements
-    let mut ib_group: Vec<(&ElementNode, bool)> = Vec::new();
-    let mut pending_inline_space = false;
-    let mut table_cell_group = AnonymousTableCellGroup::default();
-
-    // Helper closure-like macro for flushing an inline-block group.
-    // We use a nested fn instead since closures can't borrow multiple fields.
-    #[allow(clippy::drain_collect)]
-    #[inline]
-    fn flush_ib(
-        group: &mut Vec<(&ElementNode, bool)>,
-        parent_style: &ComputedStyle,
-        ctx: &LayoutContext,
-        output: &mut Vec<LayoutNode>,
-        ancestors: &[AncestorInfo],
-        env: &mut LayoutEnv,
-    ) {
-        if group.is_empty() {
-            return;
-        }
-        let taken: Vec<(&ElementNode, bool)> = group.drain(..).collect();
-        layout_inline_block_group_with_env_and_spacing(
-            &taken,
-            parent_style,
-            ctx,
-            output,
-            ancestors,
-            env,
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn flush_table_cells(
-        group: &mut AnonymousTableCellGroup<'_>,
-        parent_style: &ComputedStyle,
-        ctx: &LayoutContext,
-        output: &mut Vec<LayoutNode>,
-        ancestors: &[AncestorInfo],
-        child_index: usize,
-        sibling_count: usize,
-        positioned_depth: usize,
-        env: &mut LayoutEnv,
-    ) {
+            .children(inline_sequence);
+    // Text and inline-level elements among blocks go in anonymous blocks between them, laid out as lines
+    // (CSS 2.1 §9.2.1.1)
+    let anonymous_flow =
+        |start: usize, end: usize, output: &mut Vec<LayoutNode>, env: &mut LayoutEnv| {
+            if start >= end {
+                return;
+            }
+            AnonymousBlockFlow::new(parent_style, ctx, ancestors, positioned_ancestor_depth)
+                .layout(
+                    InlineContentSequence::segment(nodes, start, end),
+                    output,
+                    env,
+                    &mut |element: &ElementNode,
+                          child: &InlineFormattingChild,
+                          output: &mut Vec<LayoutNode>,
+                          env: &mut LayoutEnv<'_>| {
+                        flatten_element(
+                            element,
+                            LayoutTreeContext::new(parent_style, ctx, ancestors)
+                                .with_list(list_ctx)
+                                .with_positioned_ancestor_depth(positioned_ancestor_depth)
+                                .for_element(child.source().as_context()),
+                            output,
+                            env,
+                        );
+                    },
+                );
+        };
+    let flush_table_cells = |group: &mut AnonymousTableCellGroup<'_>,
+                             child_index: usize,
+                             output: &mut Vec<LayoutNode>,
+                             env: &mut LayoutEnv| {
         let Some(pending) = group.take() else {
             return;
         };
@@ -3494,272 +3437,51 @@ pub(crate) fn flatten_nodes(
             TableLayoutContext::for_anonymous_table(
                 ctx,
                 ancestors,
-                ElementSiblingContext::new(child_index, sibling_count),
-                ElementSiblingContext::new(first_source_index, sibling_count),
-                positioned_depth,
+                ElementSiblingContext::new(child_index, element_count),
+                ElementSiblingContext::new(first_source_index, element_count),
+                positioned_ancestor_depth,
             ),
         );
-    }
+    };
 
-    let mut node_index = 0usize;
-    while node_index < nodes.len() {
-        if let Some(segment) = atomic_inline_segments.peek().copied()
-            && segment.start() == node_index
-        {
-            flush_table_cells(
-                &mut table_cell_group,
-                parent_style,
-                &ib_ctx,
-                output,
-                ancestors,
-                element_index,
-                element_count,
-                positioned_ancestor_depth,
-                env,
-            );
-            flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
-            pending_inline_space = false;
-            if layout_inline_mixed_sequence_with_env(
-                segment,
-                parent_style,
-                ctx,
-                output,
-                ancestors,
-                env,
-            ) {
-                for segment_node in segment.nodes() {
-                    if let DomNode::Element(element) = segment_node {
-                        preceding_siblings.push((
-                            element.tag_name().to_string(),
-                            element
-                                .class_list()
-                                .iter()
-                                .map(|class| class.to_string())
-                                .collect(),
-                        ));
-                        element_index += 1;
-                    }
-                }
-                node_index = segment.end();
-                atomic_inline_segments.next();
-                continue;
-            }
-        }
-
-        let Some(node) = nodes.get(node_index) else {
-            break;
-        };
+    // Consecutive table cells, with only white space between them, are wrapped in an anonymous table (CSS 2.1
+    // §17.2.1), between the anonymous blocks
+    let mut table_cells = AnonymousTableCellGroup::default();
+    let mut cells_pending = false;
+    let mut flow_start = 0;
+    let mut element_index = 0;
+    for (node_index, node) in nodes.iter().enumerate() {
         match node {
-            DomNode::Text(text) => {
-                let trimmed = collapse_whitespace(text);
-                // Only flush inline-block group for non-whitespace text.
-                // Whitespace between consecutive inline-block elements must
-                // not break the group — they should stay on the same row.
-                if !trimmed.is_empty() {
-                    flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
-                    pending_inline_space = false;
-                } else if text.chars().any(char::is_whitespace) {
-                    pending_inline_space = true;
-                }
-                if !trimmed.is_empty() {
-                    flush_table_cells(
-                        &mut table_cell_group,
-                        parent_style,
-                        &ib_ctx,
-                        output,
-                        ancestors,
-                        element_index,
-                        element_count,
-                        positioned_ancestor_depth,
-                        env,
-                    );
-                    let mut text_runs = Vec::new();
-                    push_text_run_with_fallback(
-                        TextRun {
-                            text: trimmed,
-                            font_size: used_font_size(parent_style, env.fonts),
-                            bold: parent_style.font_weight == FontWeight::Bold,
-                            font_style: parent_style.font_style,
-                            decorations: parent_style.text_decorations.active(parent_style.color),
-                            color: parent_style.color,
-                            font_family: resolve_style_font_family(parent_style, env.fonts),
-                            line_height_factor: text_run_line_height_factor(
-                                parent_style,
-                                env.fonts,
-                            ),
-                            vertical_align: parent_style.vertical_align,
-                            text_shadow: parent_style.text_shadow.clone(),
-                            shaping: crate::layout::text::text_run_shaping(parent_style),
-                            metadata: crate::layout::text::text_run_metadata(parent_style),
-                            ..Default::default()
-                        },
-                        &mut text_runs,
-                        env.fonts,
-                    );
-                    let lines = wrap_text_runs(
-                        text_runs,
-                        TextWrapOptions::new(
-                            ctx.available_width(),
-                            used_font_size(parent_style, env.fonts),
-                            text_run_line_height_factor(parent_style, env.fonts),
-                            parent_style.overflow_wrap,
-                        )
-                        .with_white_space(parent_style.white_space)
-                        .with_parent_strut(parent_line_strut(parent_style, env.fonts))
-                        .with_rtl(parent_style.direction_rtl)
-                        .with_bidi_override(parent_style.unicode_bidi.overrides()),
-                        env.fonts,
-                    );
-                    if !lines.is_empty() {
-                        output.push(
-                            TextBlock {
-                                lines,
-                                text: TextBlockStyle {
-                                    alignment: parent_style.text_align,
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            }
-                            .boxed(),
-                        );
+            DomNode::Element(element) => {
+                let is_cell = children
+                    .get(element_index)
+                    .is_some_and(|child| child.style.display == Display::TableCell);
+                if is_cell {
+                    if !cells_pending {
+                        anonymous_flow(flow_start, node_index, output, env);
                     }
+                    table_cells.push(element, element_index);
+                    cells_pending = true;
+                    flow_start = node_index + 1;
+                } else if cells_pending {
+                    flush_table_cells(&mut table_cells, element_index, output, env);
+                    cells_pending = false;
                 }
-            }
-            DomNode::Element(el) => {
-                let classes = el.class_list();
-                let selector_ctx = SelectorContext {
-                    ancestors: ancestors.to_vec(),
-                    child_index: element_index,
-                    sibling_count: element_count,
-                    preceding_siblings: preceding_siblings.to_vec(),
-                    following_siblings: forward_siblings(&all_element_siblings, element_index)
-                        .to_vec(),
-                    is_empty: element_is_empty(el),
-                };
-                let style = compute_style_with_context_with_font_metrics(
-                    el.tag,
-                    el.style_attr(),
-                    parent_style,
-                    env.rules,
-                    el.tag_name(),
-                    &classes,
-                    el.id(),
-                    &el.attributes,
-                    &selector_ctx,
-                    env.font_metrics(),
-                );
-                if let Some(marker) = string_set_marker(el, env.rules, ancestors, &selector_ctx) {
-                    output.push(marker);
-                }
-                if let Some(marker) = target_anchor_marker(el) {
-                    output.push(marker);
-                }
-                if let Some(name) = style.running_name.clone() {
-                    flush_table_cells(
-                        &mut table_cell_group,
-                        parent_style,
-                        &ib_ctx,
-                        output,
-                        ancestors,
-                        element_index,
-                        element_count,
-                        positioned_ancestor_depth,
-                        env,
-                    );
-                    flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
-                    let running_context = LayoutTreeContext::new(parent_style, &ib_ctx, ancestors)
-                        .with_list(list_ctx)
-                        .with_positioned_ancestor_depth(positioned_ancestor_depth)
-                        .for_element(
-                            ElementSiblingContext::new(element_index, element_count)
-                                .with_neighbors(
-                                    &preceding_siblings,
-                                    forward_siblings(&all_element_siblings, element_index),
-                                ),
-                        );
-                    if let Some(running) = capture_running_element(name, el, running_context, env) {
-                        output.push(running);
-                    }
-                } else if style.display == Display::TableCell {
-                    flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
-                    pending_inline_space = false;
-                    table_cell_group.push(el, element_index);
-                } else if matches!(
-                    InlineFormattingRole::of(el, &style),
-                    InlineFormattingRole::Atomic(
-                        AtomicInlineKind::InlineBlock
-                            | AtomicInlineKind::InlineFlex
-                            | AtomicInlineKind::InlineGrid
-                            | AtomicInlineKind::InlineTable
-                    )
-                ) {
-                    flush_table_cells(
-                        &mut table_cell_group,
-                        parent_style,
-                        &ib_ctx,
-                        output,
-                        ancestors,
-                        element_index,
-                        element_count,
-                        positioned_ancestor_depth,
-                        env,
-                    );
-                    ib_group.push((el, pending_inline_space));
-                    pending_inline_space = false;
-                } else {
-                    flush_table_cells(
-                        &mut table_cell_group,
-                        parent_style,
-                        &ib_ctx,
-                        output,
-                        ancestors,
-                        element_index,
-                        element_count,
-                        positioned_ancestor_depth,
-                        env,
-                    );
-                    // Flush any pending inline-block group
-                    flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
-                    pending_inline_space = false;
-                    flatten_element(
-                        el,
-                        LayoutTreeContext::new(parent_style, &ib_ctx, ancestors)
-                            .with_list(list_ctx)
-                            .with_positioned_ancestor_depth(positioned_ancestor_depth)
-                            .for_element(
-                                ElementSiblingContext::new(element_index, element_count)
-                                    .with_neighbors(
-                                        &preceding_siblings,
-                                        forward_siblings(&all_element_siblings, element_index),
-                                    ),
-                            ),
-                        output,
-                        env,
-                    );
-                }
-                // Track this element as a preceding sibling for the next element
-                preceding_siblings.push((
-                    el.tag_name().to_string(),
-                    el.class_list().iter().map(|s| s.to_string()).collect(),
-                ));
                 element_index += 1;
             }
+            DomNode::Text(text) if cells_pending => {
+                if collapse_whitespace(text).is_empty() {
+                    flow_start = node_index + 1;
+                } else {
+                    flush_table_cells(&mut table_cells, element_index, output, env);
+                    cells_pending = false;
+                }
+            }
+            DomNode::Text(_) => {}
         }
-        node_index += 1;
     }
-    // Flush any remaining inline-block group at end of nodes
-    flush_table_cells(
-        &mut table_cell_group,
-        parent_style,
-        &ib_ctx,
-        output,
-        ancestors,
-        element_index,
-        element_count,
-        positioned_ancestor_depth,
-        env,
-    );
-    flush_ib(&mut ib_group, parent_style, &ib_ctx, output, ancestors, env);
+    flush_table_cells(&mut table_cells, element_index, output, env);
+    anonymous_flow(flow_start, nodes.len(), output, env);
 }
 
 /// Ordered `(tag, classes)` list of the element children of `nodes`, used to
@@ -3976,12 +3698,7 @@ fn flatten_element_with_running_mode(
                     if crate::layout::floats::FloatSide::of(style.float).is_some() {
                         super::images::float_box_around_replaced(img_element, &style)
                     } else {
-                        add_inline_replaced_baseline_gap(
-                            img_element,
-                            &style,
-                            env.fonts,
-                            InlineBaselineGapRounding::Fractional,
-                        )
+                        add_inline_replaced_baseline_gap(img_element, &style, env.fonts)
                     },
                 );
             }
@@ -3992,12 +3709,7 @@ fn flatten_element_with_running_mode(
             if let Some(svg) =
                 super::images::svg_element_node(el, &style, available_width, available_height)
             {
-                output.push(add_inline_replaced_baseline_gap(
-                    svg,
-                    &style,
-                    env.fonts,
-                    InlineBaselineGapRounding::Fractional,
-                ));
+                output.push(add_inline_replaced_baseline_gap(svg, &style, env.fonts));
             }
             return;
         }
@@ -4320,6 +4032,12 @@ fn flatten_element_with_running_mode(
             }
 
             let inner_width = available_width - style.padding.horizontal();
+            // The item's lines, where atomic inline boxes are laid out
+            let line_layout = layout_ctx.with_parent(
+                inner_width,
+                layout_ctx.parent.content_height,
+                style.font_size,
+            );
             let mut runs = Vec::new();
 
             // Check for ::before pseudo-element with custom content (e.g. CSS counters).
@@ -4579,49 +4297,50 @@ fn flatten_element_with_running_mode(
             // Block-level children other than nested lists, and inline content
             // after a block, are laid out after the marker's line, in source
             // order (`layout_list_item_blocks` below).
-            let list_item_blocks =
-                collect_list_item_marker_line(el, &style, &child_ancestors, env, &mut runs);
-            let (consumed_p_idx, extra_margin_top, extra_margin_bottom) =
-                if let Some(blocks) = &list_item_blocks {
-                    (None, blocks.margin_top, blocks.margin_bottom)
-                } else {
-                    let runs_before_inline = runs.len();
-                    InlineRunCollector::new(
-                        env.rules,
-                        env.fonts,
-                        env.counter_state,
-                        &mut *env.resources,
-                    )
-                    .collect_box_content(
-                        &el.children,
-                        &style,
-                        &mut runs,
-                        None,
-                        &child_ancestors,
-                    );
-                    append_pseudo_inline_run(
-                        &mut runs,
-                        generated_styles.after(),
-                        el,
-                        env.fonts,
-                        env.counter_state,
-                        &mut *env.resources,
-                    );
+            let list_item_blocks = collect_list_item_marker_line(
+                el,
+                &style,
+                &child_ancestors,
+                &line_layout,
+                env,
+                &mut runs,
+            );
+            let (consumed_p_idx, extra_margin_top, extra_margin_bottom) = if let Some(blocks) =
+                &list_item_blocks
+            {
+                (None, blocks.margin_top, blocks.margin_bottom)
+            } else {
+                let runs_before_inline = runs.len();
+                InlineRunCollector::for_layout(env, &line_layout).collect_box_content(
+                    &el.children,
+                    &style,
+                    &mut runs,
+                    None,
+                    &child_ancestors,
+                );
+                append_pseudo_inline_run(
+                    &mut runs,
+                    generated_styles.after(),
+                    el,
+                    env.fonts,
+                    env.counter_state,
+                    &mut *env.resources,
+                );
 
-                    // "Loose" list items (Markdown with blank lines between items)
-                    // wrap each item's content in a <p>. When the <li> has no direct
-                    // inline content but its first block child is a <p>, inline that
-                    // <p>'s runs so the marker sits on the same baseline as the first
-                    // line of text (matching Chrome), and apply the <p>'s vertical
-                    // margins on the combined block so consecutive loose items are
-                    // separated as paragraphs. Gated on <li> to keep the hot path
-                    // (nested blocks) free of extra stack.
-                    if el.tag == HtmlTag::Li && runs.len() == runs_before_inline {
-                        inline_loose_list_p(el, &style, &child_ancestors, env, &mut runs)
-                    } else {
-                        (None, 0.0, 0.0)
-                    }
-                };
+                // "Loose" list items (Markdown with blank lines between items)
+                // wrap each item's content in a <p>. When the <li> has no direct
+                // inline content but its first block child is a <p>, inline that
+                // <p>'s runs so the marker sits on the same baseline as the first
+                // line of text (matching Chrome), and apply the <p>'s vertical
+                // margins on the combined block so consecutive loose items are
+                // separated as paragraphs. Gated on <li> to keep the hot path
+                // (nested blocks) free of extra stack.
+                if el.tag == HtmlTag::Li && runs.len() == runs_before_inline {
+                    inline_loose_list_p(el, &style, &child_ancestors, &line_layout, env, &mut runs)
+                } else {
+                    (None, 0.0, 0.0)
+                }
+            };
 
             let block_heading_level = heading_level(el.tag);
 
@@ -5235,6 +4954,7 @@ fn inline_loose_list_p(
     el: &ElementNode,
     parent_style: &ComputedStyle,
     child_ancestors: &[AncestorInfo],
+    line_layout: &LayoutContext,
     env: &mut LayoutEnv,
     runs: &mut Vec<TextRun>,
 ) -> (Option<usize>, f32, f32) {
@@ -5268,13 +4988,7 @@ fn inline_loose_list_p(
                     &p_selector_ctx,
                     env.font_metrics(),
                 );
-                InlineRunCollector::new(
-                    env.rules,
-                    env.fonts,
-                    env.counter_state,
-                    &mut *env.resources,
-                )
-                .collect_box_content(
+                InlineRunCollector::for_layout(env, line_layout).collect_box_content(
                     &child_el.children,
                     &p_style,
                     runs,
@@ -5388,7 +5102,7 @@ fn route_element(
     }
 
     // Grid container handling
-    if style.display == Display::Grid {
+    if matches!(style.display, Display::Grid | Display::InlineGrid) {
         layout_avoiding_floats(
             style,
             &layout_ctx,
@@ -5464,8 +5178,13 @@ fn route_element(
             } else {
                 None
             };
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .collect_box_content(&el.children, style, &mut runs, link_url, child_ancestors);
+            InlineRunCollector::for_layout(env, &layout_ctx).collect_box_content(
+                &el.children,
+                style,
+                &mut runs,
+                link_url,
+                child_ancestors,
+            );
             append_pseudo_inline_run(
                 &mut runs,
                 generated_styles.after(),
@@ -9195,11 +8914,19 @@ mod tests {
             }
 
             fn visit_table_row(&mut self, element: &TableRow) {
-                self.0 |= element.content.cells.iter().any(cell_has_image_background);
+                self.0 |= element
+                    .content
+                    .cells
+                    .iter()
+                    .any(|cell| cell_has_image_background(&cell.layout));
             }
 
             fn visit_grid_row(&mut self, element: &GridRow) {
-                self.0 |= element.content.cells.iter().any(cell_has_image_background);
+                self.0 |= element
+                    .content
+                    .cells
+                    .iter()
+                    .any(|cell| cell_has_image_background(&cell.layout));
             }
         }
 
@@ -9208,8 +8935,8 @@ mod tests {
         search.0
     }
 
-    fn cell_has_image_background(cell: &impl CellBoxHolder) -> bool {
-        elements_have_image_background(&cell.cell_box().content.children)
+    fn cell_has_image_background(cell: &crate::layout::cells::CellBox) -> bool {
+        elements_have_image_background(&cell.content.children)
     }
 
     fn flex_cell_has_image_background(cell: &FlexCell) -> bool {

@@ -196,10 +196,6 @@ impl LayoutVisitor for Resolver<'_> {
 
     fn visit_table_row(&mut self, element: &TableRow) {
         let cell_frames = crate::layout::filter::surface::table_cell_source_frames(element);
-        let baseline_shifts = crate::layout::filter::surface::table_row_baseline_shifts(
-            &element.content.cells,
-            self.fonts,
-        );
         let mut frames = Vec::new();
         for (index, cell) in element.content.cells.iter().enumerate() {
             let Some(cell_frame) = cell_frames.get(index).copied().flatten() else {
@@ -222,7 +218,7 @@ impl LayoutVisitor for Resolver<'_> {
                 cell_frame.nested_child_space(
                     self.parent_anchor.border_origin(),
                     &cell.layout,
-                    baseline_shifts.get(index).copied().unwrap_or_default(),
+                    0.0,
                 ),
             );
             if let Some(nested) = nested {

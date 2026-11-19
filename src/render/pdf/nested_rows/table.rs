@@ -63,7 +63,6 @@ impl NestedRowsRenderer<'_, '_> {
             self.previous_margin_bottom = outer_margins.end;
             return;
         }
-        let baseline_shifts = row_baseline_shifts(cells, custom_fonts);
         let stacking_scope = StackingScope::for_element(element);
         let mut stacking_plan = StackingPaintPlan::default();
         for (cell_idx, cell) in cells.iter().enumerate() {
@@ -284,10 +283,7 @@ impl NestedRowsRenderer<'_, '_> {
                     render_cell_content(
                         content,
                         &cell.layout,
-                        CellRenderBox::new(PdfPoint::new(cell_x, row_y), cell_w, row_height)
-                            .with_baseline_shift(
-                                baseline_shifts.get(cell_idx).copied().unwrap_or(0.0),
-                            ),
+                        CellRenderBox::new(PdfPoint::new(cell_x, row_y), cell_w, row_height),
                         self.abs_origins,
                         &mut page_context,
                     );

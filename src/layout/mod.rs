@@ -12,7 +12,6 @@ pub(crate) mod fragmentation;
 pub(crate) mod grid;
 pub(crate) mod helpers;
 pub(crate) mod images;
-pub(crate) mod inline;
 pub(crate) mod inline_box;
 pub(crate) mod inline_formatting;
 pub(crate) mod intrinsic_width;

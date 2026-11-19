@@ -1,6 +1,5 @@
 use crate::layout::elements::{
-    BoxPaint, BoxPaintOwner, LayoutNode, LayoutSize, LineFragmentation, Positioning,
-    PositioningOwner,
+    BoxPaint, BoxPaintOwner, LayoutNode, LineFragmentation, Positioning, PositioningOwner,
 };
 use crate::layout::engine::{LayoutBorder, TextLine};
 use crate::layout::filter::FilterRasterOutput;
@@ -26,16 +25,6 @@ pub(crate) struct CellPaint {
 }
 
 impl CellPaint {
-    pub(crate) fn from_style(
-        style: &crate::style::computed::ComputedStyle,
-        size: LayoutSize,
-    ) -> Self {
-        Self {
-            box_paint: BoxPaint::from_style(style, size),
-            ..Default::default()
-        }
-    }
-
     pub(crate) fn has_outset_graphical_effect(&self) -> bool {
         self.box_paint.has_outset_graphical_effect()
             || self
@@ -195,11 +184,6 @@ impl CellBox {
     }
 }
 
-/// Access to the common cell box without erasing the concrete cell role.
-pub trait CellBoxHolder {
-    fn cell_box(&self) -> &CellBox;
-}
-
 /// Access to paint effects shared by every concrete cell representation.
 pub(crate) trait CellPaintHolder {
     fn cell_paint(&self) -> &CellPaint;
@@ -281,12 +265,6 @@ pub struct TableCell {
     pub layout: CellBox,
     pub span: TableCellSpan,
     pub table: TableCellState,
-}
-
-impl CellBoxHolder for TableCell {
-    fn cell_box(&self) -> &CellBox {
-        &self.layout
-    }
 }
 
 impl TableCell {
@@ -376,12 +354,6 @@ impl Default for GridCellPlacement {
 pub struct GridCell {
     pub layout: CellBox,
     pub placement: GridCellPlacement,
-}
-
-impl CellBoxHolder for GridCell {
-    fn cell_box(&self) -> &CellBox {
-        &self.layout
-    }
 }
 
 impl CellPaintHolder for GridCell {

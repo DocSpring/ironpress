@@ -44,10 +44,13 @@ impl AlignedBox {
             VerticalAlign::Super => raised(basis.parent_font_size * SUPER_SHIFT_RATIO),
             VerticalAlign::Length(length) => raised(length),
             VerticalAlign::Percent(percent) => raised(basis.line_height * percent),
-            VerticalAlign::Middle => Some((
-                self.height / 2.0 + basis.parent_x_height / 2.0,
-                self.height / 2.0 - basis.parent_x_height / 2.0,
-            )),
+            // The box's centre meets the parent's baseline plus half its x-height. Chromium rounds the x-height
+            // and then the box's reach above the baseline to whole CSS pixels.
+            VerticalAlign::Middle => {
+                let x_height = crate::fonts::round_to_css_pixel(basis.parent_x_height.max(0.0));
+                let above = crate::fonts::round_to_css_pixel(self.height / 2.0 + x_height / 2.0);
+                Some((above, self.height - above))
+            }
             VerticalAlign::Top
             | VerticalAlign::Bottom
             | VerticalAlign::TextTop
@@ -122,13 +125,32 @@ mod tests {
         }
     }
 
+    /// Chromium rounds the parent's x-height to whole CSS pixels (ParitySans's 10.9375px to 11px) and then the box's
+    /// reach above the baseline, so a 42px box beside 20px text reaches 27px above it, not 26.47px.
+    #[test]
+    fn middle_rounds_the_x_height_and_the_reach_above_the_baseline_to_css_pixels() {
+        let basis = AlignmentBasis {
+            parent_font_size: 15.0,
+            parent_x_height: 8.203_125,
+            line_height: 22.5,
+        };
+        let (above, below) = aligned(31.5, 31.5, VerticalAlign::Middle)
+            .baseline_extents(basis)
+            .unwrap();
+        assert_eq!((above, below), (20.25, 11.25));
+        let (above, below) = aligned(30.0, 30.0, VerticalAlign::Middle)
+            .baseline_extents(basis)
+            .unwrap();
+        assert_eq!((above, below), (19.5, 10.5));
+    }
+
     #[test]
     fn each_value_moves_the_box_by_what_it_refers_to() {
         let extents = |vertical_align| aligned(30.0, 24.0, vertical_align).baseline_extents(BASIS);
         assert_eq!(extents(VerticalAlign::Baseline), Some((24.0, 6.0)));
         assert_eq!(extents(VerticalAlign::Length(4.0)), Some((28.0, 2.0)));
         assert_eq!(extents(VerticalAlign::Percent(0.5)), Some((34.0, -4.0)));
-        assert_eq!(extents(VerticalAlign::Middle), Some((18.5, 11.5)));
+        assert_eq!(extents(VerticalAlign::Middle), Some((18.75, 11.25)));
         let (above, below) = extents(VerticalAlign::Super).unwrap();
         assert!((above - (24.0 + 14.0 * SUPER_SHIFT_RATIO)).abs() < 1e-4);
         assert!((below - (6.0 - 14.0 * SUPER_SHIFT_RATIO)).abs() < 1e-4);

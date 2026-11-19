@@ -261,8 +261,7 @@ pub(super) fn paint_text_box(
     // at the top of this fn); omitting the border placed the first
     // baseline `border-top` px too high inside bordered clip boxes.
     let content_top = tb_geometry.content_box().top();
-    let mut baseline_cursor =
-        TextBaselineCursor::new(content_top, ctx.text.pdf_writer.page_content_transform);
+    let mut baseline_cursor = ctx.text.pdf_writer.text_baseline_cursor(content_top);
     let line_metadata = lines
         .first()
         .map_or(Default::default(), |line| line.metadata);
@@ -365,23 +364,23 @@ pub(super) fn paint_text_box(
                     render_inline_box(
                         content,
                         inline,
-                        lx + inline.margin_left,
-                        text_y,
-                        line_top_y,
-                        line_bottom_y,
-                        line_text_top_y,
-                        line_text_bottom_y,
-                        run.font_size,
-                        run_line_height_for_vertical_align(run),
-                        line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
-                        ctx.text.custom_fonts,
-                        ctx.text.prepared_custom_fonts,
-                        ctx.page_ext_gstates,
-                        ctx.bg_alpha_counter,
-                        ctx.shadings,
-                        ctx.shading_counter,
-                        ctx.text.pdf_writer,
-                        ctx.text.page_images,
+                        InlineBoxSlot {
+                            x: lx + inline.margin_left,
+                            baseline: text_y,
+                            line: InlineBoxLine {
+                                top: line_top_y,
+                                bottom: line_bottom_y,
+                                text_top: line_text_top_y,
+                                text_bottom: line_text_bottom_y,
+                                x_height_ratio: line_primary_x_height_ratio(
+                                    &merged,
+                                    ctx.text.custom_fonts,
+                                ),
+                            },
+                            font_size: run.font_size,
+                            line_height: run_line_height_for_vertical_align(run),
+                        },
+                        ctx,
                     );
                 }
                 lx += run.atomic_inline_advance().unwrap_or_default();

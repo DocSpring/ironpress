@@ -51,8 +51,21 @@ impl LayoutVisitor for ImageCount {
 }
 
 impl LayoutVisitor for ContentOrder {
+    /// An atomic inline in a line is listed there, not again as the nodes its box was laid out as.
     fn visit_text_block(&mut self, block: &TextBlock) {
         self.push(&line_words(&block.lines));
+        let mut images = ImageCount::default();
+        for inline in block
+            .lines
+            .iter()
+            .flat_map(|line| &line.runs)
+            .filter_map(|run| run.inline_box.as_deref())
+        {
+            for node in &inline.content {
+                visit_layout_tree(node.as_ref(), &mut images);
+            }
+        }
+        self.listed_images += images.0;
     }
 
     /// A mixed inline row lays each text run and atomic inline out as a cell.

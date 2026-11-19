@@ -165,6 +165,15 @@ impl<'a> TableCellSizingContext<'a> {
         }
     }
 
+    /// The same scope, borrowed for a shorter time
+    pub(crate) fn reborrow(&mut self) -> TableCellSizingContext<'_> {
+        TableCellSizingContext {
+            memo: &mut *self.memo,
+            parent: self.parent,
+            source_scopes: self.source_scopes.clone(),
+        }
+    }
+
     pub(crate) fn descendants<'context>(
         &'context mut self,
         containing_grid: &'context TableGridIdentity,

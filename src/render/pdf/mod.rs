@@ -1,5 +1,5 @@
 use crate::error::IronpressError;
-use crate::layout::cells::{CellBox, CellBoxHolder, GridCell};
+use crate::layout::cells::{CellBox, GridCell};
 use crate::layout::elements::{
     ColumnRule, Container, FlexRow, GridRow, Image, LayoutElement, LayoutVisitor, MathBlock,
     ProgressBar, StackingParticipant, Svg, TableRow, TextBlock,
@@ -135,7 +135,6 @@ use images::{
 use layout_elements::NestedLayoutFrame;
 use layout_elements::{
     CellRenderBox, PageRenderContext, compute_grid_row_height, render_cell_content,
-    row_baseline_shifts,
 };
 pub(crate) use line_metrics::sanitize_pdf_name;
 use line_metrics::*;
@@ -465,7 +464,6 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
         } else {
             Vec::new()
         };
-        let fixed_textblock_flow_adjustments = fixed_textblock_flow_adjustments(&page.elements);
         {
             let mut ctx = PageRenderContext::new(
                 &mut pdf_writer,
@@ -493,12 +491,6 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
             for planned in plan_page_elements(&page.elements) {
                 let elem_idx = planned.index;
                 let (y_pos, element) = &page.elements[elem_idx];
-                let adjusted_y_pos = if element_uses_flow_y_adjustment(element) {
-                    *y_pos - fixed_textblock_flow_adjustments[elem_idx]
-                } else {
-                    *y_pos
-                };
-                let y_pos = &adjusted_y_pos;
                 let element_frame = PageElementFrame {
                     occlusion_coverers: &occlusion_coverers,
                     page_size,

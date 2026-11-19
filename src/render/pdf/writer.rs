@@ -137,6 +137,16 @@ impl PdfWriter {
             .resolve(self.page_content_transform, border_box)
     }
 
+    /// A cursor for a text block's baselines from `content_top`, snapping them on the current paint grid, as its
+    /// boxes are
+    pub(super) fn text_baseline_cursor(&self, content_top: f32) -> TextBaselineCursor {
+        TextBaselineCursor::new(
+            content_top,
+            self.page_content_transform,
+            self.graphics_state.box_paint_grid,
+        )
+    }
+
     pub(super) fn resolve_box_geometry(&self, layout: LayoutBoxGeometry) -> BoxPaintGeometry {
         layout.for_paint(
             self.page_content_transform,
@@ -144,7 +154,8 @@ impl PdfWriter {
         )
     }
 
-    /// Root an outer atomic inline subtree at its authored layout position.
+    /// Root an outer atomic inline subtree at its layout position snapped to the page's CSS-pixel grid, where
+    /// Chromium paints the box.
     ///
     /// Nested atomic boxes inherit the existing grid: the subtree is one paint
     /// unit in the parent inline formatting context, not a sequence of
@@ -153,6 +164,10 @@ impl PdfWriter {
         &mut self,
         origin: PdfPoint,
     ) -> Option<BoxPaintGrid> {
+        let origin = self
+            .page_content_transform
+            .snap_layout_box(PdfRect::new(origin.x, origin.y, 0.0, 0.0))
+            .top_left();
         matches!(self.graphics_state.box_paint_grid, BoxPaintGrid::Page).then(|| {
             std::mem::replace(
                 &mut self.graphics_state.box_paint_grid,

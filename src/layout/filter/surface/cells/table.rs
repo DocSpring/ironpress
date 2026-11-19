@@ -5,7 +5,6 @@ use crate::layout::elements::TableRow;
 use crate::types::{Size, Vector};
 
 use super::super::painter::{RootEffectHandling, SourcePainter};
-use super::super::text::table_row_baseline_shifts;
 use super::CellSourceFrame;
 
 /// Resolve every originating table cell against the row's canonical tracks.
@@ -34,7 +33,6 @@ impl SourcePainter<'_> {
             return None;
         }
         let frames = table_cell_source_frames(row);
-        let baseline_shifts = table_row_baseline_shifts(&row.content.cells, self.fonts);
         for (index, cell) in row.content.cells.iter().enumerate() {
             let Some(frame) = frames.get(index).copied().flatten() else {
                 continue;
@@ -44,7 +42,7 @@ impl SourcePainter<'_> {
                 frame.border_box_in(self.space.border_box.origin),
                 cell.table.clips,
                 cell.table.hide_if_empty,
-                baseline_shifts.get(index).copied().unwrap_or_default(),
+                0.0,
                 RootEffectHandling::Paint,
             )?;
         }

@@ -43,6 +43,7 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
     item: &'dom ElementNode,
     style: &ComputedStyle,
     ancestors: &[AncestorInfo<'dom>],
+    layout: &LayoutContext,
     env: &mut LayoutEnv<'_>,
     runs: &mut Vec<TextRun>,
 ) -> Option<ListItemBlocks> {
@@ -107,7 +108,7 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
     }
 
     let leading_runs = runs.len();
-    InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources).collect(
+    InlineRunCollector::for_layout(env, layout).collect(
         InlineContentSequence::segment(&item.children, 0, block_index),
         style,
         runs,
@@ -117,9 +118,7 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
     if block_child.holds_block {
         // The inline element's content up to its first block joins the
         // marker's line; the item's anonymous block flow lays out the rest
-        let mut collector =
-            InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-                .recording_blocks();
+        let mut collector = InlineRunCollector::for_layout(env, layout).recording_blocks();
         collector.collect(
             InlineContentSequence::segment(&item.children, block_index, block_index + 1),
             style,
@@ -142,14 +141,13 @@ pub(crate) fn collect_list_item_marker_line<'dom>(
     {
         let mut block_ancestors = ancestors.to_vec();
         block_ancestors.push(block_child.source().ancestor(block, false));
-        InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources)
-            .collect_box_content(
-                &block.children,
-                &block_child.style,
-                runs,
-                None,
-                &block_ancestors,
-            );
+        InlineRunCollector::for_layout(env, layout).collect_box_content(
+            &block.children,
+            &block_child.style,
+            runs,
+            None,
+            &block_ancestors,
+        );
         return Some(ListItemBlocks {
             tail_start: block_index + 1,
             lead_on_marker_line: false,

@@ -7,9 +7,10 @@
 
 use super::{
     AncestorInfo, ComputedStyle, ElementNode, ElementSiblingPosition, FlexItem,
-    GeneratedContentStyles, InlineContentSequence, InlineRunCollector, LayoutEnv, TextWrapOptions,
-    compute_style_with_context_with_font_metrics, parent_line_strut, resolve_padding_box_height,
-    text_run_line_height_factor, update_text_block_layout, used_font_size, wrap_text_runs,
+    GeneratedContentStyles, InlineContentSequence, InlineRunCollector, LayoutContext, LayoutEnv,
+    TextWrapOptions, compute_style_with_context_with_font_metrics, parent_line_strut,
+    resolve_padding_box_height, text_run_line_height_factor, update_text_block_layout,
+    used_font_size, wrap_text_runs,
 };
 
 /// Wrap `item`'s text at `final_w`, its resolved border-box main size, and give it the height of those lines.
@@ -20,6 +21,7 @@ pub(super) fn relayout_direct_text_item(
     ancestors: &[AncestorInfo],
     parent_for_children: &ComputedStyle,
     final_w: f32,
+    layout: &LayoutContext,
     env: &mut LayoutEnv,
 ) {
     let relayout_classes = child_el.class_list();
@@ -45,11 +47,21 @@ pub(super) fn relayout_direct_text_item(
         &relayout_selector_ctx,
         env.fonts,
     );
+    let content_w = (final_w
+        - relayout_child_style.padding.horizontal()
+        - relayout_child_style.border.horizontal_width())
+    .max(0.0);
+    // The item's lines, where atomic inline boxes are laid out
+    let line_layout = layout.with_parent(
+        content_w,
+        layout.parent.content_height,
+        relayout_child_style.font_size,
+    );
     let mut runs = Vec::new();
     let mut relayout_ancestors = ancestors.to_vec();
     relayout_ancestors.push(position.ancestor(child_el, child_el.children.is_empty()));
     let counter_scope = env.counter_state.enter_element(&relayout_child_style);
-    InlineRunCollector::new(env.rules, env.fonts, env.counter_state, &mut *env.resources).collect(
+    InlineRunCollector::for_layout(env, &line_layout).collect(
         InlineContentSequence::with_generated(
             &child_el.children,
             relayout_generated_styles.boxes(child_el),
@@ -60,10 +72,6 @@ pub(super) fn relayout_direct_text_item(
         &relayout_ancestors,
     );
     env.counter_state.leave_element(counter_scope);
-    let content_w = (final_w
-        - relayout_child_style.padding.horizontal()
-        - relayout_child_style.border.horizontal_width())
-    .max(0.0);
     let lines = if runs.is_empty() {
         Vec::new()
     } else {

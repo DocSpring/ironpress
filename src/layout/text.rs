@@ -20,6 +20,7 @@ use crate::types::{CornerRadii, EdgeSizes};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use super::context::{LayoutContext, LayoutEnv};
 use super::engine::{
     CounterState, FootnoteBodyStyle, FootnoteLinkData, InlineBox, InlineBoxPaint, LayoutBorder,
     RunAnchor, RunWhitespace, SyntheticFontWeight, TextLine, TextRun, TextShaping,
@@ -604,13 +605,24 @@ pub(crate) fn line_primary_font_size(runs: &[crate::layout::engine::TextRun]) ->
     if baseline_text > 0.0 {
         return baseline_text;
     }
-    runs.iter()
+    let text = runs
+        .iter()
         .filter(|r| r.inline_box.is_none())
+        .map(TextRun::line_height_font_size)
+        .fold(0.0f32, f32::max);
+    if text > 0.0 {
+        return text;
+    }
+    // A line of atomic inline boxes alone: each box's run carries its parent's font
+    runs.iter()
         .map(TextRun::line_height_font_size)
         .fold(0.0f32, f32::max)
 }
 
-fn line_primary_x_height_ratio(runs: &[TextRun], fonts: &HashMap<String, TtfFont>) -> f32 {
+pub(crate) fn line_primary_x_height_ratio(
+    runs: &[TextRun],
+    fonts: &HashMap<String, TtfFont>,
+) -> f32 {
     let primary = runs
         .iter()
         .filter(|run| {
@@ -623,7 +635,9 @@ fn line_primary_x_height_ratio(runs: &[TextRun], fonts: &HashMap<String, TtfFont
                 .partial_cmp(&right.font_size)
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
-        .or_else(|| runs.iter().find(|run| run.inline_box.is_none()));
+        .or_else(|| runs.iter().find(|run| run.inline_box.is_none()))
+        // A line of atomic inline boxes alone: each box's run carries its parent's font
+        .or_else(|| runs.first());
     if let Some(run) = primary
         && let FontFamily::Custom(name) = run.css_font_family()
         && let Some((_, font)) =
@@ -2178,7 +2192,11 @@ fn prepare_text_runs(
 fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledWord> {
     let mut styled_words = Vec::new();
     let mut prev_run_ends_ws = true;
+    // An atomic inline is a soft wrap opportunity on each side, beside text too (CSS Text 3 §5.1: it breaks as an
+    // ideograph does), as Chrome wraps it
+    let mut prev_run_is_atomic = false;
     for (run_index, run) in runs.iter().enumerate() {
+        let after_atomic = std::mem::take(&mut prev_run_is_atomic);
         let run_starts_ws = run.text.chars().next().is_some_and(is_collapsible_space);
         // The first emitted word of this run is directly adjacent to the prior
         // content when neither side of the boundary had whitespace.
@@ -2204,19 +2222,22 @@ fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledW
             });
             continue;
         }
-        if run.inline_box.is_some() {
+        if let Some(inline) = run.inline_box.as_deref() {
             // Atomic inline box (`display: inline-block`): a single, unbreakable
-            // token that takes part in inline spacing like a word.
+            // token that takes part in inline spacing like a word. An inline
+            // element's edge isn't one: its box breaks with its text.
+            let atomic = !run.is_inline_edge() && !inline.symbol_marker;
             styled_words.push(StyledWord {
                 text: String::new(),
                 run_index,
                 preserve_spacing: false,
                 joins_prev: !prev_run_ends_ws,
-                break_before: prev_run_ends_ws,
+                break_before: prev_run_ends_ws || atomic || after_atomic,
                 has_internal_predecessor: false,
                 ends_run: true,
             });
             prev_run_ends_ws = false;
+            prev_run_is_atomic = atomic;
             continue;
         }
         if run.text == "\n" {
@@ -2341,7 +2362,7 @@ fn tokenize_text_runs(runs: &[TextRun], options: TextWrapOptions) -> Vec<StyledW
             && first.text != "\n"
         {
             first.joins_prev = true;
-            first.break_before = false;
+            first.break_before = after_atomic;
         }
         if keep_trailing_space_before_rtl
             && let Some(last) = styled_words.last_mut()
@@ -3681,6 +3702,7 @@ fn build_inline_box(
         image: None,
         image_sampling: Default::default(),
         svg: None,
+        content: Vec::new(),
         replaced_sizing: None,
         // CSS `position: relative` shifts the painted box without changing its
         // in-flow inline slot. `left`/`top` win over `right`/`bottom`.
@@ -3709,13 +3731,13 @@ pub(crate) struct InlineRunCollector<'a> {
     fonts: &'a HashMap<String, TtfFont>,
     counter_state: &'a mut CounterState,
     resources: &'a mut crate::security::resources::ResourceLoader,
-    collection: CollectionState,
+    collection: CollectionState<'a>,
     context: InlineRunContext,
 }
 
 /// What the run collector carries through nested inline elements.
 #[derive(Debug, Default)]
-pub(crate) struct CollectionState {
+pub(crate) struct CollectionState<'a> {
     next_inline_decoration: usize,
     /// While recording: the number of runs collected before each absolutely
     /// positioned element, in source order. The block that lays those
@@ -3726,6 +3748,9 @@ pub(crate) struct CollectionState {
     block_boundaries: Option<Vec<usize>>,
     /// How many blocks inside inline content the collector is in, gathering each as lines of its own.
     block_lines_depth: usize,
+    /// Lays out each inline-block, inline-flex, inline-grid and inline-table as its box, when the collector is
+    /// gathering a block's lines for layout. Without it (measuring passes) such a box is its contents' lines.
+    atomic: Option<crate::layout::inline_formatting::atomic_box::AtomicInlineLayout<'a>>,
 }
 
 /// Where an absolutely positioned element sits among a block's runs.
@@ -3753,7 +3778,7 @@ pub(crate) struct OutOfFlowPlace {
     pub(crate) line_has_content: bool,
 }
 
-impl CollectionState {
+impl CollectionState<'_> {
     fn record_out_of_flow(&mut self, runs_before: usize, style: &ComputedStyle) {
         if let Some(boundaries) = &mut self.out_of_flow_boundaries {
             boundaries.push(OutOfFlowBoundary {
@@ -3803,6 +3828,22 @@ impl<'a> InlineRunCollector<'a> {
             collection: CollectionState::default(),
             context: InlineRunContext::Standard,
         }
+    }
+
+    /// A collector for the lines of a block laid out in `layout`, which lays out each atomic inline box in them as
+    /// its box.
+    pub(crate) fn for_layout(env: &'a mut LayoutEnv<'_>, layout: &LayoutContext) -> Self {
+        let atomic = crate::layout::inline_formatting::atomic_box::AtomicInlineLayout::new(
+            *layout,
+            env.filter_defs,
+            env.filter_dpi,
+            env.table_cell_sizing.reborrow(),
+            &mut *env.grid_item_heights,
+            env.print_fit_widening,
+        );
+        let mut collector = Self::new(env.rules, env.fonts, env.counter_state, &mut *env.resources);
+        collector.collection.atomic = Some(atomic);
+        collector
     }
 
     /// Record where each absolutely positioned element sits among the runs,
@@ -3887,6 +3928,15 @@ impl<'a> InlineRunCollector<'a> {
     }
 }
 
+/// Whether `element` is an inline-block, inline-flex, inline-grid or inline-table that a line lays out as its box,
+/// gauges included. An `<svg>` is a replaced element, laid out as an image is.
+fn is_box_laid_out_atomic(element: &ElementNode, style: &ComputedStyle) -> bool {
+    matches!(
+        style.display,
+        Display::InlineBlock | Display::InlineFlex | Display::InlineGrid | Display::InlineTable
+    ) && element.tag != HtmlTag::Svg
+}
+
 /// Whether an element's direction comes from its text: `dir="auto"`, or a
 /// `<bdi>` without a valid `dir` (HTML §3.2.6.4).
 fn has_auto_direction(el: &ElementNode) -> bool {
@@ -3910,7 +3960,7 @@ fn collect_text_runs_inner(
     ancestors: &[AncestorInfo],
     counter_state: &mut CounterState,
     resources: &mut crate::security::resources::ResourceLoader,
-    collection: &mut CollectionState,
+    collection: &mut CollectionState<'_>,
 ) {
     let first_run = runs.len();
     sequence.append_before(runs, fonts, counter_state, resources);
@@ -4062,7 +4112,11 @@ fn collect_text_runs_inner(
                         continue;
                     }
                     CollectedAs::Image => {
-                        if let Some(boxed) = nested_inline::image_box(el, &style, resources) {
+                        let boxed = match &collection.atomic {
+                            Some(atomic) => atomic.lay_out_replaced(el, &style, resources),
+                            None => nested_inline::image_box(el, &style, resources),
+                        };
+                        if let Some(boxed) = boxed {
                             // The inline element's background covers its content
                             // area behind a replaced box too, as behind its text.
                             let (background_color, padding) =
@@ -4126,6 +4180,37 @@ fn collect_text_runs_inner(
                     if el.attributes.contains_key("data-math") {
                         // Math elements are rendered as MathBlock by
                         // flatten_element, not as inline text runs.
+                    } else if !collected_as_float_box
+                        && is_box_laid_out_atomic(el, &style)
+                        && let Some(atomic) = &mut collection.atomic
+                    {
+                        // Laid out as its box, which enters its own counter scope
+                        let boxed = atomic.lay_out(
+                            el,
+                            &style,
+                            &selector_ctx,
+                            parent_style,
+                            crate::layout::inline_formatting::atomic_box::CollectorEnv {
+                                rules,
+                                fonts,
+                                counter_state,
+                                resources,
+                            },
+                        );
+                        let url = if el.tag == HtmlTag::A {
+                            el.attributes.get("href").map(|s| s.as_str()).or(link_url)
+                        } else {
+                            link_url
+                        };
+                        runs.push(TextRun {
+                            font_size: used_font_size(parent_style, fonts),
+                            color: parent_style.color,
+                            link_url: url.map(String::from),
+                            font_family: resolve_style_font_family(parent_style, fonts),
+                            line_height_factor: text_run_line_height_factor(parent_style, fonts),
+                            inline_box: Some(Box::new(boxed)),
+                            ..Default::default()
+                        });
                     } else {
                         let counter_scope = counter_state.enter_element(&style);
                         if style.float == Float::Footnote {

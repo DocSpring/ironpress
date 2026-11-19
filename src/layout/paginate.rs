@@ -706,6 +706,19 @@ impl BlockFlowAccumulator {
         self.result.height + margin_top - overlap
     }
 
+    /// Include `child` and return its border-box top when it's an in-flow block.
+    pub(crate) fn place(&mut self, index: usize, child: &dyn LayoutElement) -> Option<f32> {
+        let top =
+            (!element_is_out_of_flow(child) && element_float(child) == Float::None).then(|| {
+                let margin_top = child
+                    .margin_holder()
+                    .map_or(0.0, |holder| holder.margins().start);
+                self.next_block_top(margin_top, element_clear(child))
+            });
+        self.include(index, child, estimate_element_height(child));
+        top
+    }
+
     pub(crate) fn include(&mut self, index: usize, child: &dyn LayoutElement, outer_height: f32) {
         if element_is_out_of_flow(child) {
             // Out of flow: contributes nothing and leaves the collapse chain.
@@ -2740,22 +2753,13 @@ impl LayoutVisitor for ElementFlowGeometry {
     fn visit_text_block(&mut self, element: &TextBlock) {
         let text_height = element.lines.iter().map(|line| line.height).sum::<f32>();
         let natural_content_height = element.box_model.padding.vertical() + text_height;
-        let content_height = if element.clipping.rect.is_some() {
-            element
-                .box_model
-                .size
-                .height
-                .resolve(natural_content_height)
-        } else {
-            element
-                .box_model
-                .size
-                .height
-                .used()
-                .map_or(natural_content_height, |height| {
-                    natural_content_height.max(height)
-                })
-        } + element.box_model.border.vertical_width();
+        // A definite height holds and taller lines overflow it; a minimum grows to fit them (CSS 2.1 §10.5)
+        let content_height = element
+            .box_model
+            .size
+            .height
+            .resolve(natural_content_height)
+            + element.box_model.border.vertical_width();
         self.set(content_height, element.box_model.margins);
     }
 

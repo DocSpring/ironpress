@@ -21,16 +21,8 @@ pub(crate) fn element_height(element: &dyn LayoutElement) -> f32 {
             }
             let text_height = element.lines.iter().map(|line| line.height).sum::<f32>();
             let content_height = element.box_model.padding.vertical() + text_height;
-            let used_height = if element.clipping.rect.is_some() {
-                element.box_model.size.height.resolve(content_height)
-            } else {
-                element
-                    .box_model
-                    .size
-                    .height
-                    .used()
-                    .map_or(content_height, |height| content_height.max(height))
-            };
+            // A definite height holds and taller lines overflow it; a minimum grows to fit them (CSS 2.1 §10.5)
+            let used_height = element.box_model.size.height.resolve(content_height);
             self.0 = element.box_model.margins.total()
                 + used_height
                 + element.box_model.border.vertical_width();

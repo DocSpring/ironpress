@@ -1,6 +1,7 @@
 mod absolute_static_position;
 mod anonymous_blocks;
 mod atomic_inline;
+mod atomic_lines;
 mod bidi_lines;
 mod body_box;
 mod break_margins;

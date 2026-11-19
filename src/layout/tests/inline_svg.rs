@@ -24,8 +24,10 @@ struct Found {
 impl LayoutVisitor for Found {
     fn visit_text_block(&mut self, block: &TextBlock) {
         for run in block.lines.iter().flat_map(|line| &line.runs) {
+            // Drawn from its SVG, or from the replaced node it was laid out as
             if let Some(inline) = run.inline_box.as_deref()
-                && inline.svg.is_some()
+                && (inline.svg.is_some()
+                    || matches!(inline.content.as_slice(), [node] if node.replaced_element().is_some()))
             {
                 self.inline_boxes.push((inline.width, inline.height));
             }
@@ -82,10 +84,9 @@ fn an_svg_between_words_stays_in_their_line() {
     );
     assert_eq!(found.replaced, 1, "the SVG is drawn once");
     assert_eq!(
-        (found.row_cells, found.texts.len()),
-        (3, 0),
-        "\"Before\", the SVG and \"after\" are three items of one line, not three blocks: {:?}",
-        found.texts
+        (found.inline_boxes.len(), found.texts.as_slice()),
+        (1, ["Before  after".to_string()].as_slice()),
+        "\"Before\", the SVG and \"after\" are one line, not three blocks"
     );
 }
 

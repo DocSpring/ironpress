@@ -182,7 +182,6 @@ pub(in crate::render::pdf) fn render_nested_layout_elements(
                 let cell_frames = row.cell_inline_frames();
                 let row_y = planned_element.origin.y;
                 let row_height = cells.row_block_extent();
-                let baseline_shifts = row_baseline_shifts(cells, ctx.text.custom_fonts);
 
                 for (cell_idx, cell) in cells.iter().enumerate() {
                     let Some(cell_frame) = cell_frames.get(cell_idx).copied().flatten() else {
@@ -256,10 +255,7 @@ pub(in crate::render::pdf) fn render_nested_layout_elements(
                     render_cell_content(
                         content,
                         &cell.layout,
-                        CellRenderBox::new(PdfPoint::new(cell_x, row_y), cell_w, row_height)
-                            .with_baseline_shift(
-                                baseline_shifts.get(cell_idx).copied().unwrap_or(0.0),
-                            ),
+                        CellRenderBox::new(PdfPoint::new(cell_x, row_y), cell_w, row_height),
                         &abs_origins,
                         ctx,
                     );

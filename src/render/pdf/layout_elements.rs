@@ -150,12 +150,6 @@ pub(super) struct CellRenderBox {
     origin: PdfPoint,
     col_width: f32,
     row_height: f32,
-    /// Extra downward offset applied to this cell's content so a
-    /// `vertical-align: baseline` cell's first text baseline lines up with the
-    /// common baseline of the other baseline-aligned cells in the same row. 0.0
-    /// when the cell is not baseline-aligned or shares the row's tallest
-    /// baseline (the common case, so existing single-font rows are unaffected).
-    baseline_shift: f32,
 }
 
 impl CellRenderBox {
@@ -164,63 +158,8 @@ impl CellRenderBox {
             origin,
             col_width,
             row_height,
-            baseline_shift: 0.0,
         }
     }
-
-    pub(super) const fn with_baseline_shift(mut self, shift: f32) -> Self {
-        self.baseline_shift = shift;
-        self
-    }
-}
-
-/// First text baseline distance from a cell's content-box top: the leading above
-/// the first line plus its ascent. Returns `None` for cells with no rendered
-/// text line (nothing to baseline-align).
-pub(super) fn table_cell_first_baseline(
-    cell: &CellBox,
-    custom_fonts: &HashMap<String, TtfFont>,
-) -> Option<f32> {
-    let line = cell
-        .content
-        .lines
-        .iter()
-        .find(|line| line.runs.iter().any(|run| !run.text.is_empty()))?;
-    let metrics = line_box_metrics(line, custom_fonts);
-    Some(cell.box_model.content_insets.top + metrics.half_leading + metrics.ascender)
-}
-
-/// Per-cell baseline shifts for one row: each `vertical-align: baseline` cell
-/// with text is offset down so its first baseline matches the row's deepest
-/// baseline. Index i corresponds to `cells[i]`; non-baseline / text-less cells
-/// get 0.0. All-equal rows (same font + line-height) yield all-zero shifts, so
-/// uniform tables render exactly as before.
-pub(super) fn row_baseline_shifts<T: CellBoxHolder>(
-    cells: &[T],
-    custom_fonts: &HashMap<String, TtfFont>,
-) -> Vec<f32> {
-    let baselines: Vec<Option<f32>> = cells
-        .iter()
-        .map(|cell| {
-            let layout = cell.cell_box();
-            if layout.alignment.block == VerticalAlign::Baseline {
-                table_cell_first_baseline(layout, custom_fonts)
-            } else {
-                None
-            }
-        })
-        .collect();
-    let common = baselines
-        .iter()
-        .filter_map(|b| *b)
-        .fold(f32::NEG_INFINITY, f32::max);
-    if !common.is_finite() {
-        return vec![0.0; cells.len()];
-    }
-    baselines
-        .iter()
-        .map(|b| b.map_or(0.0, |own| (common - own).max(0.0)))
-        .collect()
 }
 
 #[cfg(test)]
@@ -270,8 +209,7 @@ pub(super) fn render_cell_content(
     inherited_abs_origins: &HashMap<usize, PdfPoint>,
     ctx: &mut PageRenderContext<'_>,
 ) {
-    let content_top =
-        cell_content_top(cell, placement.origin.y, placement.row_height) - placement.baseline_shift;
+    let content_top = cell_content_top(cell, placement.origin.y, placement.row_height);
     if !cell.content.children.is_empty() {
         let text_h: f32 = cell.content.lines.iter().map(|line| line.height).sum();
         render_cell_text(
@@ -360,10 +298,7 @@ pub(super) fn render_cell_text(
     ctx: &mut PageRenderContext<'_>,
 ) {
     let cell_inner_w = placement.col_width - cell.box_model.content_insets.horizontal();
-    let mut baseline_cursor = TextBaselineCursor::new(
-        placement.origin.y,
-        ctx.text.pdf_writer.page_content_transform,
-    );
+    let mut baseline_cursor = ctx.text.pdf_writer.text_baseline_cursor(placement.origin.y);
     let mut first_drawn_line = true;
     for line in &cell.content.lines {
         let metrics = line_box_metrics(line, ctx.text.custom_fonts);
@@ -445,23 +380,23 @@ pub(super) fn render_cell_text(
                         render_inline_box(
                             content,
                             inline,
-                            box_x,
-                            text_y,
-                            line_top_y,
-                            line_bottom_y,
-                            line_text_top_y,
-                            line_text_bottom_y,
-                            run.font_size,
-                            run_line_height,
-                            line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
-                            ctx.text.custom_fonts,
-                            ctx.text.prepared_custom_fonts,
-                            ctx.page_ext_gstates,
-                            ctx.bg_alpha_counter,
-                            ctx.shadings,
-                            ctx.shading_counter,
-                            ctx.text.pdf_writer,
-                            ctx.text.page_images,
+                            InlineBoxSlot {
+                                x: box_x,
+                                baseline: text_y,
+                                line: InlineBoxLine {
+                                    top: line_top_y,
+                                    bottom: line_bottom_y,
+                                    text_top: line_text_top_y,
+                                    text_bottom: line_text_bottom_y,
+                                    x_height_ratio: line_primary_x_height_ratio(
+                                        &merged,
+                                        ctx.text.custom_fonts,
+                                    ),
+                                },
+                                font_size: run.font_size,
+                                line_height: run_line_height,
+                            },
+                            ctx,
                         );
                     }
                 }
@@ -529,23 +464,20 @@ pub(super) fn render_cell_text(
             render_inline_box(
                 content,
                 inline,
-                box_x,
-                text_y,
-                line_top_y,
-                line_bottom_y,
-                line_text_top_y,
-                line_text_bottom_y,
-                font_size,
-                run_line_height,
-                line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
-                ctx.text.custom_fonts,
-                ctx.text.prepared_custom_fonts,
-                ctx.page_ext_gstates,
-                ctx.bg_alpha_counter,
-                ctx.shadings,
-                ctx.shading_counter,
-                ctx.text.pdf_writer,
-                ctx.text.page_images,
+                InlineBoxSlot {
+                    x: box_x,
+                    baseline: text_y,
+                    line: InlineBoxLine {
+                        top: line_top_y,
+                        bottom: line_bottom_y,
+                        text_top: line_text_top_y,
+                        text_bottom: line_text_bottom_y,
+                        x_height_ratio: line_primary_x_height_ratio(&merged, ctx.text.custom_fonts),
+                    },
+                    font_size,
+                    line_height: run_line_height,
+                },
+                ctx,
             );
         }
     }
