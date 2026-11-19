@@ -5,17 +5,17 @@
     "dpi": 300,
     "pdftoppm_available": true,
     "rasterizer_source_path": "/usr/bin/pdftoppm",
-    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-635-1795069645617509656-0/pdftoppm",
+    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-635-1795075549530416938-0/pdftoppm",
     "rasterizer_arguments": "[-r, 300, -png, <PDF>, <PREFIX>]",
     "rasterizer_version": "pdftoppm version 24.08.0",
     "rasterizer_sha256": "b1f76a56605df368efd233e09faad3bd910e50c0d6556c616a7c0b0adebf6013"
   },
   "overall": {
     "score_pct": 100.0,
-    "pass": 1723,
+    "pass": 1724,
     "fail": 0,
     "reference_disputed": 20,
-    "total": 1743
+    "total": 1744
   },
   "categories": [
     {
@@ -336414,7 +336414,7 @@
       "category": "paged-media",
       "score_pct": 100.0,
       "counts": {
-        "pass": 92,
+        "pass": 93,
         "fail": 0,
         "reference_disputed": 3
       },
@@ -345033,7 +345033,7 @@
           "feature": "fragmentation",
           "score_pct": 100.0,
           "counts": {
-            "pass": 4,
+            "pass": 5,
             "fail": 0,
             "reference_disputed": 0
           },
@@ -345335,6 +345335,134 @@
                 ],
                 "confidence": 1.0,
                 "different_pixels": 638,
+                "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
+              }
+            },
+            {
+              "id": "paged-floats-split-across-pages",
+              "category": "paged-media",
+              "feature": "fragmentation",
+              "subfeature": "floats",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.09,
+              "semantic_diff_pct": 0.09,
+              "description": "A floated box of text and a floated box with a height are split at the page end: the first part reaches the end of the page with its bottom border cut off and the rest carries on at the top of the next page, where the boxes that clear it go below it and below its bottom margin (CSS Fragmentation 3 section 5.1, CSS 2.1 section 9.5.2).",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "638b5717320fab39956cc18b65a2330075a798ec3ec55ba13ffd526b998a7fc2",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "9adcb0db6cdda28845b3b5f9f7fbba7e2305c8a420aef87c0ebe678f12928e35",
+                    "painted_pixels": 393217
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "0470fa0f9fc33a89fe1282b52696de5668b14a7e98f7a0eee7f9e3022c652766",
+                    "painted_pixels": 294675
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "4bc822b45227c2d9316bcebf3ebc15aa01d2eaaee4c6b093e58873c6b5ca847b",
+                    "painted_pixels": 185647
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "e95fc47c890fafd8f91c4e90b3f1a16d6578ac914731ec317637891f228b1023",
+                    "painted_pixels": 393217
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "c7602b262ec43efd71b4dbdd145a97442a4e436e02c06016dbd0cfdbe52753d7",
+                    "painted_pixels": 294675
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "1b9f20e92ea2a26372f0f04288090db8519dfe4a9c6b6aa81b2bdb538d77ac54",
+                    "painted_pixels": 185647
+                  }
+                ]
+              },
+              "diagnosis": {
+                "primary_class": "AntialiasCoverage",
+                "secondary": [],
+                "headline": "visually accepted coverage phase; raw antialiasing coverage residue on a shared outline",
+                "magnitude": {
+                  "missing_area_pct": 0.0,
+                  "extra_area_pct": 0.0,
+                  "modal_drgba": [
+                    22,
+                    51,
+                    74,
+                    0
+                  ],
+                  "delta_e": 1.4925791549797558,
+                  "recovered_alpha": null,
+                  "colorspace": null
+                },
+                "region_count": 1,
+                "region_classes": [
+                  {
+                    "class": "ColorErr",
+                    "region_count": 1,
+                    "total_pixels": 675,
+                    "total_area_pct": 0.10810810810810811,
+                    "union_bbox_css": [
+                      0.0,
+                      0.0,
+                      0.0,
+                      215.68
+                    ],
+                    "largest_region_pixels": 675,
+                    "largest_region_area_pct": 0.10810810810810811,
+                    "max_delta_e": 1.4925791549797558
+                  }
+                ],
+                "region_examples": [
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      0.0,
+                      0.0,
+                      0.0,
+                      215.68
+                    ],
+                    "area_pct": 0.10810810810810811,
+                    "modal_drgba": [
+                      22,
+                      51,
+                      74,
+                      0
+                    ],
+                    "delta_e": 1.4925791549797558,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  }
+                ],
+                "confidence": 1.0,
+                "different_pixels": 675,
                 "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
               }
             },
@@ -400496,7 +400624,7 @@
       "units-values/percentage",
       "units-values/viewport-units"
     ],
-    "implemented": 1706,
+    "implemented": 1707,
     "partial": 37,
     "unsupported": 0,
     "interaction_families": 25,
@@ -400509,6 +400637,6 @@
   "suspect_unsupported_pass": [],
   "stale_refs": [],
   "refs_lock_present": true,
-  "refs_lock_sha256": "c3d170832a9599d429f7195b54367dd5fd4ebb0edf79d7c25b9a0e7ae983968f",
+  "refs_lock_sha256": "3e9718e7b8ab82196afc5f6686ff3cb3af5382d401f21e21ecaf8496f8b34502",
   "baseline_present": true
 }

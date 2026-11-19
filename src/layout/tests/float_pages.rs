@@ -1,11 +1,13 @@
 //! Floats across pages (CSS 2.1 §9.5.1 rule 8, CSS Fragmentation 3 §5.1): a float that doesn't fit on its page
 //! goes to the next one, and a float in a paragraph's text stays beside the line it occurs on, wherever the
-//! paragraph breaks. Each expectation is what Chrome prints for the same markup. The floats are images, which
-//! Chrome doesn't split across pages.
+//! paragraph breaks. A float that can break (text, a box with a height) is split at the page end instead, and
+//! carries on at the top of the next page. Each expectation is what Chrome prints for the same markup. Images
+//! and `break-inside: avoid` floats aren't split.
 
 use crate::layout::elements::{LayoutVisitor, TextBlock};
 use crate::layout::engine::{Page, visit_layout_tree};
 use crate::layout::paginate::element_float;
+use crate::layout::paginate::estimate_element_height;
 use crate::style::computed::Float;
 use crate::types::PageSize;
 
@@ -160,4 +162,172 @@ fn a_float_that_does_not_fit_beside_its_line_starts_the_next_page() {
     );
     assert!(float_tops(&pages[0]).is_empty());
     assert_eq!(float_tops(&pages[1]), [0.0], "the float tops page 2");
+}
+
+/// The floats on a page, with their tops and heights.
+fn float_boxes(page: &Page) -> Vec<(f32, f32)> {
+    page.elements
+        .iter()
+        .filter(|(_, element)| element_float(element.as_ref()) != Float::None)
+        .map(|(top, element)| (*top, estimate_element_height(element.as_ref())))
+        .collect()
+}
+
+/// `count` lines `{word}1` to `{word}{count}`.
+fn numbered(word: &str, count: usize) -> String {
+    (1..=count)
+        .map(|index| format!("{word}{index}"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+/// Words enough for `count` lines beside a 100pt float on a 240pt page.
+fn words(count: usize) -> String {
+    (1..=count * 2)
+        .map(|index| format!("w{index}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn a_float_with_text_is_split_at_the_page_end_and_carries_on_on_the_next_page() {
+    // 100pt are left below the 300pt box: five of the float's ten 18pt lines
+    let pages = pages(&format!(
+        r#"<div style="height:300pt"></div>
+        <div style="float:left;width:100pt">{}</div><p>{}</p>"#,
+        numbered("f", 10),
+        words(5)
+    ));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        float_boxes(&pages[0]),
+        [(300.0, 100.0)],
+        "the first part fills the page"
+    );
+    assert_eq!(line_top(&pages[0], "f5"), Some(372.0));
+    assert_eq!(
+        line_top(&pages[0], "w1"),
+        Some(300.0),
+        "the text beside it stays"
+    );
+    assert_eq!(float_tops(&pages[1]), [0.0], "the rest tops page 2");
+    assert_eq!(line_top(&pages[1], "f6"), Some(0.0));
+    assert_eq!(line_top(&pages[1], "f10"), Some(72.0));
+}
+
+#[test]
+fn a_float_with_a_height_is_split_at_the_page_end() {
+    let pages = pages(
+        r#"<div style="height:300pt"></div>
+        <div style="float:left;width:100pt;height:200pt;border:3pt solid red"></div><p>text</p>"#,
+    );
+    assert_eq!(pages.len(), 2);
+    assert_eq!(float_boxes(&pages[0]), [(300.0, 100.0)]);
+    assert_eq!(
+        float_boxes(&pages[1]),
+        [(0.0, 106.0)],
+        "the rest of its 206pt"
+    );
+}
+
+#[test]
+fn a_float_that_avoids_breaks_moves_to_the_next_page_whole() {
+    let pages = pages(&format!(
+        r#"<div style="height:300pt"></div>
+        <div style="float:left;width:100pt;break-inside:avoid">{}</div><p>text</p>"#,
+        numbered("f", 10)
+    ));
+    assert!(float_tops(&pages[0]).is_empty());
+    assert_eq!(float_boxes(&pages[1]), [(0.0, 180.0)]);
+    assert_eq!(line_top(&pages[1], "f1"), Some(0.0));
+}
+
+#[test]
+fn a_float_taller_than_a_page_carries_on_over_several() {
+    let pages = pages(&format!(
+        r#"<div style="float:left;width:100pt">{}</div>"#,
+        numbered("f", 50)
+    ));
+    assert_eq!(pages.len(), 3, "22 lines to a page");
+    assert_eq!(line_top(&pages[1], "f23"), Some(0.0));
+    assert_eq!(line_top(&pages[2], "f45"), Some(0.0));
+    assert_eq!(line_top(&pages[2], "f50"), Some(90.0));
+}
+
+#[test]
+fn a_float_with_text_in_a_paragraph_is_split_beside_its_line() {
+    // Line 1 of the paragraph is at 342pt, with 58pt left: three of the float's eight lines
+    let float = format!(
+        r#"<span style="float:right;width:60pt">{}</span>"#,
+        numbered("f", 8)
+    );
+    let pages = pages(&format!(
+        r#"<div style="height:324pt"></div><p>{}</p>"#,
+        lines_with_float(8, 1, &float)
+    ));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(line_top(&pages[0], "line1"), Some(342.0));
+    assert_eq!(float_boxes(&pages[0]), [(342.0, 58.0)]);
+    assert_eq!(line_top(&pages[0], "f3"), Some(378.0));
+    assert_eq!(float_tops(&pages[1]), [0.0]);
+    assert_eq!(line_top(&pages[1], "f4"), Some(0.0));
+    assert_eq!(
+        line_top(&pages[1], "line4"),
+        Some(0.0),
+        "the paragraph carries on beside it"
+    );
+}
+
+#[test]
+fn floats_after_a_split_float_stack_below_its_rest() {
+    // Two columns of 108pt cards (six lines): the fourth row starts at 324pt and breaks at the page end, keeping
+    // four lines (the part fills the page) and carrying two
+    let card = format!(
+        r#"<div style="float:left;width:110pt">{}</div>"#,
+        numbered("c", 6)
+    );
+    let pages = pages(&card.repeat(10));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        float_boxes(&pages[0]),
+        [
+            (0.0, 108.0),
+            (0.0, 108.0),
+            (108.0, 108.0),
+            (108.0, 108.0),
+            (216.0, 108.0),
+            (216.0, 108.0),
+            (324.0, 76.0),
+            (324.0, 76.0)
+        ]
+    );
+    assert_eq!(
+        float_boxes(&pages[1]),
+        [(0.0, 36.0), (0.0, 36.0), (36.0, 108.0), (36.0, 108.0)],
+        "the fourth row's rests, then the fifth row below them"
+    );
+}
+
+#[test]
+fn a_box_that_clears_a_float_moved_to_the_next_page_goes_below_its_bottom_margin() {
+    let pages = pages(
+        r#"<div style="height:350pt"></div>
+        <div style="float:left;width:100pt;height:100pt;margin-bottom:6pt;break-inside:avoid"></div>
+        <p style="clear:both">after</p>"#,
+    );
+    assert_eq!(pages.len(), 2);
+    assert_eq!(float_tops(&pages[1]), [0.0]);
+    assert_eq!(line_top(&pages[1], "after"), Some(106.0));
+}
+
+#[test]
+fn a_box_that_clears_a_split_float_goes_below_its_rest() {
+    let pages = pages(&format!(
+        r#"<div style="height:300pt"></div>
+        <div style="float:left;width:100pt">{}</div><p style="clear:both">after</p>"#,
+        numbered("f", 10)
+    ));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(float_boxes(&pages[1]), [(0.0, 90.0)]);
+    assert_eq!(line_top(&pages[1], "after"), Some(90.0));
 }

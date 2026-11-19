@@ -16114,6 +16114,20 @@
       "reference_file": "cases/paged-media/paged-floats-continue-on-next-page.html",
       "reference_html_sha256": "875f7e4eeccdb28033e4ce41d41d70c25090c4995b23a261d17efa58de40fea8"
     },
+    "paged-floats-split-across-pages": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-floats-split-across-pages.html",
+      "html_sha256": "638b5717320fab39956cc18b65a2330075a798ec3ec55ba13ffd526b998a7fc2",
+      "manifest_sha256": "4e61a22f0e6dab704c7c9f18c263ea4050c4602e803fc450de97ab45502fef55",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-floats-split-across-pages.pdf",
+        "sha256": "2bfe52b86b77fa0ecfc022a5ffc85725df907ab059003de3ac1164ba9c7195cf"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-floats-split-across-pages.html",
+      "reference_html_sha256": "638b5717320fab39956cc18b65a2330075a798ec3ec55ba13ffd526b998a7fc2"
+    },
     "paged-footnote-counter-reset": {
       "category": "paged-media",
       "file": "cases/paged-media/paged-footnote-counter-reset.html",

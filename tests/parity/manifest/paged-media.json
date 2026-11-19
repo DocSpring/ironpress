@@ -1400,5 +1400,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-image-render", "probe-block-flow"]
+  },
+  {
+    "id": "paged-floats-split-across-pages",
+    "category": "paged-media",
+    "feature": "fragmentation",
+    "subfeature": "floats",
+    "description": "A floated box of text and a floated box with a height are split at the page end: the first part reaches the end of the page with its bottom border cut off and the rest carries on at the top of the next page, where the boxes that clear it go below it and below its bottom margin (CSS Fragmentation 3 section 5.1, CSS 2.1 section 9.5.2).",
+    "file": "cases/paged-media/paged-floats-split-across-pages.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

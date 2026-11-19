@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>floats that can break are split at the page end and carry on at the top of the next page</title>
+<style>
+  @page { size: 320px 240px; margin: 12px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; color: #1f2933; }
+  body { margin: 0; }
+  p { margin: 0; }
+  .lead { height: 72px; background: #eef0f6; }
+  .items { float: left; width: 120px; margin-right: 8px; background: #fde68a; border-left: 4px solid #b45309; }
+  .box { float: left; width: 100px; height: 150px; margin: 0 8px 6px 0; background: #bfdbfe; border: 4px solid #1d4ed8; }
+  .after { clear: both; background: #e5f5e0; }
+</style>
+</head>
+<body>
+  <div class="lead"></div>
+  <div class="items">Item 1<br>Item 2<br>Item 3<br>Item 4<br>Item 5<br>Item 6<br>Item 7<br>Item 8<br>Item 9<br>Item 10<br>Item 11<br>Item 12</div>
+  <p>Beside the list<br>line two<br>line three</p>
+  <p class="after">Below the list</p>
+  <div class="box"></div>
+  <p class="after">Below the box</p>
+</body>
+</html>

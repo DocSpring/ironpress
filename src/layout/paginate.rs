@@ -431,6 +431,46 @@ struct FloatRegion {
     in_text: bool,
 }
 
+/// Draws at the top of the page with index `page` the parts of split floats that carry on there, splitting again
+/// one taller than the page.
+fn place_carried_floats(
+    carried: &mut float_breaks::Carried,
+    page: usize,
+    page_bottom: f32,
+    current_elements: &mut Vec<(f32, LayoutNode)>,
+    current_footnotes: &mut Vec<FootnoteItem>,
+    left_floats: &mut Vec<FloatRegion>,
+    right_floats: &mut Vec<FloatRegion>,
+) {
+    for part in carried.take_for(page) {
+        let side = element_float(part.as_ref());
+        let geometry = element_flow_geometry(part.as_ref());
+        let top = geometry.margins.start;
+        let part = if exceeds_with_roundoff(top + geometry.content_height, page_bottom)
+            && let Some((here, rest)) = float_breaks::split_float(part.as_ref(), page_bottom - top)
+        {
+            carried.push(page + 1, rest);
+            here
+        } else {
+            part
+        };
+        let drawn = element_flow_geometry(part.as_ref());
+        let region = FloatRegion {
+            y_start: top,
+            y_end: top + drawn.content_height + drawn.margins.end,
+            side,
+            in_text: false,
+        };
+        if side == Float::Left {
+            left_floats.push(region);
+        } else {
+            right_floats.push(region);
+        }
+        collect_footnotes_from_element(part.as_ref(), current_footnotes);
+        current_elements.push((top, part));
+    }
+}
+
 /// Estimate the height of a layout element for wrapper sizing.
 pub(crate) fn estimate_element_height(element: &dyn LayoutElement) -> f32 {
     measurement::element_height(element)
@@ -2858,6 +2898,7 @@ pub(crate) fn paginate_with_context(
     // Track active float regions for simplified float/clear behavior
     let mut left_floats: Vec<FloatRegion> = Vec::new();
     let mut right_floats: Vec<FloatRegion> = Vec::new();
+    let mut carried_floats = float_breaks::Carried::default();
     let mut prev_margin_bottom: f32 = 0.0;
     // CSS margin-collapse-through-root: the first in-flow block on a page has
     // its margin-top collapse with the body margin on page 1. On continuation
@@ -3070,6 +3111,16 @@ pub(crate) fn paginate_with_context(
             .flex_padding_box_border_top
             .map(|border_top| (position.containing_block_depth, border_top));
 
+        // The parts of floats split at the end of the last page carry on at the top of this one
+        place_carried_floats(
+            &mut carried_floats,
+            pages.len(),
+            content_height,
+            &mut current_elements,
+            &mut current_footnotes,
+            &mut left_floats,
+            &mut right_floats,
+        );
         // Handle clear: move y below active floats on the specified side. A
         // paragraph doesn't clear the floats in its own text, drawn just
         // before it; the boxes after it do.
@@ -3324,7 +3375,9 @@ pub(crate) fn paginate_with_context(
             // would manufacture a blank leading page and retry the same box at
             // the top of page 2. Use the semantic flow state instead; the
             // internal splitter below can then consume page 1 when necessary.
-            && !first_on_page)
+            && !first_on_page
+            // A float that can break is split at the page end instead (`float_breaks`)
+            && (elem_float == Float::None || !float_breaks::can_break(element.as_ref())))
             || block_footnote_requires_break;
         if page_broke_mid_loop {
             // CSS GCPM §2.8: when a `footnote-policy: line` body cannot fit
@@ -3470,6 +3523,16 @@ pub(crate) fn paginate_with_context(
             // this iteration (float or normal-flow branch overwrites both).
             left_floats.clear();
             right_floats.clear();
+            place_carried_floats(
+                &mut carried_floats,
+                pages.len(),
+                content_height,
+                &mut current_elements,
+                &mut current_footnotes,
+                &mut left_floats,
+                &mut right_floats,
+            );
+            y = FloatBottoms::drawn(&left_floats, &right_floats, in_flow).cleared(y, elem_clear);
             advance_positioned_ancestors_after_page_break(
                 &mut positioned_y_by_depth,
                 consumed_height,
@@ -3534,14 +3597,21 @@ pub(crate) fn paginate_with_context(
                         .page_content_role()
                         .interrupts_forced_break_sequence()
                 }),
+                carried_height: carried_floats.height_on(pages.len() + 1),
             };
             let element = match spot.settle(element, float_settled, &mut work) {
                 float_breaks::FloatOutcome::Here(element) => element,
                 float_breaks::FloatOutcome::Requeued => continue,
+                float_breaks::FloatOutcome::Split { here, rest } => {
+                    carried_floats.push(pages.len() + 1, rest);
+                    here
+                }
             };
+            // A box that clears it goes below its margin box (CSS 2.1 §9.5.2)
+            let drawn = element_flow_geometry(element.as_ref());
             let region = FloatRegion {
                 y_start: float_y,
-                y_end: float_y + content_h_val,
+                y_end: float_y + drawn.content_height + drawn.margins.end,
                 side: elem_float,
                 in_text: element
                     .block_flow_owner()
@@ -3697,6 +3767,34 @@ pub(crate) fn paginate_with_context(
     // not two), so only push the pending page if it carries real content — unless
     // it is the only page, so an otherwise-empty single-page document (e.g. an
     // empty body with a page background) still renders its one page.
+    // The rest of a float split at the end of the last page carries on over new pages.
+    while !carried_floats.is_empty() {
+        pages.push(Page {
+            elements: std::mem::take(&mut current_elements),
+            print_content_scale: Default::default(),
+            document_svg_defs: Default::default(),
+            generated_content: current_generated_content.snapshot_and_advance(),
+            footnotes: std::mem::take(&mut current_footnotes),
+            geometry: Some(current_page_geometry),
+            page_name: active_page_type.name.clone(),
+            is_blank: false,
+        });
+        current_page_geometry =
+            active_page_type.geometry(&context.geometry, pages.len() + 1, false);
+        content_height = current_page_geometry.content_height();
+        repeated_decorations.append_to(&mut current_elements, current_page_geometry);
+        left_floats.clear();
+        right_floats.clear();
+        place_carried_floats(
+            &mut carried_floats,
+            pages.len(),
+            content_height,
+            &mut current_elements,
+            &mut current_footnotes,
+            &mut left_floats,
+            &mut right_floats,
+        );
+    }
     let has_real_content = current_elements
         .iter()
         .any(|(_, element)| element.page_content_role().retains_page());

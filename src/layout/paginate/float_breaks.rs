@@ -12,16 +12,21 @@
 //!   fit and can't break, it moves to the next page whole, and its floats with it.
 //! - Any other float that doesn't fit starts the next page, and the floats stacked below it (the rows of a float
 //!   grid) move up with it.
+//!
+//! A float that can break (text or a box, not an image or a `break-inside: avoid` box) is split at the page end
+//! instead, as Chrome fragments floats like any block: its first part is drawn here and the rest carries on at the
+//! top of the next page, where the floats that move there stack below it.
 
 use std::collections::VecDeque;
 
 use crate::layout::elements::{
-    IntoLayoutNode, LayoutElement, LayoutNode, LayoutVisitor, PageBreak, TextBlock,
+    BlockSize, Container, IntoLayoutNode, LayoutElement, LayoutNode, LayoutVisitor,
+    LayoutVisitorMut, PageBreak, Table, TextBlock,
 };
 use crate::layout::engine::PageBreakSide;
-use crate::layout::floats::FloatLine;
+use crate::layout::floats::{FloatLine, FloatOffset};
 use crate::layout::roundoff::exceeds_with_roundoff;
-use crate::style::computed::Float;
+use crate::style::computed::{BoxDecorationBreak, Float};
 
 use super::{
     FloatBottoms, FragmentBreakRule, PendingElement, collapse_vertical_margins, element_clear,
@@ -44,6 +49,9 @@ pub(super) struct FloatSpot {
     pub(super) page_bottom: f32,
     /// The page holds content a forced break would end it after.
     pub(super) page_has_content: bool,
+    /// The height of the tallest float part already carried over to the top of the next page, which a float moved
+    /// there goes below.
+    pub(super) carried_height: f32,
 }
 
 /// What became of a float the paginator was about to draw.
@@ -52,6 +60,8 @@ pub(super) enum FloatOutcome {
     Here(LayoutNode),
     /// It and what goes with it are back in the queue, rearranged.
     Requeued,
+    /// Its first part is drawn here, and the rest carries on at the top of the next page.
+    Split { here: LayoutNode, rest: LayoutNode },
 }
 
 impl FloatSpot {
@@ -70,6 +80,9 @@ impl FloatSpot {
             return self.settle_with_paragraph(float, index, work);
         }
         if exceeds_with_roundoff(self.top + self.height, self.page_bottom) {
+            if let Some((here, rest)) = split_float(float.as_ref(), self.page_bottom - self.top) {
+                return FloatOutcome::Split { here, rest };
+            }
             return self.start_next_page(float, work);
         }
         FloatOutcome::Here(float)
@@ -115,7 +128,7 @@ impl FloatSpot {
                 let first_height = element_flow_geometry(first.as_ref()).content_height;
                 let (here, next): (Vec<LayoutNode>, Vec<LayoutNode>) =
                     floats.into_iter().partition(|float| {
-                        line_top(float.as_ref()) < first_height && self.fits(float.as_ref())
+                        line_top(float.as_ref()) < first_height && self.stays(float.as_ref())
                     });
                 work.push_front(PendingElement::continuation(rest));
                 for mut float in next.into_iter().rev() {
@@ -149,7 +162,7 @@ impl FloatSpot {
             None if fits => {
                 let (here, after): (Vec<LayoutNode>, Vec<LayoutNode>) = floats
                     .into_iter()
-                    .partition(|float| self.fits(float.as_ref()));
+                    .partition(|float| self.stays(float.as_ref()));
                 for mut float in after.into_iter().rev() {
                     let offset = offset_block(float.as_ref());
                     move_up(&mut float, offset, FloatLine::default());
@@ -187,13 +200,15 @@ impl FloatSpot {
             // Already at the top of an empty page: a float taller than the page is drawn here
             return FloatOutcome::Here(float);
         }
-        move_up(&mut float, offset, FloatLine::default());
+        // It goes to the top of the next page, below the parts of floats carried over there
+        let by = offset - self.carried_height;
+        move_up(&mut float, by, FloatLine::default());
         for pending in work.iter_mut() {
             if element_float(pending.element.as_ref()) == Float::None {
                 break;
             }
             if float_line(pending.element.as_ref()).is_none() {
-                move_up(&mut pending.element, offset, FloatLine::default());
+                move_up(&mut pending.element, by, FloatLine::default());
             }
         }
         work.push_front(PendingElement::settled_float(float));
@@ -210,6 +225,130 @@ impl FloatSpot {
             self.flow_top + geometry.margins.start + offset_block(float) + geometry.content_height;
         !exceeds_with_roundoff(bottom, self.page_bottom)
     }
+
+    /// Whether `float` is drawn on this page: it fits, or it can break and some of it fits (the rest carries on
+    /// on the next page).
+    fn stays(self, float: &dyn LayoutElement) -> bool {
+        if self.fits(float) {
+            return true;
+        }
+        let geometry = element_flow_geometry(float);
+        let top = self.flow_top + geometry.margins.start + offset_block(float);
+        split_float(float, self.page_bottom - top).is_some()
+    }
+}
+
+/// The parts of split floats that carry on at the top of a later page.
+#[derive(Default)]
+pub(super) struct Carried {
+    parts: Vec<(usize, LayoutNode)>,
+}
+
+impl Carried {
+    /// Carries `rest` on at the top of the page with index `page`.
+    pub(super) fn push(&mut self, page: usize, rest: LayoutNode) {
+        self.parts.push((page, rest));
+    }
+
+    /// The parts to draw at the top of the page with index `page` (or an earlier one, past a blank page).
+    pub(super) fn take_for(&mut self, page: usize) -> Vec<LayoutNode> {
+        let (now, later): (Vec<_>, Vec<_>) = std::mem::take(&mut self.parts)
+            .into_iter()
+            .partition(|(at, _)| *at <= page);
+        self.parts = later;
+        now.into_iter().map(|(_, part)| part).collect()
+    }
+
+    /// The height of the tallest part carried on to the page with index `page`, which a float moved there goes
+    /// below.
+    pub(super) fn height_on(&self, page: usize) -> f32 {
+        self.parts
+            .iter()
+            .filter(|(at, _)| *at == page)
+            .map(|(_, part)| {
+                let geometry = element_flow_geometry(part.as_ref());
+                geometry.margins.start + geometry.content_height + geometry.margins.end
+            })
+            .fold(0.0, f32::max)
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+}
+
+/// Splits a float that can break at `available` below its border box's top: its first part, and the rest, which
+/// is drawn at the top of the next page. `None` for a float that can't break there (an image, a
+/// `break-inside: avoid` box, no room for any of it).
+pub(super) fn split_float(
+    float: &dyn LayoutElement,
+    available: f32,
+) -> Option<(LayoutNode, LayoutNode)> {
+    if !can_break(float) || available <= 0.0 {
+        return None;
+    }
+    // The block splitters leave floats whole, as an in-flow box's floated descendants move with their line; a float
+    // that the paginator draws itself breaks like a block
+    let mut block = float.clone_box();
+    let flow = block.block_flow_owner_mut()?.block_flow_mut();
+    let floated = *flow;
+    flow.float = Float::None;
+    let (mut here, mut rest) = split_element(block.as_ref(), available, FragmentBreakRule::Normal)?;
+    if let Some(owner) = here.block_flow_owner_mut() {
+        *owner.block_flow_mut() = floated;
+    }
+    fill_to_page_end(&mut here, available);
+    if let Some(owner) = rest.block_flow_owner_mut() {
+        let flow = owner.block_flow_mut();
+        *flow = floated;
+        flow.float_offset = floated.float_offset.map(|offset| FloatOffset {
+            block: 0.0,
+            ..offset
+        });
+        flow.float_line = None;
+    }
+    rest.suppress_first_fragment_spacing();
+    Some((here, rest))
+}
+
+/// Makes a float's first part reach the page end, as a box that breaks fills the rest of its page (Chrome draws
+/// its background and side borders down to the end). A container's splitter already does.
+fn fill_to_page_end(part: &mut LayoutNode, available: f32) {
+    struct Fill(f32);
+    impl LayoutVisitorMut for Fill {
+        fn visit_text_block(&mut self, element: &mut TextBlock) {
+            if element.fragmentation.box_fragmentation.decoration == BoxDecorationBreak::Clone {
+                return;
+            }
+            // A text block's height is its padding box's
+            let text_height = element.lines.iter().map(|line| line.height).sum::<f32>();
+            let natural = element.box_model.padding.vertical() + text_height;
+            let filled = self.0 - element.box_model.border.vertical_width();
+            if filled > element.box_model.size.height.resolve(natural) {
+                element.box_model.size.height = BlockSize::fragment(filled);
+            }
+        }
+    }
+    part.accept_mut(&mut Fill(available));
+}
+
+/// Whether a float can break across pages: text or a box. Chrome doesn't split an image.
+pub(super) fn can_break(element: &dyn LayoutElement) -> bool {
+    struct Breakable(bool);
+    impl LayoutVisitor for Breakable {
+        fn visit_text_block(&mut self, _element: &TextBlock) {
+            self.0 = true;
+        }
+        fn visit_container(&mut self, _element: &Container) {
+            self.0 = true;
+        }
+        fn visit_table(&mut self, _element: &Table) {
+            self.0 = true;
+        }
+    }
+    let mut visitor = Breakable(false);
+    element.accept(&mut visitor);
+    visitor.0
 }
 
 /// The index of the paragraph after the run of floats at the front of `work`, when it's text the floats can be in.
