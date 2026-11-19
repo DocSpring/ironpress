@@ -114,3 +114,21 @@ fn a_positioned_table_cell_is_its_absolute_childrens_containing_block() {
         "x {x} is inside the second cell, not at the page area's left"
     );
 }
+
+#[test]
+fn right_aligned_tracked_text_keeps_its_last_letters_spacing_before_the_edge() {
+    // Chrome tracks after the last letter too, so right-aligned "Box" with 10pt letter spacing ends 10pt short of
+    // the content edge: the whole line is three letter spacings wider, not two
+    let markup = |spacing: &str| {
+        format!(
+            r#"<div style="position:relative;height:40pt"><div style="position:absolute;left:0;top:0;width:100pt;text-align:right;font:12pt Helvetica;letter-spacing:{spacing}">Box</div></div>"#
+        )
+    };
+    let plain = text_x(&markup("0"));
+    let tracked = text_x(&markup("10pt"));
+    assert!(
+        (plain - tracked - 30.0).abs() < 0.01,
+        "tracking moved the line start {} left",
+        plain - tracked
+    );
+}

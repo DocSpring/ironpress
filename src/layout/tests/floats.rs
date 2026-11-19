@@ -406,9 +406,16 @@ fn a_float_without_a_width_is_as_wide_as_its_widest_block() {
 
 #[test]
 fn shrink_to_fit_text_wraps_at_the_width_available() {
-    for (style, what) in [
-        ("float:left", "a float"),
-        ("position:absolute", "an absolute box"),
+    // A box whose text wraps is as wide as the width available (CSS 2.1 §10.3.5: min(max(min-content, available),
+    // max-content)), not its longest line
+    for (style, what, width) in [
+        ("float:left", "a float", 240.0),
+        (
+            "float:left;margin-right:6pt",
+            "a float with a margin",
+            234.0,
+        ),
+        ("position:absolute", "an absolute box", 240.0),
     ] {
         let page = page(&format!(
             r#"<div style="{style}">Twelve words of text that cannot all fit on one line of this page.</div>"#
@@ -424,11 +431,27 @@ fn shrink_to_fit_text_wraps_at_the_width_available() {
                 !found.0.is_empty()
             })
             .expect("the box");
-        assert!(
-            border_box_width(element.as_ref()) <= 240.0,
-            "{what} fits the page"
-        );
+        assert_near(border_box_width(element.as_ref()), width, what);
     }
+}
+
+#[test]
+fn a_letter_spaced_float_is_as_wide_as_its_tracked_text() {
+    // Chrome tracks after every letter, the space and the last letter too: "Total due" at 2px letter spacing and
+    // 4px word spacing is nine letter spacings and one word spacing wider than without. A run split between its
+    // words lost one, and the last letter's was never counted
+    let width = |style: &str| {
+        let page = page(&format!(
+            r#"<div style="float:left;{style}">Total due</div><p>x</p>"#
+        ));
+        border_box_width(floats(&page)[0].1)
+    };
+    let plain = width("");
+    assert_near(
+        width("letter-spacing:2px;word-spacing:4px"),
+        plain + 9.0 * 1.5 + 3.0,
+        "tracked width",
+    );
 }
 
 #[test]
@@ -483,4 +506,18 @@ fn no_line_runs_under_a_float_in_its_text_however_much_text_comes_before_it() {
             }
         }
     }
+}
+
+#[test]
+fn a_float_is_as_wide_as_its_text_snapped_up_to_a_layout_unit() {
+    // Chromium sizes a box from its text's width rounded up to 1/64px (`ShapeResult::SnappedWidth`) and draws the
+    // glyphs at their exact positions, so a table column or float is a little wider than its text: a cell beside it
+    // starts at a whole number of layout units
+    let page = page(r#"<div style="float:left">Qty 2</div><p>x</p>"#);
+    let width_px = border_box_width(floats(&page)[0].1) / crate::fonts::PT_PER_CSS_PX;
+    let units = width_px * 64.0;
+    assert!(
+        (units - units.round()).abs() < 1e-3,
+        "{width_px}px is not a whole number of layout units"
+    );
 }

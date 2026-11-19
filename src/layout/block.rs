@@ -372,6 +372,21 @@ fn has_direct_table_cell_child(
 
 /// Lay out a `display: block` or `display: inline-block` element.
 #[allow(clippy::too_many_arguments)]
+/// The content width of a shrink-to-fit box's text (CSS 2.1 §10.3.5): its lines' width while they're unwrapped, and
+/// the width they wrap at (or a longer word) once they wrap.
+fn shrink_to_fit_content_width(
+    lines: &[TextLine],
+    wrap_limit: f32,
+    fonts: &HashMap<String, TtfFont>,
+) -> f32 {
+    let lines_width = crate::layout::units::snapped_text_width(measure_lines_width(lines, fonts));
+    if wrap_limit < f32::MAX {
+        lines_width.max(wrap_limit)
+    } else {
+        lines_width
+    }
+}
+
 pub(crate) fn layout_block_element(
     el: &ElementNode,
     style: &mut ComputedStyle,
@@ -972,6 +987,7 @@ pub(crate) fn layout_block_element(
             } else {
                 wrap_options
             };
+            let wrap_limit = wrap_options.max_width;
             let super::text::LinesAmongFloats {
                 lines,
                 inline_float_tops,
@@ -989,7 +1005,7 @@ pub(crate) fn layout_block_element(
             }
             // For inline-block without explicit width, shrink-to-fit
             let render_w = if shrink_to_fit {
-                (measure_lines_width(&lines, fonts)
+                (shrink_to_fit_content_width(&lines, wrap_limit, fonts)
                     + layout_padding.horizontal()
                     + style.border.horizontal_width())
                 .min(block_w)
@@ -1653,6 +1669,7 @@ pub(crate) fn layout_block_element(
         } else {
             wrap_options
         };
+        let wrap_limit = wrap_options.max_width;
         // A `::first-letter` or `::first-line` restyles the runs after they
         // were counted, and right-to-left or vertical lines start elsewhere:
         // their absolute boxes keep the flow's static position.
@@ -1764,7 +1781,7 @@ pub(crate) fn layout_block_element(
         // its contents. With visible overflow the line simply paints beyond the
         // used width and the containing page/ancestor decides whether to clip it.
         let render_block_w = if shrink_to_fit {
-            (measure_lines_width(&lines, env.fonts)
+            (shrink_to_fit_content_width(&lines, wrap_limit, env.fonts)
                 + scaled_padding.horizontal()
                 + scaled_border.horizontal_width())
             .min(block_w)

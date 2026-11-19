@@ -39,7 +39,6 @@ impl<const FRACTIONAL_BITS: u32, const RAW_MIN: i64, const RAW_MAX: i64>
         Self::from_scaled(f64::from(css_pixels), f64::floor)
     }
 
-    #[cfg(test)]
     pub(crate) fn from_css_pixels_ceil(css_pixels: f32) -> Self {
         Self::from_scaled(f64::from(css_pixels), f64::ceil)
     }
@@ -57,7 +56,6 @@ impl<const FRACTIONAL_BITS: u32, const RAW_MIN: i64, const RAW_MAX: i64>
         Self::from_css_pixels_floor(points / PT_PER_CSS_PX)
     }
 
-    #[cfg(test)]
     pub(crate) fn from_points_ceil(points: f32) -> Self {
         Self::from_css_pixels_ceil(points / PT_PER_CSS_PX)
     }
@@ -111,6 +109,12 @@ impl<const FRACTIONAL_BITS: u32, const RAW_MIN: i64, const RAW_MAX: i64> std::op
     fn sub(self, rhs: Self) -> Self {
         Self::from_raw(self.0.saturating_sub(rhs.0))
     }
+}
+
+/// A text width as Chromium sizes boxes with it: rounded up to the next layout unit (`ShapeResult::SnappedWidth`),
+/// while the glyphs keep their exact positions.
+pub(crate) fn snapped_text_width(points: f32) -> f32 {
+    LayoutUnit::from_points_ceil(points).to_points()
 }
 
 /// Bresenham-style distribution of an exact non-negative layout size across

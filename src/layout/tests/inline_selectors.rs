@@ -150,7 +150,8 @@ fn positioned_inline_is_out_of_flow_and_resolves_against_its_ancestor() {
         .expect("absolute inline containing block");
     assert!((containing_block.width - 94.5).abs() < 0.001);
     assert!((containing_block.height - 51.0).abs() < 0.001);
-    assert!((positioned.insets.left - 77.496).abs() < 0.001);
+    // "Bb" is as wide as its text snapped up to a layout unit (1/64px), as Chromium sizes the box
+    assert!((positioned.insets.left - 77.484375).abs() < 0.001);
     assert!((positioned.insets.top - 33.0).abs() < 0.001);
 }
 

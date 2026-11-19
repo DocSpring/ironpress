@@ -829,6 +829,32 @@ impl InlineBoundaryAdvance {
             }
     }
 
+    pub(crate) const fn is_internal(self) -> bool {
+        matches!(self.letter_spacing, InlineBoundaryLetterSpacing::Internal)
+    }
+
+    pub(crate) const fn is_resolved(self) -> bool {
+        matches!(
+            self.letter_spacing,
+            InlineBoundaryLetterSpacing::Resolved(_)
+        )
+    }
+
+    /// A mechanical split rejoined on one line: the run's own tracking between its fragments.
+    pub(crate) fn resolve_internal_letter_spacing(&mut self, advance: f32) {
+        if self.is_internal() {
+            self.letter_spacing = InlineBoundaryLetterSpacing::Resolved(advance);
+        }
+    }
+
+    /// The last typographic unit on a line keeps its own tracking after it, and nothing else.
+    pub(crate) fn end_line(&mut self, advance: f32) {
+        *self = Self {
+            letter_spacing: InlineBoundaryLetterSpacing::Resolved(advance),
+            contextual_shaping: 0.0,
+        };
+    }
+
     pub(crate) fn mark_internal(&mut self) {
         *self = Self {
             letter_spacing: InlineBoundaryLetterSpacing::Internal,

@@ -1818,11 +1818,13 @@ fn build_pseudo_inline_box(
         )
     };
 
-    // The lines' real advances, as an element's inline-block measures them
-    let text_w = lines
-        .iter()
-        .map(|line| measure_runs_width(&line.runs, fonts))
-        .fold(0.0f32, f32::max);
+    // The lines' real advances, snapped up to a layout unit as an element's inline-block measures them
+    let text_w = crate::layout::units::snapped_text_width(
+        lines
+            .iter()
+            .map(|line| measure_runs_width(&line.runs, fonts))
+            .fold(0.0f32, f32::max),
+    );
     let text_h: f32 = lines.iter().map(|l| l.height).sum();
 
     // Resolve the painted border-box width/height from the explicit size

@@ -81,8 +81,10 @@ impl InlineWidths {
     /// The run's widths: its min-content and its widest line
     fn finished(&self) -> IntrinsicWidths {
         IntrinsicWidths {
-            min_content: self.widths.min_content,
-            max_content: self.widths.max_content.max(self.ended_lines_max),
+            min_content: crate::layout::units::snapped_text_width(self.widths.min_content),
+            max_content: crate::layout::units::snapped_text_width(
+                self.widths.max_content.max(self.ended_lines_max),
+            ),
         }
     }
 }

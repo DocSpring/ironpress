@@ -1859,6 +1859,43 @@ fn resolve_inline_fragment_borders(line: &mut TextLine) {
     }
 }
 
+/// Settle the tracking at the boundaries a finished line still leaves open.
+///
+/// A word split inside one source run left its fragments joined by an internal boundary: on the same line they are
+/// one run again, with the run's own letter spacing between them, as the painter draws them once coalesced. Chrome
+/// tracks after every typographic unit, the last one on a line too, so the line's last letter keeps its own letter
+/// spacing, while anything else past the line end (pair kerning, a boundary to the next line's text) goes.
+fn settle_line_end_boundaries(runs: &mut [TextRun]) {
+    for index in 0..runs.len().saturating_sub(1) {
+        let (before, after) = runs.split_at_mut(index + 1);
+        let (run, next) = (&mut before[index], &after[0]);
+        if run.metadata.boundary.is_internal()
+            && run.inline_box.is_none()
+            && next.inline_box.is_none()
+            && run.joins_typographically(next)
+        {
+            let letter = run.metadata.spacing.letter;
+            run.metadata
+                .boundary
+                .resolve_internal_letter_spacing(letter);
+        }
+    }
+    let Some(last) = runs.last_mut() else {
+        return;
+    };
+    last.metadata.boundary.discard();
+    if let Some(last_text) = runs
+        .iter_mut()
+        .rev()
+        .take_while(|run| run.inline_box.is_none())
+        .find(|run| run.has_typographic_unit())
+        && !last_text.metadata.boundary.is_resolved()
+    {
+        let letter = last_text.metadata.spacing.letter;
+        last_text.metadata.boundary.end_line(letter);
+    }
+}
+
 fn push_wrapped_line(
     lines: &mut Vec<TextLine>,
     runs: &mut Vec<TextRun>,
@@ -1867,9 +1904,7 @@ fn push_wrapped_line(
     fonts: &HashMap<String, TtfFont>,
 ) {
     finalize_soft_hyphen_line(runs, true);
-    if let Some(last) = runs.last_mut() {
-        last.metadata.boundary.discard();
-    }
+    settle_line_end_boundaries(runs);
     lines.push(resolved_text_line(
         std::mem::take(runs),
         height,
@@ -2534,7 +2569,7 @@ pub(crate) fn measure_text_intrinsic_widths(
         previous_token_run = Some(token.run_index);
         if token.text == "\n" && run.inline_box.is_none() {
             max_content = max_content.max(required_outer_width(
-                max_line_width,
+                max_line_width + line_end_tracking(&max_context),
                 line_exclusion(forced_line_index),
             ));
             max_line_width = 0.0;
@@ -2597,13 +2632,16 @@ pub(crate) fn measure_text_intrinsic_widths(
         } else {
             0.0
         };
-        min_content = min_content.max(required_outer_width(min_group_width, min_exclusion));
+        min_content = min_content.max(required_outer_width(
+            min_group_width + line_end_tracking(&min_context),
+            min_exclusion,
+        ));
         min_previous_ends_whitespace =
             run.inline_box.is_none() && token.text.chars().last().is_some_and(is_collapsible_space);
     }
 
     max_content = max_content.max(required_outer_width(
-        max_line_width,
+        max_line_width + line_end_tracking(&max_context),
         line_exclusion(forced_line_index),
     ));
     if !allow_soft_wrap {
@@ -2634,9 +2672,21 @@ pub(crate) fn measure_text_intrinsic_widths(
         min_content = required_outer_width(min_content, options.text_indent);
     }
     TextIntrinsicWidths {
-        min_content,
-        max_content,
+        min_content: crate::layout::units::snapped_text_width(min_content),
+        max_content: crate::layout::units::snapped_text_width(max_content),
     }
+}
+
+/// The tracking a line ending after `fragments` keeps after its last letter, as [`settle_line_end_boundaries`] gives
+/// a finished line.
+fn line_end_tracking(fragments: &[TextRun]) -> f32 {
+    fragments
+        .iter()
+        .rev()
+        .take_while(|run| run.inline_box.is_none())
+        .find(|run| run.has_typographic_unit())
+        .filter(|run| !run.metadata.boundary.is_resolved())
+        .map_or(0.0, |run| run.metadata.spacing.letter)
 }
 
 fn push_token_shaping_context(context: &mut Vec<TextRun>, token: &StyledWord, template: &TextRun) {
@@ -3252,6 +3302,7 @@ pub(crate) fn wrap_text_runs_among_floats(
 
     if !current_runs.is_empty() {
         finalize_soft_hyphen_line(&mut current_runs, false);
+        settle_line_end_boundaries(&mut current_runs);
         lines.push(resolved_text_line(
             current_runs,
             line_height,
@@ -5442,7 +5493,7 @@ mod indent_tests {
         assert_eq!(intrinsic.min_content, intrinsic.max_content);
         let lines = wrap_text_runs(
             vec![run],
-            options_at_width(options, previous_f32(intrinsic.max_content)),
+            options_at_width(options, one_layout_unit_below(intrinsic.max_content)),
             &fonts,
         );
         assert_eq!(lines.len(), 1, "NBSP is not a soft wrap opportunity");
@@ -5493,9 +5544,10 @@ mod indent_tests {
         options
     }
 
-    fn previous_f32(value: f32) -> f32 {
-        assert!(value.is_finite() && value > 0.0);
-        f32::from_bits(value.to_bits() - 1)
+    /// One layout unit (1/64px) below `width`: intrinsic widths are snapped up to a layout unit, so this is the
+    /// widest box their text no longer fits.
+    fn one_layout_unit_below(width: f32) -> f32 {
+        width - crate::layout::units::LayoutUnit::from_raw(1).to_points()
     }
 
     #[test]
@@ -5512,12 +5564,12 @@ mod indent_tests {
         );
         let below = wrap_text_runs(
             runs,
-            options_at_width(options, previous_f32(intrinsic.max_content)),
+            options_at_width(options, one_layout_unit_below(intrinsic.max_content)),
             &fonts,
         );
 
         assert_eq!(exact.len(), 1, "max-content must fit without layout slack");
-        assert_eq!(below.len(), 2, "one representable step below must wrap");
+        assert_eq!(below.len(), 2, "one layout unit below must wrap");
         assert!(intrinsic.min_content < intrinsic.max_content);
     }
 
@@ -5577,7 +5629,7 @@ mod indent_tests {
         );
         let below = wrap_text_runs(
             runs,
-            options_at_width(options, previous_f32(intrinsic.max_content)),
+            options_at_width(options, one_layout_unit_below(intrinsic.max_content)),
             &fonts,
         );
 
@@ -5604,7 +5656,7 @@ mod indent_tests {
         assert_eq!(intrinsic.min_content, intrinsic.max_content);
         let lines = wrap_text_runs(
             runs,
-            options_at_width(options, previous_f32(intrinsic.min_content)),
+            options_at_width(options, one_layout_unit_below(intrinsic.min_content)),
             &fonts,
         );
         assert_eq!(lines.len(), 1, "a style boundary is not a wrap opportunity");
@@ -5671,7 +5723,10 @@ mod indent_tests {
         let fonts = parity_sans_fonts();
         let mut run = parity_run("alpha beta");
         run.metadata.spacing.letter = 3.0;
-        let expected = estimate_text_width_for_run(&run.text, &run, &fonts);
+        // Every unit is tracked, and Chrome keeps the last letter's tracking too
+        let expected = crate::layout::units::snapped_text_width(
+            estimate_text_width_for_run(&run.text, &run, &fonts) + 3.0,
+        );
         let options = TextWrapOptions::new(500.0, 16.0, 1.2, OverflowWrap::Normal);
 
         let intrinsic = measure_text_intrinsic_widths(vec![run], options, true, &fonts);
@@ -5684,7 +5739,9 @@ mod indent_tests {
         let fonts = parity_sans_fonts();
         let mut run = parity_run("alpha   beta");
         run.metadata.spacing = crate::layout::elements::TextSpacing::new(2.0, 5.0);
-        let expected = estimate_text_width_for_run(&run.text, &run, &fonts);
+        let expected = crate::layout::units::snapped_text_width(
+            estimate_text_width_for_run(&run.text, &run, &fonts) + 2.0,
+        );
         let base = TextWrapOptions::new(500.0, 16.0, 1.2, OverflowWrap::Normal);
 
         for white_space in [WhiteSpace::PreWrap, WhiteSpace::BreakSpaces] {
@@ -5758,7 +5815,10 @@ mod indent_tests {
         assert_eq!(normal.min_content, normal.max_content);
         assert_eq!(break_word, normal);
         assert_eq!(anywhere.max_content, normal.max_content);
-        assert_eq!(anywhere.min_content, widest_character);
+        assert_eq!(
+            anywhere.min_content,
+            crate::layout::units::snapped_text_width(widest_character)
+        );
     }
 
     #[test]
@@ -5787,7 +5847,7 @@ mod indent_tests {
             );
             let below = wrap_text_runs(
                 runs,
-                options_at_width(options, previous_f32(intrinsic.max_content)),
+                options_at_width(options, one_layout_unit_below(intrinsic.max_content)),
                 &fonts,
             );
 
@@ -5795,7 +5855,7 @@ mod indent_tests {
             assert_eq!(
                 below.len(),
                 2,
-                "the preceding representable width must cross the space boundary"
+                "one layout unit narrower must cross the space boundary"
             );
         }
     }
