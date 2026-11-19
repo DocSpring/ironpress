@@ -350,3 +350,40 @@ fn shrink_to_fit_boxes_fit_their_text_when_its_font_kerns_spaces() {
         "each box's text is on one line"
     );
 }
+
+#[test]
+fn an_empty_flex_item_is_as_wide_as_its_padding_and_border() {
+    // An item with nothing in it shrinks to fit nothing (css-flexbox-1 §9.2): it took the container's width, so in a
+    // container with no width (a page design's vertical line) it had none, and its dashed border, clipped to the box,
+    // wasn't drawn
+    for (container, justify) in [
+        ("200px", "flex-start"),
+        ("200px", "center"),
+        ("0", "center"),
+    ] {
+        let rows = top_level_flex_rows(&format!(
+            r#"<div style="display: flex; justify-content: {justify}; width: {container}; height: 100px"><div style="height: 100%; border-left: 2px dashed black; padding-left: 3px"></div></div>"#
+        ));
+        let widths = rows
+            .iter()
+            .flat_map(|(_, cells, _)| cells.iter().map(|cell| cell.width))
+            .collect::<Vec<_>>();
+        assert_eq!(widths, vec![3.75], "{container} {justify}");
+    }
+}
+
+#[test]
+fn a_flex_items_aspect_ratio_and_height_give_its_width_with_or_without_content() {
+    // css-flexbox-1 §9.2.3 B: an item with a preferred aspect ratio, a content basis and a definite cross size takes
+    // its base size from them. An empty one shrank to its padding and border instead, and one with text to its text
+    for content in ["", "Hi"] {
+        let rows = top_level_flex_rows(&format!(
+            r#"<div style="display: flex; width: 220px"><div style="height: 60px; aspect-ratio: 2 / 1">{content}</div><div style="flex: 0 0 40px; height: 60px"></div></div>"#
+        ));
+        let widths = rows
+            .iter()
+            .flat_map(|(_, cells, _)| cells.iter().map(|cell| cell.width))
+            .collect::<Vec<_>>();
+        assert_eq!(widths, vec![90.0, 30.0], "content {content:?}");
+    }
+}

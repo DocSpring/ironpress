@@ -2547,8 +2547,8 @@ pub(crate) fn layout_flex_container(
             intrinsic.paint.min(width_for_percentages)
         } else if !stretches_column_cross_axis
             && !has_explicit_width
+            && transferred_aspect_width.is_none()
             && child_style.flex_grow == 0.0
-            && !runs.is_empty()
         {
             // As wide as its lines measure its text, so a font that kerns
             // across spaces doesn't make it too narrow for them. An empty item
@@ -2562,8 +2562,9 @@ pub(crate) fn layout_flex_container(
                 .unwrap_or_default();
             let pad_h = child_style.padding.horizontal();
             let border_h = child_style.border.horizontal_width();
-            // Outer width = text + padding + border (capped at container)
-            (natural_text_w + pad_h + border_h).min(width_for_percentages)
+            // Outer width = text + padding + border (capped at container),
+            // never less than its padding and border
+            (natural_text_w + pad_h + border_h).min(width_for_percentages.max(pad_h + border_h))
         } else {
             child_w_initial
         };
