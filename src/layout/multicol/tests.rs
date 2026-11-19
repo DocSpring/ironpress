@@ -280,6 +280,30 @@ fn continuation_line_boundary_has_single_owner() {
 }
 
 #[test]
+fn a_continuation_starting_on_a_line_boundary_keeps_its_lines_together() {
+    // A gap before a continuation's first line is only for a line that starts below the break. One that starts
+    // on it put a gap of the next line's distance from the break before the second line, so every line after
+    // the first in a balanced column was a line lower
+    let line = |text: &str| TextLine {
+        height: 15.0,
+        runs: vec![crate::layout::engine::TextRun {
+            text: text.to_string(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let mut lines = vec![line("one"), line("two"), line("three"), line("four")];
+
+    project_text_lines_into_fragment(&mut lines, 0.0, SourceBlockRange::continuation(30.0));
+
+    let texts: Vec<String> = lines
+        .iter()
+        .map(|line| line.runs.iter().map(|run| run.text.as_str()).collect())
+        .collect();
+    assert_eq!(texts, ["three", "four"]);
+}
+
+#[test]
 fn bounded_text_fragment_does_not_steal_the_continuation_line() {
     let mut lines = vec![
         TextLine {
@@ -339,6 +363,8 @@ fn definite_container_fragments_at_descendant_boundary_without_growing() {
         vec![inner.boxed()],
         ChildMulticolInfo {
             span_all: false,
+            inline_level: false,
+            display_none: false,
             definite_outer_height: Some(36.0),
             definite_outer_width: Some(43.5),
             breaks: ColumnBreakInfo::default(),
@@ -694,4 +720,34 @@ fn balancing_search_does_not_skip_an_exact_breakpoint() {
         balance_columns(&heights, 4),
         vec![vec![0, 1, 2], vec![3, 4], vec![5, 6, 7, 8], vec![9, 10]]
     );
+}
+
+#[test]
+fn an_odd_number_of_lines_is_balanced_over_the_columns() {
+    // When the shortest candidate height left a line over, the next candidate was the whole paragraph's height,
+    // so five lines stayed in the first column of two. The next candidate is the least extra height that pulls
+    // content back over a break
+    for (line_count, expected) in [
+        (3, vec![30.0, 15.0]),
+        (4, vec![30.0, 30.0]),
+        (5, vec![45.0, 30.0]),
+        (7, vec![60.0, 45.0]),
+    ] {
+        let text = TextBlock::plain(
+            (0..line_count)
+                .map(|_| TextLine {
+                    height: 15.0,
+                    ..Default::default()
+                })
+                .collect(),
+        );
+        let paragraph = MultiColItem {
+            elements: vec![text.boxed()],
+            ..item(line_count as f32 * 15.0, false)
+        };
+
+        let balanced = balance_fragmented_columns(&[paragraph], &[0], 2);
+
+        assert_eq!(balanced.used_block_sizes, expected, "{line_count} lines");
+    }
 }

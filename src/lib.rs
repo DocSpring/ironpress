@@ -2578,6 +2578,40 @@ fn main() {
     }
 
     #[test]
+    fn a_multicol_containers_own_text_is_drawn_in_its_columns() {
+        // Text and inline elements directly in a multi-column container were dropped: only its element children
+        // were laid out, each as a block of its own
+        let converter = HtmlConverter::new().compress(false);
+        let words = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima";
+        let pdf = converter
+            .convert(&format!(
+                r#"<style>.cols {{ column-count: 2; column-gap: 20px; width: 300px; font-size: 14px }}
+                   .cols > b {{ font-weight: normal }}</style>
+                   <div class="cols">Start {words} <b>Bold</b> <i>Italic</i> end.</div>"#
+            ))
+            .unwrap();
+        for text in ["Start", "alpha", "lima", "Bold", "Italic", "end."] {
+            assert!(pdf_has_text(&pdf, text), "{text} is missing");
+        }
+        // One anonymous block, balanced over both columns: lines start at two x positions
+        let starts = text_starts(&pdf);
+        let left = starts.iter().copied().fold(f32::MAX, f32::min);
+        assert!(
+            starts.iter().any(|&x| x > left + 140.0),
+            "every line is in the first column: {starts:?}"
+        );
+        // A run of inline content between blocks is a block of its own, in source order
+        let pdf = converter
+            .convert(
+                r#"<div style="columns: 2; width: 300px"><h2>Heading</h2>Loose text<p>Paragraph</p>Tail text</div>"#,
+            )
+            .unwrap();
+        for text in ["Heading", "Loose", "Paragraph", "Tail"] {
+            assert!(pdf_has_text(&pdf, text), "{text} is missing");
+        }
+    }
+
+    #[test]
     fn grid_repeat_full_pipeline() {
         let html = r#"
             <style>.g { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5pt; }</style>

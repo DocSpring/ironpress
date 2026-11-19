@@ -53,19 +53,18 @@ pub(super) fn project_text_lines_into_fragment(
     let source_lines = std::mem::take(lines);
     let mut projected = Vec::with_capacity(source_lines.len() + 1);
     let mut line_top = source_content_top;
-    let mut inserted_leading_gap = false;
     for line in source_lines {
         let line_height = line.height;
         let starts_before_end = source
             .end
             .is_none_or(|end| exceeds_with_roundoff(end, line_top));
         if starts_before_end && !exceeds_with_roundoff(source.start, line_top) {
-            if !inserted_leading_gap && is_positive_with_roundoff(line_top - source.start) {
+            // Only the fragment's first line can start below the break
+            if projected.is_empty() && is_positive_with_roundoff(line_top - source.start) {
                 projected.push(TextLine {
                     height: line_top - source.start,
                     ..Default::default()
                 });
-                inserted_leading_gap = true;
             }
             projected.push(line);
         }

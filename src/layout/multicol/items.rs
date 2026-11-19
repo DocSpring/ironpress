@@ -82,6 +82,10 @@ impl MultiColItem {
 
 pub(super) struct ChildMulticolInfo {
     pub(super) span_all: bool,
+    /// An in-flow inline-level box, which goes in the anonymous block of the inline content around it.
+    pub(super) inline_level: bool,
+    /// `display: none`: it generates no box, so it doesn't end a run of inline content.
+    pub(super) display_none: bool,
     pub(super) definite_outer_height: Option<f32>,
     pub(super) definite_outer_width: Option<f32>,
     pub(super) breaks: ColumnBreakInfo,
@@ -107,8 +111,20 @@ impl ChildMulticolInfo {
             };
             style.margin.left + border_box + style.margin.right
         });
+        use crate::style::computed::Display;
+        let inline_level = matches!(
+            style.display,
+            Display::Inline
+                | Display::InlineBlock
+                | Display::InlineFlex
+                | Display::InlineGrid
+                | Display::InlineTable
+        ) && crate::layout::floats::FloatSide::of(style.float).is_none()
+            && !style.position.is_absolute();
         Self {
             span_all: style.column_span_all,
+            inline_level,
+            display_none: style.display == Display::None,
             definite_outer_height,
             definite_outer_width,
             breaks,

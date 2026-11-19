@@ -174,6 +174,9 @@ impl ColumnFragmentation {
 pub(super) struct FragmentedColumns {
     pub(super) columns: Vec<Vec<ColumnFragment>>,
     pub(super) used_block_sizes: Vec<f32>,
+    /// The least extra block size that would have moved content back over a column break: the next taller
+    /// candidate for balancing (css-multicol-1 §7.1).
+    shortfall: Option<f32>,
 }
 
 impl FragmentedColumns {
@@ -277,6 +280,8 @@ pub(super) fn balance_fragmented_columns(
         }
         block_size = if used > block_size {
             used.min(upper)
+        } else if let Some(shortfall) = probe.shortfall {
+            (block_size + shortfall).min(upper)
         } else {
             upper
         };
@@ -365,12 +370,14 @@ pub(super) fn fragment_columns(
         return FragmentedColumns {
             columns: cols,
             used_block_sizes: used,
+            shortfall: None,
         };
     }
 
     let mut col = 0usize;
     let mut y = 0.0f32; // border-box fill cursor within the current column
     let mut placed_in_current_col: Vec<usize> = Vec::new();
+    let mut shortfall: Option<f32> = None;
 
     let advance_column = |cols: &mut Vec<Vec<ColumnFragment>>,
                           used: &mut Vec<f32>,
@@ -419,6 +426,7 @@ pub(super) fn fragment_columns(
             && exceeds_with_roundoff(y + group_height, geometry.block_size)
             && !exceeds_with_roundoff(group_height, geometry.block_size)
         {
+            note_shortfall(&mut shortfall, y + group_height - geometry.block_size);
             advance_column(
                 &mut cols,
                 &mut used,
@@ -449,6 +457,7 @@ pub(super) fn fragment_columns(
                 &mut y,
                 geometry,
                 &mut placed_in_current_col,
+                &mut shortfall,
             );
 
             if items[idx].break_after_column {
@@ -465,6 +474,7 @@ pub(super) fn fragment_columns(
     FragmentedColumns {
         columns: cols,
         used_block_sizes: used,
+        shortfall,
     }
 }
 
@@ -478,6 +488,7 @@ fn place_fragmented_item(
     y: &mut f32,
     geometry: ColumnFragmentation,
     placed_in_current_col: &mut Vec<usize>,
+    shortfall: &mut Option<f32>,
 ) {
     let advance_column = |cols: &mut Vec<Vec<ColumnFragment>>,
                           used: &mut Vec<f32>,
@@ -533,6 +544,7 @@ fn place_fragmented_item(
                 && (exceeds_with_roundoff(minimum_fragment_size, space_before_break)
                     || normal_break_in_empty_column.is_some())));
     if should_move_intact {
+        note_shortfall(shortfall, *y + box_h - geometry.block_size);
         advance_column(cols, used, col, y, placed_in_current_col);
     }
     let mut remaining = box_h;
@@ -640,6 +652,20 @@ fn place_fragmented_item(
         if !is_positive_with_roundoff(remaining) || fixed_last_col {
             break;
         }
+        // The column would have held the next piece too had it been this much taller
+        let next_break = item_block_break(
+            &items[idx],
+            balance_query(FragmentBreakQuery::earliest_after(
+                source_top,
+                source_top,
+                FragmentBreakRule::Normal,
+            )),
+        )
+        .unwrap_or(source_top + remaining);
+        note_shortfall(
+            shortfall,
+            *y + (next_break - source_top) - geometry.block_size,
+        );
         // Box continues in the next column.
         advance_column(cols, used, col, y, placed_in_current_col);
     }
@@ -655,8 +681,15 @@ fn place_fragmented_item(
         } else {
             // Margin adjoins the column break → truncated; next item starts a
             // fresh column at the top.
+            note_shortfall(shortfall, *y + margin - geometry.block_size);
             advance_column(cols, used, col, y, placed_in_current_col);
         }
+    }
+}
+
+fn note_shortfall(shortfall: &mut Option<f32>, amount: f32) {
+    if is_positive_with_roundoff(amount) {
+        *shortfall = Some(shortfall.map_or(amount, |least| least.min(amount)));
     }
 }
 

@@ -57,10 +57,12 @@ use crate::layout::elements::{
 };
 use crate::layout::flow_metrics::BlockMargins;
 use crate::parser::css::{AncestorInfo, SelectorContext};
-use crate::parser::dom::{DomNode, ElementNode};
-use crate::style::computed::ComputedStyle;
+use crate::parser::dom::{DomNode, ElementNode, HtmlTag};
+use crate::style::computed::{ComputedStyle, Display, compute_style_with_context};
 use crate::types::{Point, Size};
+use std::collections::HashMap;
 
+use super::block::layout_block_element;
 use super::context::{LayoutContext, LayoutEnv};
 use super::engine::{
     ElementSiblingContext, LayoutBorder, LayoutTreeContext, PageBreakSide, flatten_element,
@@ -68,6 +70,7 @@ use super::engine::{
 use super::helpers::{PseudoBoxContext, build_pseudo_block};
 use super::inline_formatting::GeneratedContentStyles;
 use super::roundoff::is_positive_with_roundoff;
+use super::text::has_non_collapsible_text;
 
 /// Geometry of one principal multicol box fragment.
 ///
@@ -200,9 +203,18 @@ pub(crate) fn layout_multicol_container(
     }
     let mut element_index = 0usize;
     let mut preceding_siblings: Vec<(String, Vec<String>)> = Vec::new();
+    // Text and inline-level boxes between the block-level children, laid out as one anonymous block (CSS 2.1
+    // §9.2.1.1)
+    let mut inline_run: Vec<DomNode> = Vec::new();
     for node in &el.children {
-        let DomNode::Element(child_el) = node else {
-            continue;
+        let child_el = match node {
+            DomNode::Text(text) => {
+                if !inline_run.is_empty() || has_non_collapsible_text(text) {
+                    inline_run.push(node.clone());
+                }
+                continue;
+            }
+            DomNode::Element(child_el) => child_el,
         };
         // Decide span-all by computing the child's style cheaply.
         let child_info = child_multicol_info(
@@ -214,6 +226,31 @@ pub(crate) fn layout_multicol_container(
             element_count,
             &preceding_siblings,
         );
+        let joins_inline_run =
+            child_info.inline_level || (child_info.display_none && !inline_run.is_empty());
+        if !joins_inline_run && !inline_run.is_empty() {
+            items.push(anonymous_block_item(
+                std::mem::take(&mut inline_run),
+                style,
+                &col_ctx,
+                &child_ancestors,
+                positioned_depth,
+                env,
+            ));
+        }
+        if joins_inline_run {
+            inline_run.push(node.clone());
+            preceding_siblings.push((
+                child_el.tag_name().to_string(),
+                child_el
+                    .class_list()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            ));
+            element_index += 1;
+            continue;
+        }
         let item_ctx = if child_info.span_all {
             &full_ctx
         } else {
@@ -243,6 +280,16 @@ pub(crate) fn layout_multicol_container(
                 .collect(),
         ));
         element_index += 1;
+    }
+    if !inline_run.is_empty() {
+        items.push(anonymous_block_item(
+            inline_run,
+            style,
+            &col_ctx,
+            &child_ancestors,
+            positioned_depth,
+            env,
+        ));
     }
     if let Some(pseudo_style) = generated_styles.after() {
         let pseudo = build_pseudo_block(
@@ -614,6 +661,50 @@ pub(crate) fn layout_multicol_container(
         ),
         positioned_depth,
     ));
+}
+
+/// The anonymous block box of a run of a multicol container's text and inline-level children, as a column item.
+/// Its children see the container as their parent, for selectors, and it inherits the container's style.
+fn anonymous_block_item(
+    run: Vec<DomNode>,
+    container_style: &ComputedStyle,
+    col_ctx: &LayoutContext,
+    child_ancestors: &[AncestorInfo],
+    positioned_depth: usize,
+    env: &mut LayoutEnv,
+) -> MultiColItem {
+    let mut anonymous = ElementNode::new(HtmlTag::Div);
+    anonymous.children = run;
+    let mut anonymous_style = compute_style_with_context(
+        HtmlTag::Unknown,
+        None,
+        container_style,
+        &[],
+        "",
+        &[],
+        None,
+        &HashMap::new(),
+        &SelectorContext::default(),
+    );
+    anonymous_style.display = Display::Block;
+    let mut elements = Vec::new();
+    layout_block_element(
+        &anonymous,
+        &mut anonymous_style,
+        col_ctx,
+        &mut elements,
+        child_ancestors,
+        child_ancestors,
+        positioned_depth,
+        &GeneratedContentStyles::default(),
+        None,
+        None,
+        env,
+    );
+    MultiColItem::from_layout(
+        elements,
+        ChildMulticolInfo::from_style(&anonymous_style, ColumnBreakInfo::default()),
+    )
 }
 
 /// Build one multicol wrapper [`Container`] holding `column_children`.
