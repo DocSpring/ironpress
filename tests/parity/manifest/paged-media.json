@@ -1412,5 +1412,17 @@
     "oracle": "chrome",
     "expected_support": "implemented",
     "depends_on": ["probe-fill-box", "probe-block-flow"]
+  },
+  {
+    "id": "paged-blocks-split-at-page-end",
+    "category": "paged-media",
+    "feature": "fragmentation",
+    "subfeature": "block-breaks",
+    "description": "A paragraph or box that crosses the page end and would fit on the next page breaks between its lines or children, keeping two lines on each side (orphans and widows), and its first fragment reaches the page end; an image inside a box that fits a page moves to the next page whole (CSS Fragmentation 3 section 4.4).",
+    "file": "cases/paged-media/paged-blocks-split-at-page-end.html",
+    "kind": "feature",
+    "oracle": "chrome",
+    "expected_support": "implemented",
+    "depends_on": ["probe-fill-box", "probe-block-flow"]
   }
 ]

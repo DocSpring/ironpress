@@ -20,13 +20,13 @@
 use std::collections::VecDeque;
 
 use crate::layout::elements::{
-    BlockSize, Container, IntoLayoutNode, LayoutElement, LayoutNode, LayoutVisitor,
-    LayoutVisitorMut, PageBreak, Table, TextBlock,
+    Container, IntoLayoutNode, LayoutElement, LayoutNode, LayoutVisitor, PageBreak, Table,
+    TextBlock,
 };
 use crate::layout::engine::PageBreakSide;
 use crate::layout::floats::{FloatLine, FloatOffset};
 use crate::layout::roundoff::exceeds_with_roundoff;
-use crate::style::computed::{BoxDecorationBreak, Float};
+use crate::style::computed::Float;
 
 use super::{
     FloatBottoms, FragmentBreakRule, PendingElement, collapse_vertical_margins, element_clear,
@@ -125,7 +125,7 @@ impl FloatSpot {
         };
         match split {
             Some((first, rest)) => {
-                let first_height = element_flow_geometry(first.as_ref()).content_height;
+                let first_height = lines_bottom(first.as_ref());
                 let (here, next): (Vec<LayoutNode>, Vec<LayoutNode>) =
                     floats.into_iter().partition(|float| {
                         line_top(float.as_ref()) < first_height && self.stays(float.as_ref())
@@ -297,7 +297,6 @@ pub(super) fn split_float(
     if let Some(owner) = here.block_flow_owner_mut() {
         *owner.block_flow_mut() = floated;
     }
-    fill_to_page_end(&mut here, available);
     if let Some(owner) = rest.block_flow_owner_mut() {
         let flow = owner.block_flow_mut();
         *flow = floated;
@@ -311,25 +310,21 @@ pub(super) fn split_float(
     Some((here, rest))
 }
 
-/// Makes a float's first part reach the page end, as a box that breaks fills the rest of its page (Chrome draws
-/// its background and side borders down to the end). A container's splitter already does.
-fn fill_to_page_end(part: &mut LayoutNode, available: f32) {
-    struct Fill(f32);
-    impl LayoutVisitorMut for Fill {
-        fn visit_text_block(&mut self, element: &mut TextBlock) {
-            if element.fragmentation.box_fragmentation.decoration == BoxDecorationBreak::Clone {
-                return;
-            }
-            // A text block's height is its padding box's
-            let text_height = element.lines.iter().map(|line| line.height).sum::<f32>();
-            let natural = element.box_model.padding.vertical() + text_height;
-            let filled = self.0 - element.box_model.border.vertical_width();
-            if filled > element.box_model.size.height.resolve(natural) {
-                element.box_model.size.height = BlockSize::fragment(filled);
-            }
+/// Where a paragraph fragment's last line ends, below its top border: the fragment itself reaches the page end.
+fn lines_bottom(fragment: &dyn LayoutElement) -> f32 {
+    struct Bottom(Option<f32>);
+    impl LayoutVisitor for Bottom {
+        fn visit_text_block(&mut self, element: &TextBlock) {
+            let lines = element.lines.iter().map(|line| line.height).sum::<f32>();
+            self.0 =
+                Some(element.box_model.border.top.width + element.box_model.padding.top + lines);
         }
     }
-    part.accept_mut(&mut Fill(available));
+    let mut bottom = Bottom(None);
+    fragment.accept(&mut bottom);
+    bottom
+        .0
+        .unwrap_or_else(|| element_flow_geometry(fragment).content_height)
 }
 
 /// Whether a float can break across pages: text or a box. Chrome doesn't split an image.

@@ -5,17 +5,17 @@
     "dpi": 300,
     "pdftoppm_available": true,
     "rasterizer_source_path": "/usr/bin/pdftoppm",
-    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-635-1795075549530416938-0/pdftoppm",
+    "rasterizer_executed_path": "/tmp/ironpress-pdftoppm-635-1795137705920704079-0/pdftoppm",
     "rasterizer_arguments": "[-r, 300, -png, <PDF>, <PREFIX>]",
     "rasterizer_version": "pdftoppm version 24.08.0",
     "rasterizer_sha256": "b1f76a56605df368efd233e09faad3bd910e50c0d6556c616a7c0b0adebf6013"
   },
   "overall": {
     "score_pct": 100.0,
-    "pass": 1724,
+    "pass": 1725,
     "fail": 0,
     "reference_disputed": 20,
-    "total": 1744
+    "total": 1745
   },
   "categories": [
     {
@@ -336414,7 +336414,7 @@
       "category": "paged-media",
       "score_pct": 100.0,
       "counts": {
-        "pass": 93,
+        "pass": 94,
         "fail": 0,
         "reference_disputed": 3
       },
@@ -345033,7 +345033,7 @@
           "feature": "fragmentation",
           "score_pct": 100.0,
           "counts": {
-            "pass": 5,
+            "pass": 6,
             "fail": 0,
             "reference_disputed": 0
           },
@@ -345092,6 +345092,194 @@
                     "painted_pixels": 290444
                   }
                 ]
+              }
+            },
+            {
+              "id": "paged-blocks-split-at-page-end",
+              "category": "paged-media",
+              "feature": "fragmentation",
+              "subfeature": "block-breaks",
+              "interaction_of": [],
+              "base_ids": [],
+              "status": "PASS",
+              "diff_pct": 0.09,
+              "semantic_diff_pct": 0.09,
+              "description": "A paragraph or box that crosses the page end and would fit on the next page breaks between its lines or children, keeping two lines on each side (orphans and widows), and its first fragment reaches the page end; an image inside a box that fits a page moves to the next page whole (CSS Fragmentation 3 section 4.4).",
+              "note": "",
+              "kind": "feature",
+              "depends_on": [
+                "probe-fill-box",
+                "probe-block-flow"
+              ],
+              "expected_support": "implemented",
+              "oracle": "chrome",
+              "reference": {
+                "status": "verified",
+                "note": ""
+              },
+              "dependency_context": "",
+              "html_sha256": "5d4b28ebf0ede75d2c5d1270caaef8e7637ff797aafc2f55b172ae8930240f15",
+              "raster": {
+                "candidate": [
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "758e0e297886b270cefc93facb598cc0eb657bedae49d9b17b4672e15af3ccf3",
+                    "painted_pixels": 566100
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "7765c20350ba4604f188b739e4653f01df77df5b5156c6cc7e3bdfa8bd79dfcc",
+                    "painted_pixels": 231250
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "755bab4e4d5c314b1ccd9f4496c1c46fcf4527afddcfdff9dc970fe8c02ecaaa",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "d83827e9b9071a4f4ec1cbcef31761955a72e2e8f109f42644fe3d199bb9a9b0",
+                    "painted_pixels": 168350
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "413c791985078527fc8b0d64bf00f884bd403b78473fc6920b3399e38d1a05a2",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "7e667950c4a3873006afeaf2ccc40711f26b03e6b15454218f9568753ef76699",
+                    "painted_pixels": 330225
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "facd73e53f289164764dff87fb6ec4b8d1b3cf48e1eecf1cae758628e5cad820",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "ca06d62a95add86d31f0a68b4aa89291f826f1237c34ce48df907d1784ccac6d",
+                    "painted_pixels": 138750
+                  }
+                ],
+                "oracle": [
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "aa7f78a4036046a40b2aa663d3566ce3d945270a6e6ca0d878d6bb268e3126fe",
+                    "painted_pixels": 566100
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "c30688c241c2fde123821045c1a0a80c52fe5fb61f4fdc846fb999b071f9bf40",
+                    "painted_pixels": 231250
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "937bb8416f1eb0782cf6a2f83233ab51fc8dc26f2f01163e4a4c71d0f5d5d12a",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "fbc80e5433ee745bc9e094b316d28c06c5833604c8e4d84086cf6dc9184be610",
+                    "painted_pixels": 168350
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "9e3dcdc85e6406219302c4023c5a2889ae5f9356dc76f0379f865e0d7645a955",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "d3f70b0740c11498a10f9bbf530da5162e20aa8f97cb31b3aafd2fa119a858e7",
+                    "painted_pixels": 330225
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "1426627cf134c541ca7f91b2ff176fea0de81ac7f3fad6521ba23607f46da2a6",
+                    "painted_pixels": 624375
+                  },
+                  {
+                    "width": 1000,
+                    "height": 750,
+                    "rgba_sha256": "72fc1f57c98f3054d1ec9e1030a3d7b736b0fc50322c6f485d2be96787f171fd",
+                    "painted_pixels": 138750
+                  }
+                ]
+              },
+              "diagnosis": {
+                "primary_class": "AntialiasCoverage",
+                "secondary": [],
+                "headline": "page 3: visually accepted coverage phase; raw antialiasing coverage residue on a shared outline",
+                "magnitude": {
+                  "missing_area_pct": 0.0,
+                  "extra_area_pct": 0.0,
+                  "modal_drgba": [
+                    67,
+                    53,
+                    11,
+                    0
+                  ],
+                  "delta_e": 1.4925791549797558,
+                  "recovered_alpha": null,
+                  "colorspace": null
+                },
+                "region_count": 1,
+                "region_classes": [
+                  {
+                    "class": "ColorErr",
+                    "region_count": 1,
+                    "total_pixels": 675,
+                    "total_area_pct": 0.10810810810810811,
+                    "union_bbox_css": [
+                      0.0,
+                      0.0,
+                      0.0,
+                      215.68
+                    ],
+                    "largest_region_pixels": 675,
+                    "largest_region_area_pct": 0.10810810810810811,
+                    "max_delta_e": 1.4925791549797558
+                  }
+                ],
+                "region_examples": [
+                  {
+                    "class": "AntialiasCoverage",
+                    "bbox_css": [
+                      0.0,
+                      0.0,
+                      0.0,
+                      215.68
+                    ],
+                    "area_pct": 0.10810810810810811,
+                    "modal_drgba": [
+                      67,
+                      53,
+                      11,
+                      0
+                    ],
+                    "delta_e": 1.4925791549797558,
+                    "recovered_alpha": null,
+                    "headline": "antialiasing coverage residue on a shared outline"
+                  }
+                ],
+                "confidence": 1.0,
+                "different_pixels": 675,
+                "visual_pass_basis": "CSS-scale observation: sub-CSS shared-colour coverage"
               }
             },
             {
@@ -400624,7 +400812,7 @@
       "units-values/percentage",
       "units-values/viewport-units"
     ],
-    "implemented": 1707,
+    "implemented": 1708,
     "partial": 37,
     "unsupported": 0,
     "interaction_families": 25,
@@ -400637,6 +400825,6 @@
   "suspect_unsupported_pass": [],
   "stale_refs": [],
   "refs_lock_present": true,
-  "refs_lock_sha256": "3e9718e7b8ab82196afc5f6686ff3cb3af5382d401f21e21ecaf8496f8b34502",
+  "refs_lock_sha256": "5eb70091b9023af171e8d329cdf6effdf813c72f23c59cc2a91174f77732a077",
   "baseline_present": true
 }

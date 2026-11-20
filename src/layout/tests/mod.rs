@@ -25,6 +25,7 @@ mod inline_svg;
 mod list_markers;
 mod lists;
 mod outside_marker_line;
+mod page_end_breaks;
 mod paged_breaks;
 mod positioning;
 mod print_fit_content;

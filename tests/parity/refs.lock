@@ -15778,6 +15778,20 @@
       "reference_file": "cases/paged-media/paged-bleed-crop-background.html",
       "reference_html_sha256": "822f0d9cb0b1fd8d2dee8f0b94d65b7a0e16a923ed1d9938d1a0155aed129a90"
     },
+    "paged-blocks-split-at-page-end": {
+      "category": "paged-media",
+      "file": "cases/paged-media/paged-blocks-split-at-page-end.html",
+      "html_sha256": "5d4b28ebf0ede75d2c5d1270caaef8e7637ff797aafc2f55b172ae8930240f15",
+      "manifest_sha256": "2d43738805d644f0710c6afb3b2dbd8d2d2df67e61d41977b907eb1917666a27",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/paged-media/paged-blocks-split-at-page-end.pdf",
+        "sha256": "3b301c374d4bbb0dea549f61b80353b4e49a03841f0d4bb02228e63b375cdd4b"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/paged-media/paged-blocks-split-at-page-end.html",
+      "reference_html_sha256": "5d4b28ebf0ede75d2c5d1270caaef8e7637ff797aafc2f55b172ae8930240f15"
+    },
     "paged-body-margin-box": {
       "category": "paged-media",
       "file": "cases/paged-media/paged-body-margin-box.html",

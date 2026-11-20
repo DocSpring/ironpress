@@ -982,7 +982,18 @@ fn split_text_block_node(
         .lines
         .split_index(lines.len(), idx, rule)?;
 
-    split_text_block_at_line_node(element, idx)
+    let (mut first, rest) = split_text_block_parts(element, idx)?;
+    // A box that breaks fills the rest of its page: Chrome draws its
+    // background and side borders down to the page end, below its last line.
+    if !clone {
+        let line_height = first.lines.iter().map(|line| line.height).sum::<f32>();
+        let natural = first.box_model.padding.vertical() + line_height;
+        let filled = avail_below_box_top - first.box_model.border.vertical_width();
+        if filled > first.box_model.size.height.resolve(natural) {
+            first.box_model.size.height = BlockSize::fragment(filled);
+        }
+    }
+    Some((Box::new(first), Box::new(rest)))
 }
 
 /// Split an in-flow text block at a known line boundary.
@@ -1018,6 +1029,11 @@ fn split_text_block_at_line_node(
     element: &TextBlock,
     idx: usize,
 ) -> Option<(LayoutNode, LayoutNode)> {
+    let (first, rest) = split_text_block_parts(element, idx)?;
+    Some((Box::new(first), Box::new(rest)))
+}
+
+fn split_text_block_parts(element: &TextBlock, idx: usize) -> Option<(TextBlock, TextBlock)> {
     if element.box_model.size.height.is_definite()
         || element.clipping.rect.is_some()
         || element.positioning.scheme != Position::Static
@@ -1057,7 +1073,7 @@ fn split_text_block_at_line_node(
 
     retain_reference_box(element, &mut first, &mut rest);
 
-    Some((Box::new(first), Box::new(rest)))
+    Some((first, rest))
 }
 
 /// Return the continuation size only when a split produces two genuinely
@@ -1351,15 +1367,50 @@ fn split_element(
         return None;
     }
 
-    split_fixed_height_text_block(element, avail_below_box_top)
+    let slices_monolithic = rule != FragmentBreakRule::FitsFresh;
+    (slices_monolithic || is_fragmentable_fixed_text(element))
+        .then(|| split_fixed_height_text_block(element, avail_below_box_top))
+        .flatten()
         .or_else(|| split_text_block(element, avail_below_box_top, rule))
-        .or_else(|| split_image_block(element, avail_below_box_top))
-        .or_else(|| split_svg_block(element, avail_below_box_top))
-        .or_else(|| split_empty_sized_container(element, avail_below_box_top))
+        .or_else(|| {
+            slices_monolithic
+                .then(|| split_image_block(element, avail_below_box_top))
+                .flatten()
+        })
+        .or_else(|| {
+            slices_monolithic
+                .then(|| split_svg_block(element, avail_below_box_top))
+                .flatten()
+        })
+        .or_else(|| {
+            slices_monolithic
+                .then(|| split_empty_sized_container(element, avail_below_box_top))
+                .flatten()
+        })
         .or_else(|| split_table_row(element, avail_below_box_top, rule))
         .or_else(|| split_grid_row(element, avail_below_box_top, rule))
         .or_else(|| split_flex_row(element, avail_below_box_top))
         .or_else(|| split_container(element, avail_below_box_top, rule))
+}
+
+/// Split a box that fits a fresh page but crosses the end of this one, at the
+/// last break `FragmentBreakRule::FitsFresh` allows whose first fragment fits
+/// the space left. `None` moves the box to the next page whole.
+fn split_in_place(
+    element: &dyn LayoutElement,
+    avail_below_box_top: f32,
+) -> Option<(LayoutNode, LayoutNode)> {
+    if !is_positive_with_roundoff(avail_below_box_top) {
+        return None;
+    }
+    let (first, rest) = split_element(element, avail_below_box_top, FragmentBreakRule::FitsFresh)?;
+    // The splitters keep a first child or line for forward progress even when
+    // it overflows; that progress is the next page's job here.
+    (!exceeds_with_roundoff(
+        element_flow_geometry(first.as_ref()).content_height,
+        avail_below_box_top,
+    ))
+    .then_some((first, rest))
 }
 
 /// Split an empty container with a used block extent only after pagination
@@ -3364,11 +3415,37 @@ pub(crate) fn paginate_with_context(
             break_decision_height + break_footer_reserve,
             fresh_fit_height,
         );
-        let page_broke_mid_loop = (fits_fresh_fragmentainer
-            && exceeds_with_roundoff(
-                y + break_decision_height + break_footer_reserve,
-                effective_content_height,
+        let overflows_here = exceeds_with_roundoff(
+            y + break_decision_height + break_footer_reserve,
+            effective_content_height,
+        );
+        // A box that crosses the page end breaks inside it, between lines or
+        // children, when a break there is allowed (`break-inside`, `orphans`,
+        // `widows`): CSS Fragmentation 3 §4.4 takes the last allowed break
+        // point that fits, and moving the whole box to the next page left the
+        // end of this one empty where Chrome fills it. The box moves whole only
+        // when no such break fits.
+        let split_at_page_end = (fits_fresh_fragmentainer
+            && overflows_here
+            && !first_on_page
+            && !block_footnote_requires_break
+            && !in_table_body
+            && table_keep_break_height.is_none()
+            && avoid_group.is_none()
+            && may_fragment_internally
+            && elem_position == Position::Static
+            && elem_float == Float::None
+            && float_breaks::can_break(element.as_ref()))
+        .then(|| {
+            split_in_place(
+                element.as_ref(),
+                effective_content_height - (y + margin_top_val),
             )
+        })
+        .flatten();
+        let page_broke_mid_loop = (fits_fresh_fragmentainer
+            && overflows_here
+            && split_at_page_end.is_none()
             // A nonzero cursor does not prove that the fragmentainer already
             // contains flow content: page 1 starts after the projected root
             // margin/padding gutter. Breaking before its first principal box
@@ -3679,7 +3756,8 @@ pub(crate) fn paginate_with_context(
             // image slices at the page edge (each page embeds only its slice); a
             // too-tall container splits between its children, re-enqueuing the
             // continuation so it resumes on the next page.
-            let split = split_element(&element, avail_below_box_top, FragmentBreakRule::Normal)
+            let split = split_at_page_end
+                .or_else(|| split_element(&element, avail_below_box_top, FragmentBreakRule::Normal))
                 .or_else(|| {
                     split_element(&element, avail_below_box_top, FragmentBreakRule::Emergency)
                 });

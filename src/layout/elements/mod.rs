@@ -795,6 +795,11 @@ pub(crate) trait FragmentStartSpacing {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FragmentBreakRule {
     Normal,
+    /// The box fits a fresh page and crosses the end of this one: it breaks
+    /// where `Normal` allows, but monolithic content inside it (an image, an
+    /// empty box with a height) moves to the next page whole instead of being
+    /// sliced (CSS Fragmentation 3 §4.4).
+    FitsFresh,
     Emergency,
 }
 

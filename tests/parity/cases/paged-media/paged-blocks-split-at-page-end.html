@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>boxes that cross the page end break between their lines or children and reach the page end</title>
+<style>
+  @page { size: 320px 240px; margin: 12px; }
+  html { font-family: ParitySans; font-size: 16px; line-height: 24px; background: #ffffff; color: #1f2933; }
+  body { margin: 0; }
+  p { margin: 0; }
+  .lead { background: #eef0f6; }
+  .page { break-before: page; }
+  .card { margin-top: 20px; padding: 5px; border: 3px solid #b45309; background: #fde68a; }
+  .box { border: 4px solid #1d4ed8; padding: 6px; background: #bfdbfe; }
+  .inner { background: #fde68a; border-left: 4px solid #b45309; }
+  .plain { background: #e5f5e0; }
+</style>
+</head>
+<body>
+  <div class="lead" style="height: 110px"></div>
+  <p class="card">Card 1<br>Card 2<br>Card 3<br>Card 4<br>Card 5<br>Card 6</p>
+
+  <div class="lead page" style="height: 100px"></div>
+  <div class="box">
+    <p>Heading</p>
+    <p class="inner">Inner 1<br>Inner 2<br>Inner 3<br>Inner 4<br>Inner 5</p>
+  </div>
+
+  <div class="lead page" style="height: 100px"></div>
+  <div class="box">
+    <p>Above 1<br>Above 2</p>
+    <svg width="100" height="80" style="display: block"><rect width="100" height="80" fill="#1d4ed8"/></svg>
+    <p>Below</p>
+  </div>
+
+  <div class="lead page" style="height: 120px"></div>
+  <p class="plain">Line 1<br>Line 2<br>Line 3<br>Line 4<br>Line 5</p>
+</body>
+</html>
