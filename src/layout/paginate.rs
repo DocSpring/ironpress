@@ -2314,6 +2314,16 @@ fn split_table_node(
         }
     }
 
+    // A header with no body row under it isn't a fragment Chrome makes: when no body row fits below the header, the
+    // table moves to the next page whole. Only a table already at the top of a page (`Emergency`) may leave one.
+    let first_has_body_row = before.children.iter().any(|child| {
+        let row = table_row_pagination_state(child.as_ref());
+        row.is_row && !row.is_header && !row.is_footer
+    });
+    if has_body_rows && !first_has_body_row && rule != FragmentBreakRule::Emergency {
+        return None;
+    }
+
     let first_has_footer = before
         .children
         .iter()

@@ -193,3 +193,31 @@ fn a_paragraph_taller_than_a_page_reaches_the_end_of_its_first_page() {
         "it reaches the page end, 7pt below its last line"
     );
 }
+
+#[test]
+fn a_table_whose_first_body_row_does_not_fit_below_its_header_moves_whole() {
+    let row = r#"<tr style="break-inside:avoid"><td>row</td></tr>"#;
+    let pages = pages(&format!(
+        r#"<div style="height:350pt"></div>
+        <div><p>Title</p><table style="border-collapse:collapse"><thead><tr><th>Head</th></tr></thead>
+        <tbody>{row}{row}{row}</tbody></table></div>"#
+    ));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(words(&pages[0]), vec!["Title"], "the title breaks away");
+    assert_eq!(tables(&pages[0]), 0, "the header isn't left alone");
+    assert_eq!(tables(&pages[1]), 1);
+}
+
+fn tables(page: &Page) -> usize {
+    struct Count(usize);
+    impl LayoutVisitor for Count {
+        fn visit_table(&mut self, _element: &crate::layout::elements::Table) {
+            self.0 += 1;
+        }
+    }
+    let mut count = Count(0);
+    for (_, element) in &page.elements {
+        visit_layout_tree(element.as_ref(), &mut count);
+    }
+    count.0
+}
