@@ -221,3 +221,172 @@ fn tables(page: &Page) -> usize {
     }
     count.0
 }
+
+/// Where the paragraph that starts with `word` is: its page and its top on that page.
+fn find(pages: &[Page], word: &str) -> (usize, f32) {
+    pages
+        .iter()
+        .enumerate()
+        .find_map(|(index, page)| {
+            page.elements
+                .iter()
+                .find(|(_, element)| {
+                    words_in(element.as_ref())
+                        .first()
+                        .is_some_and(|line| line.starts_with(word))
+                })
+                .map(|(top, _)| (index, *top))
+        })
+        .unwrap_or_else(|| panic!("{word} isn't on any page"))
+}
+
+#[test]
+fn an_empty_box_with_a_height_breaks_at_the_page_end() {
+    let pages = pages(
+        r#"<div style="height:300pt"></div><div style="min-height:150pt;background:#ccc"></div><p>after</p>"#,
+    );
+    assert_eq!(
+        find(&pages, "after"),
+        (1, 50.0),
+        "100pt of the box ends page 1, and its last 50pt start page 2"
+    );
+}
+
+#[test]
+fn an_empty_box_that_avoids_breaks_inside_moves_whole() {
+    let pages = pages(
+        r#"<div style="height:300pt"></div><div style="min-height:150pt;break-inside:avoid;background:#ccc"></div><p>after</p>"#,
+    );
+    assert_eq!(find(&pages, "after"), (1, 150.0));
+}
+
+/// A box with 12pt of padding and border above and below its content, below a spacer that leaves it 90pt: its 72pt
+/// of content fits with the top 12pt, but not with the bottom 12pt as well.
+fn padded(display: &str, content: &str) -> Vec<Page> {
+    pages(&format!(
+        r#"<div style="height:310pt"></div>
+        <div style="display:{display};padding:10pt;border:2pt solid #333;background:#eee">{content}</div>"#
+    ))
+}
+
+#[test]
+fn a_box_whose_bottom_padding_crosses_the_page_end_breaks_before_its_last_child() {
+    let children = (0..4).map(|i| format!("<p>b{i}</p>")).collect::<String>();
+    let pages = padded("block", &children);
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        words(&pages[0]),
+        names("b", 0..3),
+        "the padding and border go with b3"
+    );
+    assert_eq!(words(&pages[1]), names("b", 3..4));
+}
+
+#[test]
+fn a_paragraph_whose_bottom_padding_crosses_the_page_end_breaks_before_its_last_lines() {
+    let pages = padded("block", &format!("<p>{}</p>", lines("c", 4)));
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        words(&pages[0]),
+        names("c", 0..2),
+        "three lines fit with the padding, and widows: 2 moves c2 too"
+    );
+    assert_eq!(words(&pages[1]), names("c", 2..4));
+}
+
+#[test]
+fn a_grid_whose_bottom_padding_crosses_the_page_end_moves_whole() {
+    let children = (0..4).map(|i| format!("<p>g{i}</p>")).collect::<String>();
+    let pages = padded("grid", &children);
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].elements.len(), 1, "page 1 holds only the spacer");
+    assert_eq!(
+        pages[1].elements.len(),
+        1,
+        "the grid, not its padding and border alone"
+    );
+}
+
+/// A two-column grid 60pt above the page end: six lines on the left, and on the right one line below `right_style`.
+fn grid_with_a_lower_item(right_style: &str) -> Vec<Page> {
+    pages(&format!(
+        r#"<div style="height:340pt"></div>
+        <div style="display:grid;grid-template-columns:120pt 120pt">
+        <div>{}</div><div style="{right_style}">right</div></div>"#,
+        lines("l", 6)
+    ))
+}
+
+#[test]
+fn a_grid_item_placed_too_low_to_start_on_the_page_continues_on_the_next() {
+    for right_style in ["margin-top:50pt", "padding-top:50pt"] {
+        let pages = grid_with_a_lower_item(right_style);
+        assert_eq!(pages.len(), 2, "{right_style}");
+        let words: Vec<_> = pages.iter().map(words_with_grid_items).collect();
+        assert_eq!(
+            words[0],
+            names("l", 0..3),
+            "{right_style}: the items fragment independently (CSS Break 3 parallel flows), so three lines on the \
+             left stay on page 1, and the right item, whose line would be below the page end there, isn't drawn on it"
+        );
+        let mut page_2 = names("l", 3..6);
+        page_2.push("right".to_owned());
+        assert_eq!(words[1], page_2, "{right_style}: nothing is lost");
+    }
+}
+
+#[test]
+fn a_grid_row_breaks_when_every_item_starts_on_the_page() {
+    let pages = grid_with_a_lower_item("margin-top:10pt");
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].elements.len(), 2, "the row breaks after l2");
+}
+
+/// The first word of each line on a page, in paragraphs, table cells and grid items.
+fn words_with_grid_items(page: &Page) -> Vec<String> {
+    struct Collect(Vec<String>);
+    impl Collect {
+        fn lines(&mut self, lines: &[crate::layout::engine::TextLine]) {
+            for line in lines {
+                let text: String = line.runs.iter().map(|run| run.text.as_str()).collect();
+                self.0
+                    .extend(text.split_whitespace().next().map(str::to_owned));
+            }
+        }
+    }
+    impl LayoutVisitor for Collect {
+        fn visit_text_block(&mut self, block: &TextBlock) {
+            self.lines(&block.lines);
+        }
+        fn visit_table_row(&mut self, element: &crate::layout::elements::TableRow) {
+            for cell in &element.content.cells {
+                self.lines(&cell.layout.content.lines);
+            }
+        }
+        fn visit_grid_row(&mut self, element: &crate::layout::elements::GridRow) {
+            for cell in &element.content.cells {
+                self.lines(&cell.layout.content.lines);
+            }
+        }
+    }
+    let mut collect = Collect(Vec::new());
+    for (_, element) in &page.elements {
+        visit_layout_tree(element.as_ref(), &mut collect);
+    }
+    collect.0
+}
+
+#[test]
+fn a_table_in_a_grid_item_that_has_no_room_for_its_first_row_starts_the_next_page() {
+    let pages = pages(
+        r#"<div style="height:370pt"></div>
+        <div style="display:grid"><div><p>Heading</p></div>
+        <div><table><tr style="break-inside:avoid"><td>rowa</td></tr><tr><td>rowb</td></tr></table></div></div>"#,
+    );
+    assert_eq!(pages.len(), 2);
+    assert!(
+        !words_with_grid_items(&pages[0]).contains(&"rowa".to_owned()),
+        "the first row isn't drawn past the end of page 1"
+    );
+    assert!(words_with_grid_items(&pages[1]).contains(&"rowa".to_owned()));
+}

@@ -8,7 +8,7 @@ use super::fragmentation::split_flow_at_descendant_break;
 use super::roundoff::{equal_with_roundoff, exceeds_with_roundoff, is_positive_with_roundoff};
 use super::text::{OverflowWrap, TextWrapOptions, wrap_text_runs};
 use crate::layout::elements::{
-    BlockSize, Container, FlexRow, FragmentBreakRule, GridRow, Image, IntoLayoutNode,
+    BlockSize, BoxModel, Container, FlexRow, FragmentBreakRule, GridRow, Image, IntoLayoutNode,
     LayoutElement, LayoutNode, LayoutVisitor, LayoutVisitorMut, MathBlock, NamedString,
     PageContentRole, ProgressBar, RunningElement, Svg, Table, TableFragmentGroup, TableRow,
     TextBlock, visit_layout_tree,
@@ -957,15 +957,30 @@ fn split_text_block_node(
     // Greedily keep whole lines that fit, but always retain at least one line on
     // this page — the forward-progress invariant: never leave a fragmentainer
     // empty / never break at the very top with zero content.
-    let mut acc = 0.0f32;
-    let mut idx = 0usize;
-    for (i, line) in lines.iter().enumerate() {
-        let next = acc + line.height;
-        if i > 0 && next > avail_lines {
-            break;
+    let fitting_lines = |space: f32| {
+        let mut acc = 0.0f32;
+        let mut idx = 0usize;
+        for (i, line) in lines.iter().enumerate() {
+            let next = acc + line.height;
+            if i > 0 && next > space {
+                break;
+            }
+            acc = next;
+            idx = i + 1;
         }
-        acc = next;
-        idx = i + 1;
+        (idx, acc)
+    };
+    let (mut idx, lines_height) = fitting_lines(avail_lines);
+    // Every line fits but the box's bottom padding and border don't: Chrome
+    // keeps them with the last line, breaking a line earlier, rather than leave
+    // them alone at the top of the next page.
+    let end_decoration = end_decoration(&element.box_model);
+    if idx >= lines.len()
+        && !clone
+        && rule != FragmentBreakRule::Emergency
+        && exceeds_with_roundoff(lines_height + end_decoration, avail_lines)
+    {
+        idx = fitting_lines(avail_lines - end_decoration).0;
     }
     if idx == 0 || idx >= lines.len() {
         // Every line fits (no overflow to split) or not even one would stay.
@@ -1382,11 +1397,7 @@ fn split_element(
                 .then(|| split_svg_block(element, avail_below_box_top))
                 .flatten()
         })
-        .or_else(|| {
-            slices_monolithic
-                .then(|| split_empty_sized_container(element, avail_below_box_top))
-                .flatten()
-        })
+        .or_else(|| split_empty_sized_container(element, avail_below_box_top))
         .or_else(|| split_table_row(element, avail_below_box_top, rule))
         .or_else(|| split_grid_row(element, avail_below_box_top, rule))
         .or_else(|| split_flex_row(element, avail_below_box_top))
@@ -1483,6 +1494,25 @@ fn split_empty_sized_container_node(
     Some((Box::new(first), Box::new(rest)))
 }
 
+/// Split a child of a box that breaks, at a break inside it that fits the
+/// room it has. The splitters keep a first row, child or line that overflows
+/// for forward progress, which is the emergency rule's job: otherwise the box
+/// breaks before the child, as Chrome does, rather than draw it past the
+/// page end.
+fn split_child(
+    child: &dyn LayoutElement,
+    avail_below_box_top: f32,
+    rule: FragmentBreakRule,
+) -> Option<(LayoutNode, LayoutNode)> {
+    let (head, tail) = split_element(child, avail_below_box_top, rule)?;
+    (rule == FragmentBreakRule::Emergency
+        || !exceeds_with_roundoff(
+            element_flow_geometry(head.as_ref()).content_height,
+            avail_below_box_top,
+        ))
+    .then_some((head, tail))
+}
+
 fn split_nested_rows_at(
     rows: &[LayoutNode],
     available_height: f32,
@@ -1506,15 +1536,13 @@ fn split_nested_rows_at(
             .map(|holder| holder.margins().start)
             .unwrap_or_default();
         let child_avail = (available_height - used - margin_start).max(0.0);
-        if is_positive_with_roundoff(child_avail) {
-            if let Some((head, tail)) = split_empty_sized_container(child, child_avail)
-                .or_else(|| split_element(child, child_avail, rule))
-            {
-                first.push(head);
-                rest.push(tail);
-                rest.extend_from_slice(&rows[idx + 1..]);
-                return (first, rest);
-            }
+        if is_positive_with_roundoff(child_avail)
+            && let Some((head, tail)) = split_child(child, child_avail, rule)
+        {
+            first.push(head);
+            rest.push(tail);
+            rest.extend_from_slice(&rows[idx + 1..]);
+            return (first, rest);
         }
         rest.extend_from_slice(&rows[idx..]);
         return (first, rest);
@@ -1646,7 +1674,11 @@ fn split_grid_cell(
     rest_h: f32,
     rule: FragmentBreakRule,
 ) -> (GridCell, GridCell) {
-    let (first_content, rest_content) = split_cell_content(&cell.layout, first_h, rule);
+    // An item placed below the top of its grid area (its `margin-top`, an
+    // alignment offset) has that much less of the first fragment.
+    let offset = cell.placement.inset.map_or(0.0, |inset| inset.offset.y);
+    let (first_content, rest_content) =
+        split_cell_content(&cell.layout, (first_h - offset).max(0.0), rule);
 
     let mut first = cell.clone();
     first.layout.content = first_content;
@@ -2021,6 +2053,27 @@ fn split_flex_row_node(
 /// ALONE taller than the fragmentainer the splitter RECURSES into it (rather than
 /// leaving it whole to clip), so a deeply nested too-tall box still fragments
 /// across pages instead of losing data.
+/// The bottom padding and border, which the last fragment of a box that
+/// breaks with `box-decoration-break: slice` carries.
+fn end_decoration(box_model: &BoxModel) -> f32 {
+    box_model.padding.bottom + box_model.border.bottom.width
+}
+
+/// A grid container's box holds its grid rows.
+fn is_grid_container(element: &Container) -> bool {
+    struct GridRows(bool);
+    impl LayoutVisitor for GridRows {
+        fn visit_grid_row(&mut self, _element: &GridRow) {
+            self.0 = true;
+        }
+    }
+    element.children.iter().any(|child| {
+        let mut rows = GridRows(false);
+        child.accept(&mut rows);
+        rows.0
+    })
+}
+
 fn split_container(
     element: &dyn LayoutElement,
     avail_below_box_top: f32,
@@ -2102,6 +2155,24 @@ fn split_container_node(
         .remaining_fragment_floor(avail_below_box_top);
     let has_floor_continuation = continuation_size.used().is_some();
 
+    // Every child fits but the box's bottom padding and border don't, so the
+    // continuation would hold nothing else (a grid's used height is a floor
+    // that ends with them). Chrome never leaves them alone at the top of the
+    // next page: a grid moves there whole, and any other box breaks before
+    // its last content that fits with them.
+    let end_decoration = end_decoration(&element.box_model);
+    let children_height = simulate_block_flow(children).height;
+    let only_decoration_continues = !clone
+        && rule != FragmentBreakRule::Emergency
+        && !exceeds_with_roundoff(children_height, avail_children)
+        && !continuation_size
+            .used()
+            .is_some_and(|floor| exceeds_with_roundoff(floor, end_decoration))
+        && exceeds_with_roundoff(children_height + end_decoration, avail_children);
+    if only_decoration_continues && is_grid_container(element) {
+        return None;
+    }
+
     // The page-fit check that brought us here sums the children's outer heights
     // WITHOUT adjacent-sibling margin collapse, so a box whose children collapse
     // (CSS 2.1 §8.3.1) is over-measured and can look like it overflows when it
@@ -2109,11 +2180,17 @@ fn split_container_node(
     // (`simulate_block_flow`): if the children genuinely fit, the box is not
     // overflowing — place it whole (unchanged behaviour) rather than spuriously
     // fragmenting a box that lands on a single page in Chrome.
-    if !exceeds_with_roundoff(simulate_block_flow(children).height, avail_children)
+    if !exceeds_with_roundoff(children_height, avail_children)
         && !has_floor_continuation
+        && !only_decoration_continues
     {
         return None;
     }
+    let avail_children = if only_decoration_continues {
+        avail_children - end_decoration
+    } else {
+        avail_children
+    };
 
     // Greedily keep whole children that fit, always retaining at least the first
     // (forward progress). Adjacent sibling margins collapse, as in the container's
@@ -2179,7 +2256,7 @@ fn split_container_node(
             + sibling_margin_overlap(prev_margin_bottom, next_child.as_ref()))
         .max(0.0);
         if is_positive_with_roundoff(child_avail) {
-            if let Some((c_first, c_rest)) = split_element(next_child.as_ref(), child_avail, rule) {
+            if let Some((c_first, c_rest)) = split_child(next_child.as_ref(), child_avail, rule) {
                 let mut first_children = children[..idx].to_vec();
                 first_children.push(c_first);
                 let mut rest_children = vec![c_rest];
