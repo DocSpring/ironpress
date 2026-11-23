@@ -14,6 +14,7 @@ use super::{
 };
 
 /// Wrap `item`'s text at `final_w`, its resolved border-box main size, and give it the height of those lines.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn relayout_direct_text_item(
     item: &mut FlexItem,
     child_el: &ElementNode,

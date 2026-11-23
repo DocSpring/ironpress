@@ -370,8 +370,6 @@ fn has_direct_table_cell_child(
     false
 }
 
-/// Lay out a `display: block` or `display: inline-block` element.
-#[allow(clippy::too_many_arguments)]
 /// The content width of a shrink-to-fit box's text (CSS 2.1 §10.3.5): its lines' width while they're unwrapped, and
 /// the width they wrap at (or a longer word) once they wrap.
 fn shrink_to_fit_content_width(
@@ -430,6 +428,8 @@ pub(crate) fn apply_first_letter_pseudo(
     )
 }
 
+/// Lay out a `display: block` or `display: inline-block` element.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_block_element(
     el: &ElementNode,
     style: &mut ComputedStyle,

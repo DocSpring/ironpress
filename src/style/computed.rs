@@ -5656,12 +5656,10 @@ fn apply_font_shorthand<'a>(
     font_metrics: FontMetrics<'_>,
 ) -> Option<&'a str> {
     let tokens: Vec<&str> = value.split_whitespace().collect();
-    let Some(size_idx) = tokens.iter().position(|token| {
+    let size_idx = tokens.iter().position(|token| {
         let size = token.split_once('/').map_or(*token, |(size, _)| size);
         parse_length(size).is_some() || crate::style::font_size::is_font_size_keyword(size)
-    }) else {
-        return None;
-    };
+    })?;
 
     let inherited_font_weight = style.font_weight;
     style.font_style = FontStyle::Normal;
