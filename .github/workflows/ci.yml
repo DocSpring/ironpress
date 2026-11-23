@@ -51,7 +51,9 @@ jobs:
         run: npm run check
 
   test:
-    runs-on: ubuntu-latest
+    # The parity oracle's system fonts are Ubuntu 24.04's (tests/parity/README.md): on a newer runner they differ, so
+    # every committed refs.lock provenance fails its font bundle check.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
