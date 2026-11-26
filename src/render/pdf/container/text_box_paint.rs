@@ -545,6 +545,21 @@ pub(super) fn paint_text_box(
             if let Some(decoration) = &decoration {
                 decoration.paint_above_text(content);
             }
+            // A link's text is clickable over its run's slice of the line, as the other line renderers write it
+            if !vertical
+                && phase.paints_contents()
+                && let Some(annotation) = text_run_link_annotation(
+                    run,
+                    ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                        lx,
+                        line_bottom_y,
+                        rw,
+                        line_top_y - line_bottom_y,
+                    )),
+                )
+            {
+                ctx.text.annotations.push(annotation);
+            }
             lx += rw;
         }
         border_pieces.paint(content, ctx);
