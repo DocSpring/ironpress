@@ -19,6 +19,7 @@ use crate::style::computed::{
 use crate::types::{Color, EdgeSizes, Margin, PageSize, Size};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+mod flex_line;
 mod float_breaks;
 mod measurement;
 
@@ -1400,7 +1401,7 @@ fn split_element(
         .or_else(|| split_empty_sized_container(element, avail_below_box_top))
         .or_else(|| split_table_row(element, avail_below_box_top, rule))
         .or_else(|| split_grid_row(element, avail_below_box_top, rule))
-        .or_else(|| split_flex_row(element, avail_below_box_top))
+        .or_else(|| split_flex_row(element, avail_below_box_top, rule))
         .or_else(|| split_container(element, avail_below_box_top, rule))
 }
 
@@ -1960,20 +1961,23 @@ fn split_flex_row_at_line(
 fn split_flex_row(
     element: &dyn LayoutElement,
     avail_below_box_top: f32,
+    rule: FragmentBreakRule,
 ) -> Option<(LayoutNode, LayoutNode)> {
     struct SplitVisitor {
         available: f32,
+        rule: FragmentBreakRule,
         result: Option<(LayoutNode, LayoutNode)>,
     }
 
     impl LayoutVisitor for SplitVisitor {
         fn visit_flex_row(&mut self, element: &FlexRow) {
-            self.result = split_flex_row_node(element, self.available);
+            self.result = split_flex_row_node(element, self.available, self.rule);
         }
     }
 
     let mut visitor = SplitVisitor {
         available: avail_below_box_top,
+        rule,
         result: None,
     };
     element.accept(&mut visitor);
@@ -1983,6 +1987,7 @@ fn split_flex_row(
 fn split_flex_row_node(
     element: &FlexRow,
     avail_below_box_top: f32,
+    rule: FragmentBreakRule,
 ) -> Option<(LayoutNode, LayoutNode)> {
     if element.content.cells.is_empty()
         || !is_positive_with_roundoff(element.content.row_height)
@@ -2006,7 +2011,7 @@ fn split_flex_row_node(
     line_tops.sort_by(f32::total_cmp);
     line_tops.dedup_by(|a, b| equal_with_roundoff(*a, *b));
     if line_tops.len() <= 1 {
-        return None;
+        return flex_line::split_flex_line(element, avail_inner, rule);
     }
 
     let line_extent = |line_top: f32| -> f32 {
@@ -2380,7 +2385,21 @@ fn split_table_node(
                 !row.is_row || row.avoid_group != Some(group)
             })
             .map_or(0, |index| index + 1);
-        if trailing_group_start < before.children.len() {
+        // At the top of a page (the emergency rule), the group moves on only when something stays behind and the
+        // group fits a page: one taller than a page breaks inside (CSS Fragmentation 3 §4.4), and one that would leave
+        // the fragment empty would make the continuation the whole table again, and pagination would never end
+        let group_height: f32 = before.children[trailing_group_start..]
+            .iter()
+            .chain(after.children.iter().take_while(|child| {
+                let row = table_row_pagination_state(child.as_ref());
+                row.is_row && row.avoid_group == Some(group)
+            }))
+            .map(|child| estimate_element_height(child.as_ref()))
+            .sum();
+        let moves_on = rule != FragmentBreakRule::Emergency
+            || (trailing_group_start > 0
+                && !exceeds_with_roundoff(group_height, available_before_footer));
+        if trailing_group_start < before.children.len() && moves_on {
             let moved = before.children.split_off(trailing_group_start);
             if !moved.is_empty() {
                 let mut continuation = moved;

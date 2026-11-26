@@ -175,3 +175,26 @@ pub(super) fn inline_boxes(markup: &str) -> Vec<crate::layout::engine::InlineBox
         .filter_map(|run| run.inline_box.map(|inline| *inline))
         .collect()
 }
+
+/// The visible words on each page, in layout tree order
+pub(super) fn words_per_page(pages: &[Page]) -> Vec<Vec<String>> {
+    pages
+        .iter()
+        .map(|page| {
+            let mut collector = RunCollector::default();
+            for (_, element) in &page.elements {
+                visit_layout_tree(element.as_ref(), &mut collector);
+            }
+            collector
+                .0
+                .iter()
+                .flat_map(|run| {
+                    run.text
+                        .split_whitespace()
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        })
+        .collect()
+}
