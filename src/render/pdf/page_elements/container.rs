@@ -94,7 +94,8 @@ pub(in crate::render::pdf) fn render_container(
     let c_fragment_geometry = c_box_geometry.fragment(element.fragmentation);
     let c_paint_box = c_paint_geometry.border_box;
     if phase.paints_contents()
-        && let Some(link) = box_link_annotation(&element.paint, c_paint_box)
+        && let Some(link) =
+            box_link_annotation(&element.paint, c_fragment_geometry, ctx.text.pdf_writer)
     {
         ctx.text.annotations.push(link);
     }

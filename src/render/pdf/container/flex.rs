@@ -82,6 +82,12 @@ pub(super) fn render_flex_child(
         flex_gradient_reference,
         flex_background.image_destination_box,
     );
+    if phase.paints_contents()
+        && let Some(link) =
+            box_link_annotation(&child.paint, flex_fragment_geometry, ctx.text.pdf_writer)
+    {
+        ctx.text.annotations.push(link);
+    }
     let flex_group = PaintGroupScope::begin(content, child, flex_fragment_geometry, ctx);
 
     // A flex container that establishes a containing block records its
@@ -292,13 +298,14 @@ pub(super) fn render_flex_child(
             );
             let cell_box_geometry = ctx.text.pdf_writer.resolve_box_geometry(cell_geometry);
             let cell_paint_geometry = cell_box_geometry.painting();
+            let cell_fragment_geometry =
+                cell_box_geometry.fragment(cell.fragmentation.box_fragmentation);
             if cell_phase.paints_contents()
-                && let Some(link) = box_link_annotation(&cell.paint, cell_paint_geometry.border_box)
+                && let Some(link) =
+                    box_link_annotation(&cell.paint, cell_fragment_geometry, ctx.text.pdf_writer)
             {
                 ctx.text.annotations.push(link);
             }
-            let cell_fragment_geometry =
-                cell_box_geometry.fragment(cell.fragmentation.box_fragmentation);
             let cell_background = cell_box_geometry.background(
                 cell.paint.background.layers.origin,
                 cell.paint.background.layers.clip,

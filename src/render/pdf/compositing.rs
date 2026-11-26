@@ -15,6 +15,17 @@ pub(super) struct PaintGroupScope {
     paint_box: PdfRect,
 }
 
+/// A paint group's own CSS transform, resolved against its box, as `PaintGroupScope::begin` applies it
+pub(super) fn resolved_group_transform(
+    group: &crate::layout::elements::PaintGroup,
+    geometry: FragmentPaintGeometry,
+) -> Option<transforms::ResolvedPdfTransform> {
+    group.transform.value.as_ref().map(|transform| {
+        let reference = geometry.painting().transform_reference(&group.transform);
+        resolve_css_transform(transform, reference.pivot(), reference.size())
+    })
+}
+
 impl PaintGroupScope {
     pub(super) fn begin(
         content: &mut String,
@@ -27,10 +38,7 @@ impl PaintGroupScope {
         let grouped = effects.needs_source_isolation();
         let group_start = grouped.then_some(content.len());
 
-        let resolved_transform = group.transform.value.as_ref().map(|transform| {
-            let reference = geometry.painting().transform_reference(&group.transform);
-            resolve_css_transform(transform, reference.pivot(), reference.size())
-        });
+        let resolved_transform = resolved_group_transform(group, geometry);
         let prior_paint_transform = resolved_transform.map(|transform| {
             let prior = ctx
                 .text

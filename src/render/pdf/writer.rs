@@ -115,6 +115,51 @@ impl PdfWriter {
         self.graphics_state.local_to_layout * local
     }
 
+    /// Where a rectangle in the current paint group's coordinates lands on the page's layout: through every CSS
+    /// transform of the boxes being painted, as the box's own paint does (the smallest rectangle around it)
+    pub(super) fn painted_rect(&self, rect: PdfRect) -> PdfRect {
+        self.painted_rect_within(rect, None)
+    }
+
+    /// Where a box's `rect` is painted on the page, through its own transform (the paint group it hasn't entered yet)
+    /// as well as the ones it's inside: their bounding box
+    pub(super) fn painted_rect_within(
+        &self,
+        rect: PdfRect,
+        own_transform: Option<PdfMatrix>,
+    ) -> PdfRect {
+        let matrix = own_transform.map_or(self.graphics_state.local_to_layout, |own| {
+            self.graphics_state.local_to_layout * own
+        });
+        if matrix == PdfMatrix::IDENTITY {
+            return rect;
+        }
+        let corners = [
+            PdfPoint::new(rect.left, rect.bottom),
+            PdfPoint::new(rect.right(), rect.bottom),
+            PdfPoint::new(rect.left, rect.top()),
+            PdfPoint::new(rect.right(), rect.top()),
+        ]
+        .map(|corner| matrix.transform_point(corner));
+        let left = corners
+            .iter()
+            .map(|corner| corner.x)
+            .fold(f32::INFINITY, f32::min);
+        let right = corners
+            .iter()
+            .map(|corner| corner.x)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let bottom = corners
+            .iter()
+            .map(|corner| corner.y)
+            .fold(f32::INFINITY, f32::min);
+        let top = corners
+            .iter()
+            .map(|corner| corner.y)
+            .fold(f32::NEG_INFINITY, f32::max);
+        PdfRect::new(left, bottom, right - left, top - bottom)
+    }
+
     pub(super) fn has_active_paint_transform(&self) -> bool {
         self.graphics_state.local_to_layout != PdfMatrix::IDENTITY
     }

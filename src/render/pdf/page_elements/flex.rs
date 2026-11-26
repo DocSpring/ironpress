@@ -74,6 +74,12 @@ pub(in crate::render::pdf) fn render_flex_row(
         flex_gradient_reference,
         flex_background_geometry.image_destination_box,
     );
+    if phase.paints_contents()
+        && let Some(link) =
+            box_link_annotation(&element.paint, flex_fragment_geometry, ctx.text.pdf_writer)
+    {
+        ctx.text.annotations.push(link);
+    }
     let flex_group = PaintGroupScope::begin(content, element, flex_fragment_geometry, ctx);
 
     if phase.paints_decoration() {
@@ -299,7 +305,9 @@ pub(in crate::render::pdf) fn render_flex_row(
             let cell_fragment_geometry =
                 cell_box_geometry.fragment(cell.fragmentation.box_fragmentation);
             let cell_paint_box = cell_paint_geometry.border_box;
-            if let Some(link) = box_link_annotation(&cell.paint, cell_paint_box) {
+            if let Some(link) =
+                box_link_annotation(&cell.paint, cell_fragment_geometry, ctx.text.pdf_writer)
+            {
                 ctx.text.annotations.push(link);
             }
             let cell_background = cell_box_geometry.background(

@@ -452,7 +452,12 @@ pub(super) fn render_cell_text(
 
             if let Some(annotation) = text_run_link_annotation(
                 run,
-                PdfRect::new(x, line_annotation_bottom, run_width, line_annotation_height),
+                ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                    x,
+                    line_annotation_bottom,
+                    run_width,
+                    line_annotation_height,
+                )),
             ) {
                 ctx.text.annotations.push(annotation);
             }

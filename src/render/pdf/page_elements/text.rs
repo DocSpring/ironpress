@@ -142,7 +142,8 @@ pub(in crate::render::pdf) fn render_text_block(
         ctx.text.annotations.push(widget);
     }
     if phase.paints_contents()
-        && let Some(link) = text_block_link_annotation(element, tb_paint_box)
+        && let Some(link) =
+            text_block_link_annotation(element, tb_fragment_geometry, ctx.text.pdf_writer)
     {
         ctx.text.annotations.push(link);
     }

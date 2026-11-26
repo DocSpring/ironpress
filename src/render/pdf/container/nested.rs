@@ -163,7 +163,8 @@ pub(super) fn render_nested_container(
     let nk_fragment_geometry = nk_box_geometry.fragment(child.fragmentation);
     let nk_border_box = nk_paint_geometry.rounded_border_box(*cont_radii);
     if phase.paints_contents()
-        && let Some(link) = box_link_annotation(&child.paint, nk_paint_geometry.border_box)
+        && let Some(link) =
+            box_link_annotation(&child.paint, nk_fragment_geometry, ctx.text.pdf_writer)
     {
         ctx.text.annotations.push(link);
     }

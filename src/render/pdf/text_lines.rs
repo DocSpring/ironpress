@@ -142,8 +142,8 @@ pub(super) fn render_run_inline_box(
     }
 }
 
-/// Paints an atomic inline box in its line and returns its painted border box, where a link around it puts its
-/// annotation (`inline_box_link_annotation`)
+/// Paints an atomic inline box in its line and returns its border box where it's painted on the page, through its own
+/// and its ancestors' transforms: where a link around it puts its annotation (`inline_box_link_annotation`)
 pub(super) fn render_inline_box(
     content: &mut String,
     inline: &crate::layout::engine::InlineBox,
@@ -394,7 +394,16 @@ pub(super) fn render_inline_box(
     if let Some(prior) = prior_grid {
         ctx.text.pdf_writer.restore_box_paint_grid(prior);
     }
-    paint_geometry.border_box
+    // The box's own transform is its content's (the box laid out as a block), which paints it transformed
+    let own_transform = inline
+        .content
+        .first()
+        .and_then(|node| node.paint_group_owner())
+        .and_then(|owner| resolved_group_transform(owner.paint_group(), fragment_geometry))
+        .map(|transform| transform.matrix());
+    ctx.text
+        .pdf_writer
+        .painted_rect_within(paint_geometry.border_box, own_transform)
 }
 
 fn paint_centered_inline_stroke(

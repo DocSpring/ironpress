@@ -80,19 +80,28 @@ pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<P
 }
 
 /// The annotation of the link a box is the box of (an `<a href>` laid out as a block, a flex or grid item), over its
-/// border box, as Chromium writes it
+/// border box where it's painted, through its own and its ancestors' transforms, as Chromium writes it. A box that
+/// `visibility: hidden` hides has none
 pub(super) fn box_link_annotation(
     paint: &crate::layout::elements::BoxPaint,
-    border_box: PdfRect,
+    geometry: FragmentPaintGeometry,
+    pdf_writer: &PdfWriter,
 ) -> Option<PageAnnotation> {
-    link_annotation(paint.link.as_ref()?, border_box)
+    if !paint.visible {
+        return None;
+    }
+    let own_transform =
+        resolved_group_transform(&paint.group, geometry).map(|transform| transform.matrix());
+    let rect = pdf_writer.painted_rect_within(geometry.painting().border_box, own_transform);
+    link_annotation(paint.link.as_ref()?, rect)
 }
 
 /// A text block's box link annotation, unless its text already carries the link: a block link's lines keep their
 /// own annotations, as before
 pub(super) fn text_block_link_annotation(
     block: &crate::layout::elements::TextBlock,
-    border_box: PdfRect,
+    geometry: FragmentPaintGeometry,
+    pdf_writer: &PdfWriter,
 ) -> Option<PageAnnotation> {
     let url = block.paint.link.as_ref()?;
     let text_carries_link = block
@@ -103,7 +112,7 @@ pub(super) fn text_block_link_annotation(
     if text_carries_link {
         return None;
     }
-    box_link_annotation(&block.paint, border_box)
+    box_link_annotation(&block.paint, geometry, pdf_writer)
 }
 
 fn link_annotation(url: &str, rect: PdfRect) -> Option<PageAnnotation> {

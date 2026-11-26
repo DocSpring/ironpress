@@ -59,8 +59,10 @@ pub(super) fn paint_text_box(
     {
         ctx.text.annotations.push(widget);
     }
+    let tb_fragment_geometry = tb_box_geometry.fragment(child.fragmentation.box_fragmentation);
     if phase.paints_contents()
-        && let Some(link) = text_block_link_annotation(child, tb_paint_geometry.border_box)
+        && let Some(link) =
+            text_block_link_annotation(child, tb_fragment_geometry, ctx.text.pdf_writer)
     {
         ctx.text.annotations.push(link);
     }
@@ -72,7 +74,6 @@ pub(super) fn paint_text_box(
             .generated_image_box(),
         tb_background_geometry.image_destination_box,
     );
-    let tb_fragment_geometry = tb_box_geometry.fragment(child.fragmentation.box_fragmentation);
 
     let tb_group = PaintGroupScope::begin(content, child, tb_fragment_geometry, ctx);
 

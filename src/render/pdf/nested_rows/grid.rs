@@ -109,12 +109,12 @@ impl NestedRowsRenderer<'_, '_> {
                 );
                 let cell_box_geometry = pdf_writer.resolve_box_geometry(cell_geometry);
                 let cell_paint_geometry = cell_box_geometry.painting();
+                let cell_fragment_geometry = cell_box_geometry.fragment(Default::default());
                 if let Some(link) =
-                    box_link_annotation(&cell.layout.paint, cell_paint_geometry.border_box)
+                    box_link_annotation(&cell.layout.paint, cell_fragment_geometry, pdf_writer)
                 {
                     annotations.push(link);
                 }
-                let cell_fragment_geometry = cell_box_geometry.fragment(Default::default());
                 let cell_background = cell_box_geometry.background(
                     cell.layout.paint.background.layers.origin,
                     cell.layout.paint.background.layers.clip,
