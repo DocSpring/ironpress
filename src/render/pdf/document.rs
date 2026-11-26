@@ -70,13 +70,18 @@ pub(super) fn form_widget_annotation(
 /// Chromium writes it: the line's height would take in the text above and below a box that's shorter or taller
 pub(super) fn inline_box_link_annotation(
     run: &TextRun,
-    border_box: PdfRect,
+    border_box: Option<PdfRect>,
 ) -> Option<PageAnnotation> {
     text_run_link_annotation(run, border_box)
 }
 
-pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<PageAnnotation> {
-    link_annotation(run.link_url.as_ref()?, rect)
+/// A run's link annotation over `rect`, its part of the line that the clips around it leave visible
+/// (`PdfWriter::visible_painted_rect`): none when they hide it
+pub(super) fn text_run_link_annotation(
+    run: &TextRun,
+    rect: Option<PdfRect>,
+) -> Option<PageAnnotation> {
+    link_annotation(run.link_url.as_ref()?, rect?)
 }
 
 /// The annotation of the link a box is the box of (an `<a href>` laid out as a block, a flex or grid item), over its
@@ -92,7 +97,8 @@ pub(super) fn box_link_annotation(
     }
     let own_transform =
         resolved_group_transform(&paint.group, geometry).map(|transform| transform.matrix());
-    let rect = pdf_writer.painted_rect_within(geometry.painting().border_box, own_transform);
+    let rect =
+        pdf_writer.visible_painted_rect_within(geometry.painting().border_box, own_transform)?;
     link_annotation(paint.link.as_ref()?, rect)
 }
 
@@ -113,21 +119,6 @@ pub(super) fn text_block_link_annotation(
         return None;
     }
     box_link_annotation(&block.paint, geometry, pdf_writer)
-}
-
-/// An annotation cut to what the `overflow` clips being painted inside leave visible: a link they hide entirely is
-/// left out. A form field's widget is kept whole
-pub(super) fn visible_annotation(
-    annotation: PageAnnotation,
-    pdf_writer: &PdfWriter,
-) -> Option<PageAnnotation> {
-    match annotation {
-        PageAnnotation::Link { rect, url } => {
-            let rect = pdf_writer.visible_annotation_rect(rect)?;
-            Some(PageAnnotation::Link { rect, url })
-        }
-        widget @ PageAnnotation::Widget { .. } => Some(widget),
-    }
 }
 
 fn link_annotation(url: &str, rect: PdfRect) -> Option<PageAnnotation> {

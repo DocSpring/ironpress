@@ -1,7 +1,7 @@
 //! Paint-time clipping shared by recursive formatting contexts.
 
 use super::PdfWriter;
-use super::geometry::PdfRect;
+use super::geometry::{PdfPoint, RoundedRect};
 use super::stacking::StackingTraversal;
 
 /// One PDF graphics-state clip mirrored into deferred stacking fragments.
@@ -11,17 +11,18 @@ use super::stacking::StackingTraversal;
 /// are clipped by the same geometry even when stacking defers their paint.
 pub(super) struct ContentClip {
     command: String,
-    /// The clip path's bounding box, which link annotations inside it are cut to
-    bounds: PdfRect,
+    /// The clip's shape, which link annotations inside it are cut to
+    shape: RoundedRect,
     /// The annotation clip to restore when the scope finishes
-    prior_annotation_clip: Option<PdfRect>,
+    prior_annotation_clip: Option<Vec<PdfPoint>>,
 }
 
 impl ContentClip {
-    pub(super) fn from_path(path: String, bounds: PdfRect) -> Self {
+    /// A clip to `shape`: its outline, rounded where it has radii
+    pub(super) fn of(shape: RoundedRect) -> Self {
         Self {
-            command: format!("q\n{path}W n\n"),
-            bounds,
+            command: format!("q\n{}W n\n", shape.path_or_rect()),
+            shape,
             prior_annotation_clip: None,
         }
     }
@@ -30,10 +31,7 @@ impl ContentClip {
         geometry: super::PaintBoxGeometry,
         radii: crate::types::CornerRadii,
     ) -> Self {
-        Self::from_path(
-            geometry.rounded_padding_box(radii).path_or_rect(),
-            geometry.padding_box(),
-        )
+        Self::of(geometry.rounded_padding_box(radii))
     }
 
     pub(super) fn begin(
@@ -44,7 +42,7 @@ impl ContentClip {
     ) {
         output.push_str(&self.command);
         stacking.push_clip(self.command.clone());
-        self.prior_annotation_clip = pdf_writer.enter_annotation_clip(self.bounds);
+        self.prior_annotation_clip = pdf_writer.enter_annotation_clip(self.shape);
     }
 
     pub(super) fn finish(
@@ -55,6 +53,6 @@ impl ContentClip {
     ) {
         stacking.pop_clip();
         output.push_str("Q\n");
-        pdf_writer.restore_annotation_clip(self.prior_annotation_clip);
+        pdf_writer.restore_annotation_clip(self.prior_annotation_clip.clone());
     }
 }

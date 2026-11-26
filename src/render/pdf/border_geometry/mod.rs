@@ -112,6 +112,20 @@ impl BorderSideRegion {
 /// using the INNER radius (`radius - border`) at the padding box, matching the
 /// way borders paint inside the box. Returns the path operators WITHOUT the
 /// terminating `W n`, so callers append `"W n\n"` (or `"\nW n\n"`).
+/// The padding box an `overflow` clip cuts a box's content to, with its rounded inner corners: `border_box` inset by
+/// the border widths (`overflow_clip_path` draws it)
+pub(super) fn overflow_clip_shape(
+    border_box: PdfRect,
+    border: EdgeSizes,
+    radii: CornerRadii,
+) -> RoundedRect {
+    RoundedRect::new(
+        border_box,
+        radii.fit_to(border_box.width, border_box.height),
+    )
+    .inset(border)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn overflow_clip_path(
     x: f32,
@@ -121,8 +135,7 @@ pub(super) fn overflow_clip_path(
     border: EdgeSizes,
     radii: CornerRadii,
 ) -> String {
-    let border_box = PdfRect::new(x, y, w, h);
-    let padding_box = RoundedRect::new(border_box, radii.fit_to(w, h)).inset(border);
+    let padding_box = overflow_clip_shape(PdfRect::new(x, y, w, h), border, radii);
     if let Some(path) = padding_box.path() {
         return path;
     }

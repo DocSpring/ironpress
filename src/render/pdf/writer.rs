@@ -65,6 +65,9 @@ pub(crate) struct PdfWriter {
     pub(super) opts: RenderOpts,
     pub(super) page_content_transform: PageContentTransform,
     pub(super) graphics_state: PdfGraphicsState,
+    /// The part of the page the `overflow` clips being painted inside leave visible, where link annotations go: a
+    /// convex polygon on the page's layout (`annotation_clip`). `None` when nothing clips
+    pub(super) annotation_clip: Option<Vec<PdfPoint>>,
     /// AcroForm fields (`RenderOpts::pdf_forms`)
     pub(super) forms: FormWriterState,
 }
@@ -78,9 +81,6 @@ pub(super) struct PdfGraphicsState {
     /// so they must explicitly inherit this matrix from every ancestor.
     local_to_layout: PdfMatrix,
     box_paint_grid: BoxPaintGrid,
-    /// The part of the page the `overflow` clips being painted inside leave visible, where link annotations are
-    /// written (the bounding box of each clip through the transforms around it). `None` when nothing clips
-    annotation_clip: Option<PdfRect>,
 }
 
 impl PdfWriter {
@@ -118,12 +118,6 @@ impl PdfWriter {
         self.graphics_state.local_to_layout * local
     }
 
-    /// Where a rectangle in the current paint group's coordinates lands on the page's layout: through every CSS
-    /// transform of the boxes being painted, as the box's own paint does (the smallest rectangle around it)
-    pub(super) fn painted_rect(&self, rect: PdfRect) -> PdfRect {
-        self.painted_rect_within(rect, None)
-    }
-
     /// Where a box's `rect` is painted on the page, through its own transform (the paint group it hasn't entered yet)
     /// as well as the ones it's inside: their bounding box
     pub(super) fn painted_rect_within(
@@ -131,67 +125,64 @@ impl PdfWriter {
         rect: PdfRect,
         own_transform: Option<PdfMatrix>,
     ) -> PdfRect {
+        annotation_clip::extent(&self.painted_corners(rect, own_transform))
+    }
+
+    /// Where a link annotation over `rect` goes on the page: where it's painted on the page's layout, through every CSS
+    /// transform of the boxes being painted (the smallest rectangle around it), cut to what the `overflow` clips being
+    /// painted inside leave visible, or `None` when they hide all of it
+    pub(super) fn visible_painted_rect(&self, rect: PdfRect) -> Option<PdfRect> {
+        self.visible_painted_rect_within(rect, None)
+    }
+
+    /// `painted_rect_within`, cut to what the `overflow` clips being painted inside leave visible
+    pub(super) fn visible_painted_rect_within(
+        &self,
+        rect: PdfRect,
+        own_transform: Option<PdfMatrix>,
+    ) -> Option<PdfRect> {
+        let Some(clip) = &self.annotation_clip else {
+            return Some(self.painted_rect_within(rect, own_transform));
+        };
+        annotation_clip::bounds(&annotation_clip::intersect(
+            &self.painted_corners(rect, own_transform),
+            clip,
+        ))
+    }
+
+    /// A rectangle's corners on the page's layout, through its own transform and the ones it's inside
+    fn painted_corners(&self, rect: PdfRect, own_transform: Option<PdfMatrix>) -> Vec<PdfPoint> {
         let matrix = own_transform.map_or(self.graphics_state.local_to_layout, |own| {
             self.graphics_state.local_to_layout * own
         });
-        if matrix == PdfMatrix::IDENTITY {
-            return rect;
-        }
-        let corners = [
+        [
             PdfPoint::new(rect.left, rect.bottom),
             PdfPoint::new(rect.right(), rect.bottom),
-            PdfPoint::new(rect.left, rect.top()),
             PdfPoint::new(rect.right(), rect.top()),
+            PdfPoint::new(rect.left, rect.top()),
         ]
-        .map(|corner| matrix.transform_point(corner));
-        let left = corners
-            .iter()
-            .map(|corner| corner.x)
-            .fold(f32::INFINITY, f32::min);
-        let right = corners
-            .iter()
-            .map(|corner| corner.x)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let bottom = corners
-            .iter()
-            .map(|corner| corner.y)
-            .fold(f32::INFINITY, f32::min);
-        let top = corners
-            .iter()
-            .map(|corner| corner.y)
-            .fold(f32::NEG_INFINITY, f32::max);
-        PdfRect::new(left, bottom, right - left, top - bottom)
+        .map(|corner| matrix.transform_point(corner))
+        .to_vec()
     }
 
-    /// Enter an `overflow` clip of `bounds` in the current paint group's coordinates: link annotations written inside
-    /// it cover only what it leaves visible, as Chromium writes them. Returns the clip to restore after it
-    pub(super) fn enter_annotation_clip(&mut self, bounds: PdfRect) -> Option<PdfRect> {
-        let prior = self.graphics_state.annotation_clip;
-        let painted = self.painted_rect(bounds);
-        let visible = match prior {
+    /// Enter an `overflow` clip, `clip` in the current paint group's coordinates: link annotations painted inside it
+    /// cover only what it and the clips around it leave visible, as Chromium writes them. Returns the clip to restore
+    /// after it
+    pub(super) fn enter_annotation_clip(&mut self, clip: RoundedRect) -> Option<Vec<PdfPoint>> {
+        let matrix = self.graphics_state.local_to_layout;
+        let painted: Vec<PdfPoint> = annotation_clip::outline(clip)
+            .into_iter()
+            .map(|point| matrix.transform_point(point))
+            .collect();
+        let visible = match &self.annotation_clip {
             None => painted,
-            Some(outer) => outer.intersection(painted).unwrap_or(PdfRect::new(
-                painted.left,
-                painted.bottom,
-                0.0,
-                0.0,
-            )),
+            Some(outer) => annotation_clip::intersect(&painted, outer),
         };
-        self.graphics_state.annotation_clip = Some(visible);
-        prior
+        self.annotation_clip.replace(visible)
     }
 
-    pub(super) fn restore_annotation_clip(&mut self, prior: Option<PdfRect>) {
-        self.graphics_state.annotation_clip = prior;
-    }
-
-    /// The part of a link annotation's `rect` (on the page's layout) that the clips around it leave visible, or
-    /// `None` when they hide all of it
-    pub(super) fn visible_annotation_rect(&self, rect: PdfRect) -> Option<PdfRect> {
-        match self.graphics_state.annotation_clip {
-            None => Some(rect),
-            Some(clip) => clip.intersection(rect),
-        }
+    pub(super) fn restore_annotation_clip(&mut self, prior: Option<Vec<PdfPoint>>) {
+        self.annotation_clip = prior;
     }
 
     pub(super) fn has_active_paint_transform(&self) -> bool {

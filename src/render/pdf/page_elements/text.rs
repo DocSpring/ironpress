@@ -139,13 +139,13 @@ pub(in crate::render::pdf) fn render_text_block(
         && phase.paints_contents()
         && let Some(widget) = form_widget_annotation(element, tb_paint_box)
     {
-        ctx.text.push_annotation(widget);
+        ctx.text.annotations.push(widget);
     }
     if phase.paints_contents()
         && let Some(link) =
             text_block_link_annotation(element, tb_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.push_annotation(link);
+        ctx.text.annotations.push(link);
     }
 
     // Apply transform if set (wrap in q/Q).
@@ -626,7 +626,11 @@ pub(in crate::render::pdf) fn render_text_block(
         prior_annotation_clip = ctx
             .text
             .pdf_writer
-            .enter_annotation_clip(tb_paint_geometry.padding_box());
+            .enter_annotation_clip(overflow_clip_shape(
+                tb_paint_box,
+                tb_paint_geometry.border,
+                *tb_radii,
+            ));
         content.push_str("q\n");
         content.push_str(&overflow_clip_path(
             tb_paint_box.left,

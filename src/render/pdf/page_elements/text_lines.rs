@@ -465,14 +465,14 @@ pub(super) fn render_text_block_lines(
             // Track link annotation
             if let Some(annotation) = text_run_link_annotation(
                 run,
-                ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                ctx.text.pdf_writer.visible_painted_rect(PdfRect::new(
                     bg_x,
                     line_annotation_bottom,
                     run_width,
                     line_annotation_top - line_annotation_bottom,
                 )),
             ) {
-                ctx.text.push_annotation(annotation);
+                ctx.text.annotations.push(annotation);
             }
 
             bg_x += run_width;

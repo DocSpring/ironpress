@@ -138,18 +138,19 @@ pub(super) fn render_run_inline_box(
 ) {
     let border_box = render_inline_box(content, inline, slot, ctx);
     if let Some(annotation) = inline_box_link_annotation(run, border_box) {
-        ctx.text.push_annotation(annotation);
+        ctx.text.annotations.push(annotation);
     }
 }
 
 /// Paints an atomic inline box in its line and returns its border box where it's painted on the page, through its own
-/// and its ancestors' transforms: where a link around it puts its annotation (`inline_box_link_annotation`)
+/// and its ancestors' transforms, cut to what the clips around it leave visible: where a link around it puts its
+/// annotation (`inline_box_link_annotation`), none when they hide it
 pub(super) fn render_inline_box(
     content: &mut String,
     inline: &crate::layout::engine::InlineBox,
     slot: InlineBoxSlot,
     ctx: &mut PageRenderContext<'_>,
-) -> PdfRect {
+) -> Option<PdfRect> {
     let InlineBoxSlot {
         x: box_x,
         baseline: baseline_y,
@@ -403,7 +404,7 @@ pub(super) fn render_inline_box(
         .map(|transform| transform.matrix());
     ctx.text
         .pdf_writer
-        .painted_rect_within(paint_geometry.border_box, own_transform)
+        .visible_painted_rect_within(paint_geometry.border_box, own_transform)
 }
 
 fn paint_centered_inline_stroke(

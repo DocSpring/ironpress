@@ -78,7 +78,7 @@ pub(in crate::render::pdf) fn render_flex_row(
         && let Some(link) =
             box_link_annotation(&element.paint, flex_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.push_annotation(link);
+        ctx.text.annotations.push(link);
     }
     let flex_group = PaintGroupScope::begin(content, element, flex_fragment_geometry, ctx);
 
@@ -247,7 +247,11 @@ pub(in crate::render::pdf) fn render_flex_row(
         prior_annotation_clip = ctx
             .text
             .pdf_writer
-            .enter_annotation_clip(flex_paint_geometry.padding_box());
+            .enter_annotation_clip(overflow_clip_shape(
+                flex_paint_box,
+                flex_paint_geometry.border,
+                *flex_radii,
+            ));
     }
 
     // Render each flex cell at its computed x-offset
@@ -313,7 +317,7 @@ pub(in crate::render::pdf) fn render_flex_row(
             if let Some(link) =
                 box_link_annotation(&cell.paint, cell_fragment_geometry, ctx.text.pdf_writer)
             {
-                ctx.text.push_annotation(link);
+                ctx.text.annotations.push(link);
             }
             let cell_background = cell_box_geometry.background(
                 cell.paint.background.layers.origin,
@@ -570,14 +574,14 @@ pub(in crate::render::pdf) fn render_flex_row(
 
                     if let Some(annotation) = text_run_link_annotation(
                         run,
-                        ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                        ctx.text.pdf_writer.visible_painted_rect(PdfRect::new(
                             x,
                             line_annotation_bottom,
                             rw,
                             line_annotation_top - line_annotation_bottom,
                         )),
                     ) {
-                        ctx.text.push_annotation(annotation);
+                        ctx.text.annotations.push(annotation);
                     }
 
                     x += rw;

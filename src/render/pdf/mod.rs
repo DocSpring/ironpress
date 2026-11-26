@@ -43,6 +43,7 @@ use crate::style::computed::{
     BorderImageSource, GradientLayerBox,
 };
 mod affine_solids;
+mod annotation_clip;
 mod background_images;
 mod backgrounds;
 mod border_geometry;

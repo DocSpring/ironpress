@@ -97,7 +97,7 @@ pub(in crate::render::pdf) fn render_container(
         && let Some(link) =
             box_link_annotation(&element.paint, c_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.push_annotation(link);
+        ctx.text.annotations.push(link);
     }
 
     if c_visible_self
@@ -335,17 +335,18 @@ pub(in crate::render::pdf) fn render_container(
     if let Some(command) = &clip_command {
         content.push_str(command);
         ctx.stacking.push_clip(command.clone());
-        let bounds = if c_has_v || c_has_h {
+        let shape = if c_has_v || c_has_h {
             PdfRect::new(
                 c_paint_padding_box.left,
                 c_paint_padding_box.bottom + c_h_gutter,
                 c_paint_padding_box.width - c_v_gutter,
                 c_paint_padding_box.height - c_h_gutter,
             )
+            .rounded(Default::default())
         } else {
-            c_paint_padding_box
+            overflow_clip_shape(c_paint_box, c_paint_geometry.border, *c_border_radii)
         };
-        prior_annotation_clip = ctx.text.pdf_writer.enter_annotation_clip(bounds);
+        prior_annotation_clip = ctx.text.pdf_writer.enter_annotation_clip(shape);
     }
 
     // Render children recursively

@@ -57,14 +57,14 @@ pub(super) fn paint_text_box(
         && phase.paints_contents()
         && let Some(widget) = form_widget_annotation(child, tb_paint_geometry.border_box)
     {
-        ctx.text.push_annotation(widget);
+        ctx.text.annotations.push(widget);
     }
     let tb_fragment_geometry = tb_box_geometry.fragment(child.fragmentation.box_fragmentation);
     if phase.paints_contents()
         && let Some(link) =
             text_block_link_annotation(child, tb_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.push_annotation(link);
+        ctx.text.annotations.push(link);
     }
     let tb_background_geometry = tb_box_geometry.background(*tb_bg_origin, *tb_bg_clip, *tb_radii);
     let tb_background_box = tb_background_geometry.painting_box;
@@ -261,7 +261,7 @@ pub(super) fn paint_text_box(
         prior_annotation_clip = ctx
             .text
             .pdf_writer
-            .enter_annotation_clip(tb_paint_geometry.padding_box());
+            .enter_annotation_clip(tb_paint_geometry.rounded_padding_box(*tb_radii));
         tb_paint_geometry
             .rounded_padding_box(*tb_radii)
             .push_clip(content);
@@ -555,7 +555,7 @@ pub(super) fn paint_text_box(
                 && phase.paints_contents()
                 && let Some(annotation) = text_run_link_annotation(
                     run,
-                    ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                    ctx.text.pdf_writer.visible_painted_rect(PdfRect::new(
                         lx,
                         line_bottom_y,
                         rw,
@@ -563,7 +563,7 @@ pub(super) fn paint_text_box(
                     )),
                 )
             {
-                ctx.text.push_annotation(annotation);
+                ctx.text.annotations.push(annotation);
             }
             lx += rw;
         }

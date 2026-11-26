@@ -112,7 +112,6 @@ impl NestedRowsRenderer<'_, '_> {
                 let cell_fragment_geometry = cell_box_geometry.fragment(Default::default());
                 if let Some(link) =
                     box_link_annotation(&cell.layout.paint, cell_fragment_geometry, pdf_writer)
-                        .and_then(|link| visible_annotation(link, pdf_writer))
                 {
                     annotations.push(link);
                 }

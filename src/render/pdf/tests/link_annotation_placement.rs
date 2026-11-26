@@ -141,6 +141,33 @@ fn render_no_link_annotation_for_a_link_an_overflow_clip_hides() {
 }
 
 #[test]
+fn render_no_link_annotation_outside_a_rotated_or_rounded_clip() {
+    let link = r#"<p style="margin: 0"><a href="https://example.com/placed">LINK01</a></p>"#;
+    // The clipped second line lies inside the rotated clip's bounding box but outside the clip
+    let rotated = format!(
+        r#"<div style="transform: translate(60pt, 60pt) rotate(25deg)">{}</div>"#,
+        clipping_box(link)
+    );
+    assert_eq!(placed_link_rects(&rotated), Vec::<[f32; 4]>::new(), "{rotated}");
+    // A circle hides the corners of its square
+    let circle = |inner: &str| {
+        format!(r#"<div style="width: 220pt; height: 220pt; border-radius: 110pt; overflow: hidden">{inner}</div>"#)
+    };
+    let small_marker = r#"<a href="https://example.com/placed" style="display: inline-block; width: 40pt; height: 15pt"></a>"#;
+    let corner = circle(&format!(r#"<p style="margin: 0">{small_marker}</p>"#));
+    assert_eq!(placed_link_rects(&corner), Vec::<[f32; 4]>::new(), "{corner}");
+    let middle = circle(&format!(r#"<p style="margin: 100pt 0 0 80pt">{PLACED_LINK}</p>"#));
+    assert_eq!(placed_link_rects(&middle).len(), 1, "{middle}");
+    // Across the curve: only the part inside the circle is clickable. The circle (radius 110pt) reaches 55.45pt left of
+    // its center 15pt below its top
+    let across = circle(&format!(r#"<p style="margin: 0">{PLACED_LINK}</p>"#));
+    let rects = placed_link_rects(&across);
+    assert_eq!(rects.len(), 1, "{across}");
+    let [left, _, right, _] = rects[0];
+    assert!((left - (72.0 + 110.0 - 55.45)).abs() < 0.5 && (right - (72.0 + 90.0)).abs() < 0.5, "{rects:?} for {across}");
+}
+
+#[test]
 fn render_link_annotation_cut_to_what_an_overflow_clip_shows() {
     let link = r#"<a href="https://example.com/placed">the terms and conditions</a>"#;
     let narrow = |item: &str| format!(r#"<div style="width: 40pt; overflow: hidden; white-space: nowrap">{item}</div>"#);
