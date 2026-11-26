@@ -114,7 +114,7 @@ source gem would build against the unpatched 1.7.0 crate from crates.io.
 
 ## Builds
 
-- `docspring-1.7.0.3` to `docspring-1.7.0.8`: the rows up to and including that build's.
+- `docspring-1.7.0.3` to `docspring-1.7.0.9`: the rows up to and including that build's.
 - `docspring-1.7.0.2`: the first four rows.
 - `docspring-1.7.0.1`: the first three rows. Don't use it: a table with a forced break inside a cell can move onto an
   extra page.
