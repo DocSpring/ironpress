@@ -18,7 +18,13 @@ impl PageAnnotation {
     /// link is both an atomic inline box in a linked run and a link's own box
     pub(super) fn repeats(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Link { rect, url }, Self::Link { rect: other_rect, url: other_url }) => {
+            (
+                Self::Link { rect, url },
+                Self::Link {
+                    rect: other_rect,
+                    url: other_url,
+                },
+            ) => {
                 url == other_url
                     && (rect.left - other_rect.left).abs() < 0.01
                     && (rect.bottom - other_rect.bottom).abs() < 0.01
