@@ -92,6 +92,24 @@ fn render_text_link_annotation_in_a_paragraph_in_a_flex_grid_or_table_cell() {
 }
 
 #[test]
+fn render_text_link_annotation_in_a_flex_row_inside_a_styled_box() {
+    let text = r#"Read <a href="https://example.com/placed">the terms</a>"#;
+    for item in [text.to_string(), format!("<p>{text}</p>")] {
+        for outer in ["padding: 10pt", "border: 1pt solid black", "transform: translate(30pt, 45pt)"] {
+            let html = format!(r#"<div style="{outer}"><div style="display: flex"><div>{item}</div></div></div>"#);
+            let rects = placed_link_rects(&html);
+            assert_eq!(rects.len(), 1, "{html}");
+            let [left, bottom, right, top] = rects[0];
+            assert!(left > 72.0 + 20.0 && right - left > 30.0 && top - bottom > 10.0, "{rects:?} for {html}");
+        }
+    }
+    let nested = |style: &str| {
+        format!(r#"<div style="padding: 10pt{style}"><div style="display: flex"><div>{text}</div></div></div>"#)
+    };
+    assert_moved_by_translate(&nested(""), &nested("; transform: translate(30pt, 45pt)"));
+}
+
+#[test]
 fn render_no_link_annotation_over_a_hidden_box() {
     let hidden = PLACED_LINK.replace("display: inline-block", "visibility: hidden; display: inline-block");
     assert!(placed_link_rects(&format!(r#"<div style="display: flex">{hidden}</div>"#)).is_empty());

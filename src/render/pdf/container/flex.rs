@@ -421,6 +421,18 @@ pub(super) fn render_flex_child(
                         ctx.text.pdf_writer,
                         ctx.text.page_images,
                     );
+                    // A link's text is clickable over its run's slice of the line, as the other line renderers write it
+                    if let Some(annotation) = text_run_link_annotation(
+                        run,
+                        ctx.text.pdf_writer.painted_rect(PdfRect::new(
+                            lx,
+                            inline_box_line.bottom,
+                            rw,
+                            inline_box_line.top - inline_box_line.bottom,
+                        )),
+                    ) {
+                        ctx.text.annotations.push(annotation);
+                    }
                     lx += rw;
                 }
             }
