@@ -138,7 +138,7 @@ pub(super) fn render_run_inline_box(
 ) {
     let border_box = render_inline_box(content, inline, slot, ctx);
     if let Some(annotation) = inline_box_link_annotation(run, border_box) {
-        ctx.text.annotations.push(annotation);
+        ctx.text.push_annotation(annotation);
     }
 }
 

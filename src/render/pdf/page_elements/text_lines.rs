@@ -472,7 +472,7 @@ pub(super) fn render_text_block_lines(
                     line_annotation_top - line_annotation_bottom,
                 )),
             ) {
-                ctx.text.annotations.push(annotation);
+                ctx.text.push_annotation(annotation);
             }
 
             bg_x += run_width;

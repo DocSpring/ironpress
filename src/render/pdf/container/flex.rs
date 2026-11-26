@@ -86,7 +86,7 @@ pub(super) fn render_flex_child(
         && let Some(link) =
             box_link_annotation(&child.paint, flex_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
     let flex_group = PaintGroupScope::begin(content, child, flex_fragment_geometry, ctx);
 
@@ -304,7 +304,7 @@ pub(super) fn render_flex_child(
                 && let Some(link) =
                     box_link_annotation(&cell.paint, cell_fragment_geometry, ctx.text.pdf_writer)
             {
-                ctx.text.annotations.push(link);
+                ctx.text.push_annotation(link);
             }
             let cell_background = cell_box_geometry.background(
                 cell.paint.background.layers.origin,
@@ -431,7 +431,7 @@ pub(super) fn render_flex_child(
                             inline_box_line.top - inline_box_line.bottom,
                         )),
                     ) {
-                        ctx.text.annotations.push(annotation);
+                        ctx.text.push_annotation(annotation);
                     }
                     lx += rw;
                 }

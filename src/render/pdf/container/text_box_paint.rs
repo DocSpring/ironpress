@@ -57,14 +57,14 @@ pub(super) fn paint_text_box(
         && phase.paints_contents()
         && let Some(widget) = form_widget_annotation(child, tb_paint_geometry.border_box)
     {
-        ctx.text.annotations.push(widget);
+        ctx.text.push_annotation(widget);
     }
     let tb_fragment_geometry = tb_box_geometry.fragment(child.fragmentation.box_fragmentation);
     if phase.paints_contents()
         && let Some(link) =
             text_block_link_annotation(child, tb_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
     let tb_background_geometry = tb_box_geometry.background(*tb_bg_origin, *tb_bg_clip, *tb_radii);
     let tb_background_box = tb_background_geometry.painting_box;
@@ -256,7 +256,12 @@ pub(super) fn paint_text_box(
     // clipped. `tb_clip_rect` is set by layout for
     // overflow:hidden/clip/scroll/auto.
     let tb_needs_clip = phase.paints_contents() && tb_clip_rect.is_some();
+    let mut prior_annotation_clip = None;
     if tb_needs_clip {
+        prior_annotation_clip = ctx
+            .text
+            .pdf_writer
+            .enter_annotation_clip(tb_paint_geometry.padding_box());
         tb_paint_geometry
             .rounded_padding_box(*tb_radii)
             .push_clip(content);
@@ -558,7 +563,7 @@ pub(super) fn paint_text_box(
                     )),
                 )
             {
-                ctx.text.annotations.push(annotation);
+                ctx.text.push_annotation(annotation);
             }
             lx += rw;
         }
@@ -569,6 +574,9 @@ pub(super) fn paint_text_box(
     }
     if tb_needs_clip {
         content.push_str("Q\n");
+        ctx.text
+            .pdf_writer
+            .restore_annotation_clip(prior_annotation_clip);
     }
     tb_group.finish(content, ctx);
 }

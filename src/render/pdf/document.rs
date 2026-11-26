@@ -115,6 +115,21 @@ pub(super) fn text_block_link_annotation(
     box_link_annotation(&block.paint, geometry, pdf_writer)
 }
 
+/// An annotation cut to what the `overflow` clips being painted inside leave visible: a link they hide entirely is
+/// left out. A form field's widget is kept whole
+pub(super) fn visible_annotation(
+    annotation: PageAnnotation,
+    pdf_writer: &PdfWriter,
+) -> Option<PageAnnotation> {
+    match annotation {
+        PageAnnotation::Link { rect, url } => {
+            let rect = pdf_writer.visible_annotation_rect(rect)?;
+            Some(PageAnnotation::Link { rect, url })
+        }
+        widget @ PageAnnotation::Widget { .. } => Some(widget),
+    }
+}
+
 fn link_annotation(url: &str, rect: PdfRect) -> Option<PageAnnotation> {
     if decode_footnote_link(url).is_some() || is_internal_target_anchor(url) {
         return None;

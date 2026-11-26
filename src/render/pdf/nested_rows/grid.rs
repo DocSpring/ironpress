@@ -112,6 +112,7 @@ impl NestedRowsRenderer<'_, '_> {
                 let cell_fragment_geometry = cell_box_geometry.fragment(Default::default());
                 if let Some(link) =
                     box_link_annotation(&cell.layout.paint, cell_fragment_geometry, pdf_writer)
+                        .and_then(|link| visible_annotation(link, pdf_writer))
                 {
                     annotations.push(link);
                 }
@@ -251,14 +252,14 @@ impl NestedRowsRenderer<'_, '_> {
                     },
                 );
 
-                let content_clip = cell.placement.clips.then(|| {
+                let mut content_clip = cell.placement.clips.then(|| {
                     ContentClip::rounded_padding_box(
                         cell_paint_geometry,
                         cell.layout.paint.border_radii,
                     )
                 });
-                if let Some(clip) = &content_clip {
-                    clip.begin(content, self.stacking);
+                if let Some(clip) = &mut content_clip {
+                    clip.begin(content, self.stacking, pdf_writer);
                 }
                 let cell_inner_w = cell_content_box.width;
                 let mut baseline_cursor = pdf_writer.text_baseline_cursor(cell_content_box.top());
@@ -433,7 +434,7 @@ impl NestedRowsRenderer<'_, '_> {
                 }
 
                 if let Some(clip) = &content_clip {
-                    clip.finish(content, self.stacking);
+                    clip.finish(content, self.stacking, pdf_writer);
                 }
                 let mut cell_ctx = PageRenderContext::new(
                     pdf_writer,

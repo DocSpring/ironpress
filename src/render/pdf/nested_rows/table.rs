@@ -256,14 +256,14 @@ impl NestedRowsRenderer<'_, '_> {
                 }
 
                 if cell_phase.paints_contents() {
-                    let content_clip = cell.table.clips.then(|| {
+                    let mut content_clip = cell.table.clips.then(|| {
                         ContentClip::rounded_padding_box(
                             cell_paint_geometry,
                             cell.layout.paint.border_radii,
                         )
                     });
-                    if let Some(clip) = &content_clip {
-                        clip.begin(content, self.stacking);
+                    if let Some(clip) = &mut content_clip {
+                        clip.begin(content, self.stacking, pdf_writer);
                     }
                     let mut page_context = PageRenderContext::new(
                         pdf_writer,
@@ -290,7 +290,7 @@ impl NestedRowsRenderer<'_, '_> {
                     cell_group.finish(content, &mut page_context);
                     self.stacking.restore(page_context.stacking.take_since(0));
                     if let Some(clip) = &content_clip {
-                        clip.finish(content, self.stacking);
+                        clip.finish(content, self.stacking, pdf_writer);
                     }
                 } else {
                     let mut page_context = PageRenderContext::new(

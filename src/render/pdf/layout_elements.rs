@@ -36,6 +36,14 @@ impl<'a> TextRenderContext<'a> {
         }
     }
 
+    /// Write a page annotation: a link covers only what the `overflow` clips around it leave visible, and a link they
+    /// hide is left out, as Chromium writes it
+    pub(super) fn push_annotation(&mut self, annotation: PageAnnotation) {
+        if let Some(annotation) = visible_annotation(annotation, self.pdf_writer) {
+            self.annotations.push(annotation);
+        }
+    }
+
     pub(super) fn annotation_marker(&self) -> usize {
         self.annotations.len()
     }
@@ -459,7 +467,7 @@ pub(super) fn render_cell_text(
                     line_annotation_height,
                 )),
             ) {
-                ctx.text.annotations.push(annotation);
+                ctx.text.push_annotation(annotation);
             }
 
             x += run_width;

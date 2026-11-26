@@ -109,6 +109,58 @@ fn render_text_link_annotation_in_a_flex_row_inside_a_styled_box() {
     assert_moved_by_translate(&nested(""), &nested("; transform: translate(30pt, 45pt)"));
 }
 
+/// A box 18pt tall that shows its first line and clips the rest
+fn clipping_box(inner: &str) -> String {
+    format!(r#"<div style="height: 18pt; overflow: hidden; line-height: 18pt"><p style="margin: 0">VISIBLE</p>{inner}</div>"#)
+}
+
+#[test]
+fn render_no_link_annotation_for_a_link_an_overflow_clip_hides() {
+    let link = r#"<p style="margin: 0"><a href="https://example.com/placed">LINK01</a></p>"#;
+    let marker = format!(r#"<p style="margin: 0">Name {PLACED_LINK}</p>"#);
+    let block = r#"<a href="https://example.com/placed" style="display: block">BLOCK</a>"#;
+    for inner in [link.to_string(), marker, block.to_string()] {
+        let clipped = clipping_box(&inner);
+        for html in [
+            clipped.clone(),
+            format!(r#"<div style="display: flex"><div>{clipped}</div></div>"#),
+            format!(r#"<div style="padding: 10pt"><div style="display: flex"><div>{clipped}</div></div></div>"#),
+            format!(r#"<div style="display: grid"><div>{clipped}</div></div>"#),
+            format!(r#"<table><tr><td>{clipped}</td></tr></table>"#),
+            format!(r#"<div style="transform: translate(30pt, 45pt)">{clipped}</div>"#),
+            format!(r#"<div style="height: 18pt; overflow: hidden"><div style="display: flex"><div><p style="margin: 0; line-height: 18pt">VISIBLE</p>{inner}</div></div></div>"#),
+        ] {
+            assert_eq!(placed_link_rects(&html), Vec::<[f32; 4]>::new(), "{html}");
+        }
+    }
+    // The same links in a box that shows them keep their annotations
+    for inner in [link, block] {
+        let shown = clipping_box(inner).replace("height: 18pt; overflow", "height: 36pt; overflow");
+        assert_eq!(placed_link_rects(&shown).len(), 1, "{shown}");
+    }
+}
+
+#[test]
+fn render_link_annotation_cut_to_what_an_overflow_clip_shows() {
+    let link = r#"<a href="https://example.com/placed">the terms and conditions</a>"#;
+    let narrow = |item: &str| format!(r#"<div style="width: 40pt; overflow: hidden; white-space: nowrap">{item}</div>"#);
+    for html in [
+        narrow(link),
+        narrow(&format!("<p>{link}</p>")),
+        format!(r#"<div style="display: flex"><div>{}</div></div>"#, narrow(&format!("<p>{link}</p>"))),
+    ] {
+        let rects = placed_link_rects(&html);
+        assert_eq!(rects.len(), 1, "{html}");
+        let [left, _, right, _] = rects[0];
+        // The clip's edge is on the page's CSS pixel grid: 40pt is 53.33px, painted at 53px
+        assert!((left - 72.0).abs() < 0.1 && (right - 111.75).abs() < 0.1, "{rects:?} for {html}");
+    }
+    // A clip moves with its box's transform, and the annotation is cut where the clip is painted
+    let moved = format!(r#"<div style="transform: translate(30pt, 45pt)">{}</div>"#, narrow(link));
+    let [left, _, right, _] = placed_link_rects(&moved)[0];
+    assert!((left - 102.0).abs() < 0.1 && (right - 141.75).abs() < 0.1, "{left} {right} for {moved}");
+}
+
 #[test]
 fn render_no_link_annotation_over_a_hidden_box() {
     let hidden = PLACED_LINK.replace("display: inline-block", "visibility: hidden; display: inline-block");

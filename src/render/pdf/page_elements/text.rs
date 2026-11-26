@@ -139,13 +139,13 @@ pub(in crate::render::pdf) fn render_text_block(
         && phase.paints_contents()
         && let Some(widget) = form_widget_annotation(element, tb_paint_box)
     {
-        ctx.text.annotations.push(widget);
+        ctx.text.push_annotation(widget);
     }
     if phase.paints_contents()
         && let Some(link) =
             text_block_link_annotation(element, tb_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
 
     // Apply transform if set (wrap in q/Q).
@@ -621,7 +621,12 @@ pub(in crate::render::pdf) fn render_text_block(
     // outline are painted (so they stay fully visible) and BEFORE
     // the inline text / descendant content (which is clipped to the
     // padding box). Mirrors the nested-TextBlock paint order.
+    let mut prior_annotation_clip = None;
     if needs_clip {
+        prior_annotation_clip = ctx
+            .text
+            .pdf_writer
+            .enter_annotation_clip(tb_paint_geometry.padding_box());
         content.push_str("q\n");
         content.push_str(&overflow_clip_path(
             tb_paint_box.left,
@@ -654,6 +659,9 @@ pub(in crate::render::pdf) fn render_text_block(
     // Restore the text box's local overflow clip.
     if needs_clip {
         content.push_str("Q\n");
+        ctx.text
+            .pdf_writer
+            .restore_annotation_clip(prior_annotation_clip);
     }
 
     tb_group.finish(content, ctx);

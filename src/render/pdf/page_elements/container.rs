@@ -97,7 +97,7 @@ pub(in crate::render::pdf) fn render_container(
         && let Some(link) =
             box_link_annotation(&element.paint, c_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
 
     if c_visible_self
@@ -331,9 +331,21 @@ pub(in crate::render::pdf) fn render_container(
         }
         command
     });
+    let mut prior_annotation_clip = None;
     if let Some(command) = &clip_command {
         content.push_str(command);
         ctx.stacking.push_clip(command.clone());
+        let bounds = if c_has_v || c_has_h {
+            PdfRect::new(
+                c_paint_padding_box.left,
+                c_paint_padding_box.bottom + c_h_gutter,
+                c_paint_padding_box.width - c_v_gutter,
+                c_paint_padding_box.height - c_h_gutter,
+            )
+        } else {
+            c_paint_padding_box
+        };
+        prior_annotation_clip = ctx.text.pdf_writer.enter_annotation_clip(bounds);
     }
 
     // Render children recursively
@@ -382,6 +394,9 @@ pub(in crate::render::pdf) fn render_container(
     if needs_clip {
         ctx.stacking.pop_clip();
         content.push_str("Q\n");
+        ctx.text
+            .pdf_writer
+            .restore_annotation_clip(prior_annotation_clip);
     }
     // Paint print scrollbar chrome in the reserved gutter, after
     // the (gutter-inset) content clip is closed.

@@ -78,6 +78,9 @@ pub(super) struct PdfGraphicsState {
     /// so they must explicitly inherit this matrix from every ancestor.
     local_to_layout: PdfMatrix,
     box_paint_grid: BoxPaintGrid,
+    /// The part of the page the `overflow` clips being painted inside leave visible, where link annotations are
+    /// written (the bounding box of each clip through the transforms around it). `None` when nothing clips
+    annotation_clip: Option<PdfRect>,
 }
 
 impl PdfWriter {
@@ -158,6 +161,37 @@ impl PdfWriter {
             .map(|corner| corner.y)
             .fold(f32::NEG_INFINITY, f32::max);
         PdfRect::new(left, bottom, right - left, top - bottom)
+    }
+
+    /// Enter an `overflow` clip of `bounds` in the current paint group's coordinates: link annotations written inside
+    /// it cover only what it leaves visible, as Chromium writes them. Returns the clip to restore after it
+    pub(super) fn enter_annotation_clip(&mut self, bounds: PdfRect) -> Option<PdfRect> {
+        let prior = self.graphics_state.annotation_clip;
+        let painted = self.painted_rect(bounds);
+        let visible = match prior {
+            None => painted,
+            Some(outer) => outer.intersection(painted).unwrap_or(PdfRect::new(
+                painted.left,
+                painted.bottom,
+                0.0,
+                0.0,
+            )),
+        };
+        self.graphics_state.annotation_clip = Some(visible);
+        prior
+    }
+
+    pub(super) fn restore_annotation_clip(&mut self, prior: Option<PdfRect>) {
+        self.graphics_state.annotation_clip = prior;
+    }
+
+    /// The part of a link annotation's `rect` (on the page's layout) that the clips around it leave visible, or
+    /// `None` when they hide all of it
+    pub(super) fn visible_annotation_rect(&self, rect: PdfRect) -> Option<PdfRect> {
+        match self.graphics_state.annotation_clip {
+            None => Some(rect),
+            Some(clip) => clip.intersection(rect),
+        }
     }
 
     pub(super) fn has_active_paint_transform(&self) -> bool {

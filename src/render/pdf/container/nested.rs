@@ -166,7 +166,7 @@ pub(super) fn render_nested_container(
         && let Some(link) =
             box_link_annotation(&child.paint, nk_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
     let background_geometry =
         nk_fragment_geometry.background(*nk_bg_origin, *nk_bg_clip, *cont_radii);
@@ -628,26 +628,31 @@ pub(super) fn render_nested_container(
         // Scroll containers inset the clip by the reserved gutter so
         // content does not paint under the scrollbar.
         let clip = overflow.clips();
-        let content_clip = clip.then(|| {
+        let mut content_clip = clip.then(|| {
+            let scroll_clip = paint_padding_box.inset(EdgeSizes {
+                right: v_gutter,
+                bottom: h_gutter,
+                ..Default::default()
+            });
             let path = if has_v || has_h {
                 // Rectangular clip inset by the per-side border and the
                 // reserved gutter (right gutter for vertical, bottom for
                 // horizontal — matching the LTR/top-anchored UA layout).
-                let scroll_clip = paint_padding_box.inset(EdgeSizes {
-                    right: v_gutter,
-                    bottom: h_gutter,
-                    ..Default::default()
-                });
                 scroll_clip.rect_path()
             } else {
                 nk_paint_geometry
                     .rounded_padding_box(*cont_radii)
                     .path_or_rect()
             };
-            ContentClip::from_path(path)
+            let bounds = if has_v || has_h {
+                scroll_clip
+            } else {
+                paint_padding_box
+            };
+            ContentClip::from_path(path, bounds)
         });
-        if let Some(clip) = &content_clip {
-            clip.begin(content, &mut ctx.stacking);
+        if let Some(clip) = &mut content_clip {
+            clip.begin(content, &mut ctx.stacking, ctx.text.pdf_writer);
         }
 
         // Recurse into nested children
@@ -687,7 +692,7 @@ pub(super) fn render_nested_container(
         );
 
         if let Some(clip) = &content_clip {
-            clip.finish(content, &mut ctx.stacking);
+            clip.finish(content, &mut ctx.stacking, ctx.text.pdf_writer);
         }
 
         // Paint the print scrollbar chrome in the reserved gutter,

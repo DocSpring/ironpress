@@ -78,7 +78,7 @@ pub(in crate::render::pdf) fn render_flex_row(
         && let Some(link) =
             box_link_annotation(&element.paint, flex_fragment_geometry, ctx.text.pdf_writer)
     {
-        ctx.text.annotations.push(link);
+        ctx.text.push_annotation(link);
     }
     let flex_group = PaintGroupScope::begin(content, element, flex_fragment_geometry, ctx);
 
@@ -230,6 +230,7 @@ pub(in crate::render::pdf) fn render_flex_row(
     // the stacking scheduler too so positioned descendants cannot escape when
     // their paint is deferred to an ancestor context.
     let needs_clip = element.overflow.combined.clips();
+    let mut prior_annotation_clip = None;
     if needs_clip {
         let mut command = String::from("q\n");
         command.push_str(&overflow_clip_path(
@@ -243,6 +244,10 @@ pub(in crate::render::pdf) fn render_flex_row(
         command.push_str("W n\n");
         content.push_str(&command);
         ctx.stacking.push_clip(command);
+        prior_annotation_clip = ctx
+            .text
+            .pdf_writer
+            .enter_annotation_clip(flex_paint_geometry.padding_box());
     }
 
     // Render each flex cell at its computed x-offset
@@ -308,7 +313,7 @@ pub(in crate::render::pdf) fn render_flex_row(
             if let Some(link) =
                 box_link_annotation(&cell.paint, cell_fragment_geometry, ctx.text.pdf_writer)
             {
-                ctx.text.annotations.push(link);
+                ctx.text.push_annotation(link);
             }
             let cell_background = cell_box_geometry.background(
                 cell.paint.background.layers.origin,
@@ -572,7 +577,7 @@ pub(in crate::render::pdf) fn render_flex_row(
                             line_annotation_top - line_annotation_bottom,
                         )),
                     ) {
-                        ctx.text.annotations.push(annotation);
+                        ctx.text.push_annotation(annotation);
                     }
 
                     x += rw;
@@ -659,6 +664,9 @@ pub(in crate::render::pdf) fn render_flex_row(
     if needs_clip {
         ctx.stacking.pop_clip();
         content.push_str("Q\n");
+        ctx.text
+            .pdf_writer
+            .restore_annotation_clip(prior_annotation_clip);
     }
     flex_group.finish(content, ctx);
 }
