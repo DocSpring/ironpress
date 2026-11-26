@@ -162,6 +162,11 @@ pub(super) fn render_nested_container(
     let nk_paint_geometry = nk_box_geometry.painting();
     let nk_fragment_geometry = nk_box_geometry.fragment(child.fragmentation);
     let nk_border_box = nk_paint_geometry.rounded_border_box(*cont_radii);
+    if phase.paints_contents()
+        && let Some(link) = box_link_annotation(&child.paint, nk_paint_geometry.border_box)
+    {
+        ctx.text.annotations.push(link);
+    }
     let background_geometry =
         nk_fragment_geometry.background(*nk_bg_origin, *nk_bg_clip, *cont_radii);
     let nk_gradient_reference = background_geometry.positioning_area.generated_image_box();

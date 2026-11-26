@@ -841,6 +841,13 @@ pub(crate) fn render_pdf_to_writer_full_opts_with_resources<W: std::io::Write>(
             let rect = annotation.rect_mut();
             *rect = page_content_transform.transform_rect(*rect);
         }
+        let mut written: Vec<PageAnnotation> = Vec::with_capacity(annotations.len());
+        for annotation in annotations {
+            if !written.iter().any(|kept| kept.repeats(&annotation)) {
+                written.push(annotation);
+            }
+        }
+        let annotations = written;
 
         let paint_streams = match decoration_stream.as_deref() {
             Some(decorations) => PagePaintStreams::with_decorations(&document_content, decorations),

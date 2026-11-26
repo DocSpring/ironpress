@@ -299,6 +299,9 @@ pub(in crate::render::pdf) fn render_flex_row(
             let cell_fragment_geometry =
                 cell_box_geometry.fragment(cell.fragmentation.box_fragmentation);
             let cell_paint_box = cell_paint_geometry.border_box;
+            if let Some(link) = box_link_annotation(&cell.paint, cell_paint_box) {
+                ctx.text.annotations.push(link);
+            }
             let cell_background = cell_box_geometry.background(
                 cell.paint.background.layers.origin,
                 cell.paint.background.layers.clip,

@@ -3394,6 +3394,9 @@ pub struct ComputedStyle {
     /// for a change of generic family; `None` when it inherits the parent's.
     /// Not inherited.
     pub(crate) declared_font_size: Option<DeclaredFontSize>,
+    /// The URL this element links to (an `<a href>`): each box it generates is a link area, as a browser's PDF output
+    /// marks it. Not inherited; text in an inline link carries its URL on its runs.
+    pub(crate) link: Option<String>,
     pub root_font_size: f32,
     pub root_font_units: FontUnitLengths,
     pub viewport_width: f32,
@@ -3833,6 +3836,7 @@ impl Default for ComputedStyle {
             font_size: 12.0,
             font_size_origin: FontSizeOrigin::default(),
             declared_font_size: None,
+            link: None,
             root_font_size: 12.0,
             root_font_units: FontUnitLengths::default(),
             viewport_width: 595.28,
@@ -4330,6 +4334,9 @@ fn compute_style_with_context_and_percentage_basis_impl(
     // for block tags, so an inline tag such as a `display:inline-block`
     // `<span>` wrongly inherited its parent's padding/margin.)
     style.declared_font_size = None;
+    style.link = (tag == HtmlTag::A)
+        .then(|| attributes.get("href").cloned())
+        .flatten();
     style.centered_by_parent_text_align = parent.text_align_webkit_center;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;
@@ -4724,6 +4731,7 @@ pub(crate) fn compute_pseudo_element_style_with_font_metrics(
 
     // Reset non-inherited properties (pseudo-elements are generated boxes)
     style.declared_font_size = None;
+    style.link = None;
     style.centered_by_parent_text_align = parent_style.text_align_webkit_center;
     style.margin = EdgeSizes::default();
     style.margin_em_top = None;

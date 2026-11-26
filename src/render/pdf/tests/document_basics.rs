@@ -823,3 +823,63 @@ fn render_link_annotation_over_an_image_in_a_link() {
     let content = String::from_utf8_lossy(&pdf);
     assert_eq!(link_rects(&content, "https://example.com/img").len(), 1, "{content}");
 }
+
+/// An empty link laid out as a block (a flex or grid item, display: block) is still a link: Chromium writes its
+/// annotation over the link's border box. DocSpring's signing markers sit in flex rows and inline-flex outlines.
+fn assert_one_block_link(html: &str) {
+    let pdf = crate::html_to_pdf(html).unwrap();
+    let content = String::from_utf8_lossy(&pdf);
+    let rects = link_rects(&content, "https://example.com/block");
+    assert_eq!(rects.len(), 1, "one link annotation over the box: {html}");
+    let [x1, y1, x2, y2] = rects[0];
+    assert!(((x2 - x1) - 90.0).abs() < 0.01, "120px wide: {:?} for {html}", rects[0]);
+    assert!(((y2 - y1) - 15.0).abs() < 0.01, "20px tall: {:?} for {html}", rects[0]);
+}
+
+const BLOCK_LINK: &str =
+    r#"<a href="https://example.com/block" style="display: inline-block; width: 120px; height: 20px"></a>"#;
+
+#[test]
+fn render_link_annotation_over_a_link_in_a_flex_row() {
+    assert_one_block_link(&format!(r#"<div style="display: flex; gap: 8px"><span>Signature:</span>{BLOCK_LINK}</div>"#));
+}
+
+#[test]
+fn render_link_annotation_over_a_link_in_an_inline_flex_outline() {
+    assert_one_block_link(&format!(
+        r#"<p><span style="display: inline-flex; outline: 1px solid black">{BLOCK_LINK}</span> I agree</p>"#
+    ));
+}
+
+#[test]
+fn render_link_annotation_over_a_link_in_a_grid() {
+    assert_one_block_link(&format!(r#"<div style="display: grid; grid-template-columns: 1fr 1fr"><div>Sig</div>{BLOCK_LINK}</div>"#));
+}
+
+#[test]
+fn render_link_annotation_over_a_block_link() {
+    assert_one_block_link(
+        r#"<a href="https://example.com/block" style="display: block; width: 120px; height: 20px"></a>"#,
+    );
+}
+
+#[test]
+fn render_one_link_annotation_per_line_of_a_block_link_with_text() {
+    // A block link with text keeps the text's annotations (one per line), with none added over the block
+    let html = r#"<a href="https://example.com/text" style="display: block; width: 120px">Read the terms</a>"#;
+    let pdf = crate::html_to_pdf(html).unwrap();
+    let content = String::from_utf8_lossy(&pdf);
+    assert_eq!(link_rects(&content, "https://example.com/text").len(), 1, "{content}");
+}
+
+#[test]
+fn render_link_annotation_over_a_link_in_a_flex_column() {
+    assert_one_block_link(&format!(r#"<div style="display: flex; flex-direction: column"><span>Signature:</span>{BLOCK_LINK}</div>"#));
+}
+
+#[test]
+fn render_link_annotation_over_a_link_in_a_wrapping_flex_column() {
+    assert_one_block_link(&format!(
+        r#"<div style="display: flex; flex-direction: column; flex-wrap: wrap; height: 200px"><span>Signature:</span>{BLOCK_LINK}</div>"#
+    ));
+}

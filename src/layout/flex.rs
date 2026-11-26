@@ -89,6 +89,8 @@ struct FlexItem {
     is_relative: bool,
     z_index: ZIndex,
     aspect_ratio: Option<f32>,
+    /// The URL of the link the item is the box of (`ComputedStyle::link`): its cell is a link area
+    link: Option<String>,
 }
 
 /// Containing-block and static-position state shared by every out-of-flow child
@@ -1917,6 +1919,7 @@ pub(crate) fn layout_flex_container(
             };
 
             FlexItem {
+                link: generated_style.link.clone(),
                 elements: vec![element],
                 break_before: generated_style
                     .break_before
@@ -2431,6 +2434,7 @@ pub(crate) fn layout_flex_container(
 
             let contains_nested_forced_break = sequence_contains_page_break(&child_elements_buf);
             items.push(FlexItem {
+                link: child_style.link.clone(),
                 elements: child_elements_buf,
                 break_before: child_style
                     .break_before
@@ -2740,6 +2744,7 @@ pub(crate) fn layout_flex_container(
 
         let contains_nested_forced_break = sequence_contains_page_break(&item_elements);
         items.push(FlexItem {
+            link: child_style.link.clone(),
             elements: item_elements,
             break_before: child_style
                 .break_before
@@ -4122,6 +4127,10 @@ pub(crate) fn layout_flex_container(
                     .map(|&i| items[i].height)
                     .fold(line.cross_size, f32::max);
 
+                // Each item made one cell, in line order
+                for (cell, &item_idx) in flex_cells.iter_mut().zip(&line_items) {
+                    cell.paint.box_paint.link = items[item_idx].link.clone();
+                }
                 // Stamp each cell with its cross-axis position within the
                 // container so a single FlexRow can span every wrapped line.
                 for cell in flex_cells.iter_mut() {
@@ -4459,6 +4468,9 @@ pub(crate) fn layout_flex_container(
                                     ..Default::default()
                                 },
                             ));
+                        }
+                        if let Some(cell) = all_flex_cells.last_mut() {
+                            cell.paint.box_paint.link = item.link.clone();
                         }
                         y += item.height;
                     }

@@ -348,6 +348,9 @@ pub(crate) struct BoxPaint {
     pub(crate) outline: OutlinePaint,
     pub(crate) group: PaintGroup,
     pub(crate) visible: bool,
+    /// The URL of the link this box is the box of (`ComputedStyle::link`), written as a link annotation over its
+    /// border box
+    pub(crate) link: Option<String>,
 }
 
 impl Default for BoxPaint {
@@ -360,6 +363,7 @@ impl Default for BoxPaint {
             outline: OutlinePaint::default(),
             group: PaintGroup::default(),
             visible: true,
+            link: None,
         }
     }
 }
@@ -379,6 +383,7 @@ impl BoxPaint {
             outline: OutlinePaint::from_style(style),
             group: PaintGroup::from_style(style),
             visible: style.visibility == Visibility::Visible,
+            link: style.link.clone(),
         }
     }
 

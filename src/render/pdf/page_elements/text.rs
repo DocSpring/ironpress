@@ -141,6 +141,11 @@ pub(in crate::render::pdf) fn render_text_block(
     {
         ctx.text.annotations.push(widget);
     }
+    if phase.paints_contents()
+        && let Some(link) = text_block_link_annotation(element, tb_paint_box)
+    {
+        ctx.text.annotations.push(link);
+    }
 
     // Apply transform if set (wrap in q/Q).
     // Rotate and scale are applied around the element's centre so

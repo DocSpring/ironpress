@@ -14,6 +14,21 @@ pub(super) enum PageAnnotation {
 }
 
 impl PageAnnotation {
+    /// Whether this is a link annotation to the same URL over the same rectangle as `other`: an empty inline-block
+    /// link is both an atomic inline box in a linked run and a link's own box
+    pub(super) fn repeats(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Link { rect, url }, Self::Link { rect: other_rect, url: other_url }) => {
+                url == other_url
+                    && (rect.left - other_rect.left).abs() < 0.01
+                    && (rect.bottom - other_rect.bottom).abs() < 0.01
+                    && (rect.width - other_rect.width).abs() < 0.01
+                    && (rect.height - other_rect.height).abs() < 0.01
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn rect_mut(&mut self) -> &mut PdfRect {
         match self {
             Self::Link { rect, .. } | Self::Widget { rect, .. } => rect,
@@ -55,16 +70,43 @@ pub(super) fn inline_box_link_annotation(
 }
 
 pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<PageAnnotation> {
-    let url = run.link_url.as_ref()?;
-    if decode_footnote_link(url).is_some() {
+    link_annotation(run.link_url.as_ref()?, rect)
+}
+
+/// The annotation of the link a box is the box of (an `<a href>` laid out as a block, a flex or grid item), over its
+/// border box, as Chromium writes it
+pub(super) fn box_link_annotation(
+    paint: &crate::layout::elements::BoxPaint,
+    border_box: PdfRect,
+) -> Option<PageAnnotation> {
+    link_annotation(paint.link.as_ref()?, border_box)
+}
+
+/// A text block's box link annotation, unless its text already carries the link: a block link's lines keep their
+/// own annotations, as before
+pub(super) fn text_block_link_annotation(
+    block: &crate::layout::elements::TextBlock,
+    border_box: PdfRect,
+) -> Option<PageAnnotation> {
+    let url = block.paint.link.as_ref()?;
+    let text_carries_link = block
+        .lines
+        .iter()
+        .flat_map(|line| &line.runs)
+        .any(|run| run.link_url.as_ref() == Some(url));
+    if text_carries_link {
         return None;
     }
-    if is_internal_target_anchor(url) {
+    box_link_annotation(&block.paint, border_box)
+}
+
+fn link_annotation(url: &str, rect: PdfRect) -> Option<PageAnnotation> {
+    if decode_footnote_link(url).is_some() || is_internal_target_anchor(url) {
         return None;
     }
     Some(PageAnnotation::Link {
         rect,
-        url: url.clone(),
+        url: url.to_string(),
     })
 }
 

@@ -59,6 +59,11 @@ pub(super) fn paint_text_box(
     {
         ctx.text.annotations.push(widget);
     }
+    if phase.paints_contents()
+        && let Some(link) = text_block_link_annotation(child, tb_paint_geometry.border_box)
+    {
+        ctx.text.annotations.push(link);
+    }
     let tb_background_geometry = tb_box_geometry.background(*tb_bg_origin, *tb_bg_clip, *tb_radii);
     let tb_background_box = tb_background_geometry.painting_box;
     let tb_gradient_area = LayerPaintArea::new(

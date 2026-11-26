@@ -292,6 +292,11 @@ pub(super) fn render_flex_child(
             );
             let cell_box_geometry = ctx.text.pdf_writer.resolve_box_geometry(cell_geometry);
             let cell_paint_geometry = cell_box_geometry.painting();
+            if cell_phase.paints_contents()
+                && let Some(link) = box_link_annotation(&cell.paint, cell_paint_geometry.border_box)
+            {
+                ctx.text.annotations.push(link);
+            }
             let cell_fragment_geometry =
                 cell_box_geometry.fragment(cell.fragmentation.box_fragmentation);
             let cell_background = cell_box_geometry.background(
