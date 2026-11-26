@@ -65,6 +65,14 @@ fn render_link_annotation_over_a_flex_container_link() {
 }
 
 #[test]
+fn render_text_link_annotation_through_a_flex_rows_transform() {
+    let row = |style: &str| {
+        format!(r#"<div style="display: flex{style}"><div><a href="https://example.com/placed">Sign here</a></div></div>"#)
+    };
+    assert_moved_by_translate(&row(""), &row("; transform: translate(30pt, 45pt)"));
+}
+
+#[test]
 fn render_no_link_annotation_over_a_hidden_box() {
     let hidden = PLACED_LINK.replace("display: inline-block", "visibility: hidden; display: inline-block");
     assert!(placed_link_rects(&format!(r#"<div style="display: flex">{hidden}</div>"#)).is_empty());

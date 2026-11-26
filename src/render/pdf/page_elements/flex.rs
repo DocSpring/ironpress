@@ -565,12 +565,12 @@ pub(in crate::render::pdf) fn render_flex_row(
 
                     if let Some(annotation) = text_run_link_annotation(
                         run,
-                        PdfRect::new(
+                        ctx.text.pdf_writer.painted_rect(PdfRect::new(
                             x,
                             line_annotation_bottom,
                             rw,
                             line_annotation_top - line_annotation_bottom,
-                        ),
+                        )),
                     ) {
                         ctx.text.annotations.push(annotation);
                     }
