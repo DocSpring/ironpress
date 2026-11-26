@@ -51,7 +51,7 @@ lightningcss = { version = "=1.0.0-alpha.71", default-features = false }
 # admits 0.28.3 even though that release moved to an incompatible cssparser.
 # Keep the transitive selector API on the version alpha.71 was built against.
 parcel_selectors = "=0.28.2"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "ico"] }
 png_decoder = { package = "png", version = "0.18" }
 pulldown-cmark = "0.13"
 markup5ever_rcdom = "0.39"

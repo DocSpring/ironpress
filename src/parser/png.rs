@@ -118,17 +118,26 @@ fn parse_png_with_limit(data: &[u8], max_idat: usize) -> Option<PngInfo> {
     })
 }
 
-/// Re-encode a PNG that the PDF embedding paths can't take as it is, as an
-/// 8-bit RGB or RGBA PNG: palette colours (which [`parse_png`] rejects, so a
-/// CSS background drew nothing), a `tRNS` transparency chunk (which the raw
-/// IDAT pass-through ignored), and 16-bit samples with alpha (which the alpha
-/// decoder read as twice as many 8-bit pixels: a garbled image at double
-/// size). Other bytes, including every other PNG, come back unchanged.
+/// Re-encode an image that the PDF embedding paths can't take as it is, as an
+/// 8-bit RGB or RGBA PNG. That's a PNG with palette colours (which
+/// [`parse_png`] rejects, so a CSS background drew nothing), a `tRNS`
+/// transparency chunk (which the raw IDAT pass-through ignored) or 16-bit
+/// samples with alpha (which the alpha decoder read as twice as many 8-bit
+/// pixels: a garbled image at double size), and the other formats Chromium
+/// draws that have a decoder in Rust ([`other_raster_format`]), which were
+/// left out. Other bytes, including every other PNG, come back unchanged, and
+/// so does an image that doesn't decode.
 pub(crate) fn normalize_for_pdf(bytes: Vec<u8>) -> Vec<u8> {
-    if !needs_normalizing(&bytes) {
+    let format = if needs_normalizing(&bytes) {
+        image::ImageFormat::Png
+    } else if let Some(format) = other_raster_format(&bytes) {
+        format
+    } else {
         return bytes;
-    }
-    let Ok(image) = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png) else {
+    };
+    // An animated GIF or WebP decodes to its first frame, which Chromium
+    // prints when the page has just loaded
+    let Ok(image) = image::load_from_memory_with_format(&bytes, format) else {
         return bytes;
     };
     let image = if image.color().has_alpha() {
@@ -143,6 +152,22 @@ pub(crate) fn normalize_for_pdf(bytes: Vec<u8>) -> Vec<u8> {
     ) {
         Ok(()) => encoded,
         Err(_) => bytes,
+    }
+}
+
+/// GIF, WebP, BMP and ICO, by their first bytes. The PDF paths embed only PNG
+/// and JPEG; AVIF, which Chromium draws too, needs a C decoder.
+fn other_raster_format(data: &[u8]) -> Option<image::ImageFormat> {
+    if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        Some(image::ImageFormat::Gif)
+    } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        Some(image::ImageFormat::WebP)
+    } else if data.starts_with(b"BM") {
+        Some(image::ImageFormat::Bmp)
+    } else if data.starts_with(&[0, 0, 1, 0]) {
+        Some(image::ImageFormat::Ico)
+    } else {
+        None
     }
 }
 
@@ -425,6 +450,57 @@ mod tests {
         assert_eq!((info.bit_depth, info.channels), (8, 3));
         let pixels = image::load_from_memory(&opaque).unwrap().to_rgb8();
         assert_eq!(pixels.get_pixel(0, 0).0, [255, 0, 0]);
+    }
+
+    #[test]
+    fn normalize_for_pdf_makes_gif_webp_bmp_and_ico_pngs() {
+        let mut pixels = image::RgbaImage::from_pixel(3, 2, image::Rgba([200, 30, 60, 255]));
+        pixels.put_pixel(0, 0, image::Rgba([0, 0, 0, 0]));
+        let source = image::DynamicImage::ImageRgba8(pixels);
+        for format in [
+            image::ImageFormat::Gif,
+            image::ImageFormat::WebP,
+            image::ImageFormat::Bmp,
+            image::ImageFormat::Ico,
+        ] {
+            let mut bytes = Vec::new();
+            source
+                .write_to(&mut std::io::Cursor::new(&mut bytes), format)
+                .unwrap();
+            assert_eq!(other_raster_format(&bytes), Some(format));
+            let normalized = normalize_for_pdf(bytes);
+            let info = parse_png(&normalized).unwrap_or_else(|| panic!("{format:?}"));
+            assert_eq!((info.width, info.height, info.bit_depth), (3, 2, 8));
+            let decoded = image::load_from_memory(&normalized).unwrap().to_rgba8();
+            assert_eq!(decoded.get_pixel(2, 1).0, [200, 30, 60, 255], "{format:?}");
+            assert_eq!(decoded.get_pixel(0, 0)[3], 0, "{format:?}");
+        }
+    }
+
+    #[test]
+    fn normalize_for_pdf_takes_an_animated_gifs_first_frame() {
+        let frame = |colour: [u8; 4]| {
+            image::Frame::new(image::RgbaImage::from_pixel(2, 2, image::Rgba(colour)))
+        };
+        let mut gif = Vec::new();
+        {
+            let mut encoder = image::codecs::gif::GifEncoder::new(&mut gif);
+            encoder
+                .encode_frames([frame([0, 128, 0, 255]), frame([0, 0, 255, 255])])
+                .unwrap();
+        }
+        let normalized = normalize_for_pdf(gif);
+        let decoded = image::load_from_memory(&normalized).unwrap().to_rgba8();
+        assert_eq!(decoded.get_pixel(1, 1).0, [0, 128, 0, 255]);
+    }
+
+    #[test]
+    fn normalize_for_pdf_leaves_bytes_that_only_start_like_an_image() {
+        // A stylesheet or font that starts with a BMP's or a GIF's first bytes
+        let cases: [&[u8]; 3] = [b"BM { color: red }", b"GIF89a not really", b"\0\0\x01\0x"];
+        for bytes in cases {
+            assert_eq!(normalize_for_pdf(bytes.to_vec()), bytes.to_vec());
+        }
     }
 
     #[test]

@@ -4156,11 +4156,19 @@ body { background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy
     }
 
     #[test]
-    fn engine_image_unsupported_format_ignored() {
-        // Covers engine.rs line 2225: non-PNG, non-JPEG data returns None
+    fn engine_image_gif_is_drawn() {
         let html = r#"<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">"#;
         let pdf = html_to_pdf(html).unwrap();
+        assert!(String::from_utf8_lossy(&pdf).contains("Do\n"));
+    }
+
+    #[test]
+    fn engine_image_unsupported_format_ignored() {
+        // TIFF, which Chromium doesn't draw either
+        let html = r#"<img src="data:image/tiff;base64,SUkqAAgAAAA=">"#;
+        let pdf = html_to_pdf(html).unwrap();
         assert!(pdf.starts_with(b"%PDF"));
+        assert!(!String::from_utf8_lossy(&pdf).contains("Do\n"));
     }
 
     #[test]
