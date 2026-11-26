@@ -649,5 +649,21 @@
       "probe-fill-box",
       "probe-text-baseline"
     ]
+  },
+  {
+    "id": "img-gif-webp-bmp",
+    "category": "images-replaced",
+    "feature": "img",
+    "subfeature": "raster-formats",
+    "description": "GIF (with a transparent palette entry), lossless WebP with alpha and BMP images in <img>, and a GIF as a CSS background, are drawn as Chromium draws them.",
+    "file": "cases/images-replaced/img-gif-webp-bmp.html",
+    "kind": "feature",
+    "expected_support": "implemented",
+    "oracle": "chrome",
+    "sanitize": true,
+    "depends_on": [
+      "probe-fill-box",
+      "probe-image-render"
+    ]
   }
 ]

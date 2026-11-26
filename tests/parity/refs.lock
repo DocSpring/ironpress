@@ -7658,6 +7658,20 @@
       "reference_file": "cases/images-replaced/img-data-uri-intrinsic.html",
       "reference_html_sha256": "5c2e7cf88a77e2b90123cf91aac039659091d29c03a0180840307ce9b95efcb8"
     },
+    "img-gif-webp-bmp": {
+      "category": "images-replaced",
+      "file": "cases/images-replaced/img-gif-webp-bmp.html",
+      "html_sha256": "60624a0439fa0f1ce609d46b673488c9a6dfdf95ef29623378a3115c502afc08",
+      "manifest_sha256": "012e072974476995b65ac07dfb4fc4a49c6930aafb84781ade8e5ad1edd85233",
+      "oracle": "chrome",
+      "pdf": {
+        "file": "oracles/images-replaced/img-gif-webp-bmp.pdf",
+        "sha256": "1b5a1fc51dc3353f6bca8f28cf70111596c5c5822a89b16c29ac03c326c1b966"
+      },
+      "provenance": "2d508d025d8561de3e5394a380cb0cf0ed6de7c13946f6af37b63313865da665",
+      "reference_file": "cases/images-replaced/img-gif-webp-bmp.html",
+      "reference_html_sha256": "60624a0439fa0f1ce609d46b673488c9a6dfdf95ef29623378a3115c502afc08"
+    },
     "img-height-scaled": {
       "category": "images-replaced",
       "file": "cases/images-replaced/img-height-scaled.html",
