@@ -1,6 +1,6 @@
 use super::cells::TableRowCells;
 use super::engine::{
-    FootnoteItem, GridCell, Page, PageBreakSide, ReplacedFragment, TextLine, TextRun,
+    FlexLineId, FootnoteItem, GridCell, Page, PageBreakSide, ReplacedFragment, TextLine, TextRun,
     decode_footnote_link_data, target_anchor_id,
 };
 use super::flow_metrics::BlockMargins;
@@ -2002,38 +2002,35 @@ fn split_flex_row_node(
         return None;
     }
 
-    let mut line_tops: Vec<f32> = element
-        .content
-        .cells
-        .iter()
-        .map(|cell| cell.y_offset)
-        .collect();
-    line_tops.sort_by(f32::total_cmp);
-    line_tops.dedup_by(|a, b| equal_with_roundoff(*a, *b));
-    if line_tops.len() <= 1 {
-        return flex_line::split_flex_line(element, avail_inner, rule);
+    // The row's flex lines, by the line each item belongs to (an item's margin or alignment moves it within its
+    // line), in order down the row, with where each starts and ends
+    let mut lines: Vec<(FlexLineId, f32, f32)> = Vec::new();
+    for cell in &element.content.cells {
+        let extent = if cell.line_cross_size > 0.0 {
+            cell.line_cross_size
+        } else {
+            cell.natural_height
+        };
+        let bottom = cell.y_offset + extent;
+        match lines.iter_mut().find(|(line, _, _)| *line == cell.line_id) {
+            Some((_, top, line_bottom)) => {
+                *top = top.min(cell.y_offset);
+                *line_bottom = line_bottom.max(bottom);
+            }
+            None => lines.push((cell.line_id, cell.y_offset, bottom)),
+        }
     }
-
-    let line_extent = |line_top: f32| -> f32 {
-        element
-            .content
-            .cells
-            .iter()
-            .filter(|cell| equal_with_roundoff(cell.y_offset, line_top))
-            .map(|cell| {
-                if cell.line_cross_size > 0.0 {
-                    cell.line_cross_size
-                } else {
-                    cell.natural_height
-                }
-            })
-            .fold(0.0_f32, f32::max)
-    };
-
-    let cut_y = line_tops.iter().enumerate().find_map(|(idx, &top)| {
-        (idx > 0 && exceeds_with_roundoff(top + line_extent(top), avail_inner)).then_some(top)
-    })?;
-    split_flex_row_at_line(element, cut_y, avail_inner)
+    lines.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let (index, &(line, top, _)) = lines
+        .iter()
+        .enumerate()
+        .find(|(_, (_, _, bottom))| exceeds_with_roundoff(*bottom, avail_inner))?;
+    if index == 0 {
+        // The first line runs past the page end: it breaks inside its items
+        return flex_line::split_flex_line(element, line, avail_inner, rule);
+    }
+    // A later line that doesn't fit starts the next page
+    split_flex_row_at_line(element, top, avail_inner)
 }
 
 /// Split a too-tall in-flow `Container` between its children (CSS Fragmentation 3
@@ -2406,6 +2403,23 @@ fn split_table_node(
                 continuation.append(&mut after.children);
                 after.children = continuation;
                 kept_group_together = true;
+            }
+        } else if !moves_on {
+            // The group breaks inside after all, but between its rows as anywhere else: the emergency rule would cut
+            // a row that fits a page at the page end, and leave the part below it on neither page
+            if let Some((normal_before, normal_after)) = split_container_node(
+                principal,
+                available_before_footer,
+                FragmentBreakRule::Normal,
+            ) {
+                let holds_a_body_row = normal_before.children.iter().any(|child| {
+                    let row = table_row_pagination_state(child.as_ref());
+                    row.is_row && !row.is_header && !row.is_footer
+                });
+                if holds_a_body_row {
+                    before = normal_before;
+                    after = normal_after;
+                }
             }
         }
     }
