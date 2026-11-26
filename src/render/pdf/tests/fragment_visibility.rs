@@ -19,35 +19,75 @@ fn page_lines(body: &str) -> Vec<Vec<(String, f32)>> {
     content
         .split("endstream")
         .filter(|stream| stream.contains("] TJ"))
-        .map(|stream| {
-            let mut y = f32::NAN;
-            let mut lines = Vec::new();
-            for line in stream.lines() {
-                if line.ends_with(" Tm") {
-                    y = line
-                        .split_whitespace()
-                        .nth(5)
-                        .and_then(|value| value.parse().ok())
-                        .expect("the text matrix's y");
-                } else if let Some(array) = line
-                    .strip_suffix("] TJ")
-                    .and_then(|rest| rest.strip_prefix('['))
-                {
-                    let text: String = array
-                        .split_whitespace()
-                        .filter_map(|item| item.strip_prefix('<')?.strip_suffix('>'))
-                        .map(|glyph| {
-                            *glyphs
-                                .get(glyph)
-                                .unwrap_or_else(|| panic!("glyph {glyph} in the ToUnicode map"))
-                        })
-                        .collect();
-                    lines.push((text, y));
-                }
-            }
-            lines
-        })
+        .map(|stream| stream_lines(stream, &glyphs))
         .collect()
+}
+
+/// A content stream's text, with the y on the page of each piece: its text matrix's origin through the current
+/// transformation matrix (`q`, `Q` and `cm`), since some text is drawn in a CSS pixel space
+fn stream_lines(
+    stream: &str,
+    glyphs: &std::collections::HashMap<String, char>,
+) -> Vec<(String, f32)> {
+    type Matrix = [f32; 6];
+    let multiply = |m: Matrix, n: Matrix| -> Matrix {
+        [
+            m[0] * n[0] + m[1] * n[2],
+            m[0] * n[1] + m[1] * n[3],
+            m[2] * n[0] + m[3] * n[2],
+            m[2] * n[1] + m[3] * n[3],
+            m[4] * n[0] + m[5] * n[2] + n[4],
+            m[4] * n[1] + m[5] * n[3] + n[5],
+        ]
+    };
+    let mut ctm: Matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let mut saved = Vec::new();
+    let mut operands: Vec<f32> = Vec::new();
+    let mut array: Option<String> = None;
+    let mut y = f32::NAN;
+    let mut lines = Vec::new();
+    for token in stream.split_whitespace() {
+        if token.starts_with('[') {
+            array = Some(String::new());
+        }
+        if let Some(text) = array.as_mut() {
+            let glyph = token.trim_start_matches('[').trim_end_matches(']');
+            if let Some(hex) = glyph
+                .strip_prefix('<')
+                .and_then(|rest| rest.strip_suffix('>'))
+            {
+                text.push(
+                    *glyphs
+                        .get(hex)
+                        .unwrap_or_else(|| panic!("glyph {hex} in the ToUnicode map")),
+                );
+            }
+            if token.ends_with(']') {
+                lines.push((array.take().expect("an array"), y));
+            }
+            continue;
+        }
+        match token {
+            "q" => saved.push(ctm),
+            "Q" => ctm = saved.pop().expect("a saved state"),
+            "cm" => {
+                let m: Matrix = operands[operands.len() - 6..]
+                    .try_into()
+                    .expect("six operands");
+                ctm = multiply(m, ctm);
+            }
+            "Tm" => {
+                let m = &operands[operands.len() - 6..];
+                y = m[4] * ctm[1] + m[5] * ctm[3] + ctm[5];
+            }
+            _ => {}
+        }
+        match token.parse::<f32>() {
+            Ok(number) => operands.push(number),
+            Err(_) => operands.clear(),
+        }
+    }
+    lines
 }
 
 /// The ToUnicode map's glyph IDs (as the hex the content streams draw them with) and their characters
@@ -167,4 +207,30 @@ fn a_centered_flex_item_with_a_min_height_breaks_from_its_top() {
         pages[0].iter().any(|(text, _)| text == "LEFT1"),
         "{pages:?}"
     );
+}
+
+#[test]
+fn wrapped_flex_lines_taller_than_a_page_each_break_across_pages() {
+    let item = |prefix: &str, count: usize| {
+        format!(
+            r#"<div style="width: 120pt">{}</div>"#,
+            paragraphs(prefix, count)
+        )
+    };
+    let pages = page_lines(&format!(
+        r#"<div style="display: flex; flex-wrap: wrap">{}{}{}{}</div><p>AFTER1</p>"#,
+        item("FIRST", 40),
+        item("SECOND", 30),
+        item("THIRD", 40),
+        item("FOURTH", 30)
+    ));
+    for (prefix, count) in [
+        ("FIRST", 40),
+        ("SECOND", 30),
+        ("THIRD", 40),
+        ("FOURTH", 30),
+        ("AFTER", 1),
+    ] {
+        assert_each_drawn_once_on_its_page(&pages, prefix, count);
+    }
 }

@@ -238,9 +238,12 @@ fn item_break(
     }
 }
 
-/// An item at `top` below its row's content-box top, `extent` tall, kept there whatever height its line or row has
+/// An item at `top` below its row's content-box top, `extent` tall, kept there whatever height its line or row has.
+/// Its line's size goes with the unbroken line: the fragment is its own extent, which is what the next page's break
+/// measures the line by
 fn placed_at(mut cell: FlexCell, top: f32, extent: f32) -> FlexCell {
     cell.y_offset = top;
+    cell.line_cross_size = 0.0;
     cell.align_self = AlignSelf::FlexStart;
     cell.cross_min = 0.0;
     cell.cross_max = f32::INFINITY;
