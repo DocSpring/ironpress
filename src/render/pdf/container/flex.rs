@@ -366,8 +366,9 @@ pub(super) fn render_flex_child(
                         if let Some(inline) = run.inline_box.as_deref()
                             && !run.is_inline_edge()
                         {
-                            render_inline_box(
+                            render_run_inline_box(
                                 content,
+                                run,
                                 inline,
                                 InlineBoxSlot {
                                     x: lx + inline.margin_left,

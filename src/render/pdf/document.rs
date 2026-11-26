@@ -45,6 +45,15 @@ pub(super) fn form_widget_annotation(
     Some(PageAnnotation::Widget { rect, field })
 }
 
+/// The annotation of the link an atomic inline box is in (an inline-block, an image), over the box's border box, as
+/// Chromium writes it: the line's height would take in the text above and below a box that's shorter or taller
+pub(super) fn inline_box_link_annotation(
+    run: &TextRun,
+    border_box: PdfRect,
+) -> Option<PageAnnotation> {
+    text_run_link_annotation(run, border_box)
+}
+
 pub(super) fn text_run_link_annotation(run: &TextRun, rect: PdfRect) -> Option<PageAnnotation> {
     let url = run.link_url.as_ref()?;
     if decode_footnote_link(url).is_some() {

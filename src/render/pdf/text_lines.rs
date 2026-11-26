@@ -128,12 +128,28 @@ pub(super) struct InlineBoxSlot {
     pub(super) line_height: f32,
 }
 
+/// Paints a line's atomic inline box (`render_inline_box`) with the annotation of the link its run is in
+pub(super) fn render_run_inline_box(
+    content: &mut String,
+    run: &TextRun,
+    inline: &crate::layout::engine::InlineBox,
+    slot: InlineBoxSlot,
+    ctx: &mut PageRenderContext<'_>,
+) {
+    let border_box = render_inline_box(content, inline, slot, ctx);
+    if let Some(annotation) = inline_box_link_annotation(run, border_box) {
+        ctx.text.annotations.push(annotation);
+    }
+}
+
+/// Paints an atomic inline box in its line and returns its painted border box, where a link around it puts its
+/// annotation (`inline_box_link_annotation`)
 pub(super) fn render_inline_box(
     content: &mut String,
     inline: &crate::layout::engine::InlineBox,
     slot: InlineBoxSlot,
     ctx: &mut PageRenderContext<'_>,
-) {
+) -> PdfRect {
     let InlineBoxSlot {
         x: box_x,
         baseline: baseline_y,
@@ -325,8 +341,9 @@ pub(super) fn render_inline_box(
                 // An inline-block nested in this one paints in its slot.
                 if let Some(nested) = run.inline_box.as_deref() {
                     if !run.is_inline_edge() {
-                        render_inline_box(
+                        render_run_inline_box(
                             content,
+                            run,
                             nested,
                             InlineBoxSlot {
                                 x: x + nested.margin_left,
@@ -377,6 +394,7 @@ pub(super) fn render_inline_box(
     if let Some(prior) = prior_grid {
         ctx.text.pdf_writer.restore_box_paint_grid(prior);
     }
+    paint_geometry.border_box
 }
 
 fn paint_centered_inline_stroke(

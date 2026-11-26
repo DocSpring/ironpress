@@ -363,7 +363,7 @@ pub(super) fn render_cell_text(
         // (CSS 2.1 Appendix E, step 8). Collect them here and paint them after
         // the in-flow runs — the same deferral the page-level line painter
         // applies.
-        let mut deferred_inline: Vec<(&crate::layout::engine::InlineBox, f32, f32, f32)> =
+        let mut deferred_inline: Vec<(&TextRun, &crate::layout::engine::InlineBox, f32, f32, f32)> =
             Vec::new();
         let mut border_pieces = InlineBorderPieces::default();
         for (run_index, run) in merged.iter().enumerate() {
@@ -375,10 +375,11 @@ pub(super) fn render_cell_text(
                     let box_x = x + inline.margin_left;
                     let run_line_height = run_line_height_for_vertical_align(run);
                     if inline.rel_offset_x != 0.0 || inline.rel_offset_y != 0.0 {
-                        deferred_inline.push((inline, box_x, run.font_size, run_line_height));
+                        deferred_inline.push((run, inline, box_x, run.font_size, run_line_height));
                     } else {
-                        render_inline_box(
+                        render_run_inline_box(
                             content,
+                            run,
                             inline,
                             InlineBoxSlot {
                                 x: box_x,
@@ -462,9 +463,10 @@ pub(super) fn render_cell_text(
 
         // Paint deferred relatively positioned inline boxes above the line's
         // in-flow content, preserving their source order.
-        for (inline, box_x, font_size, run_line_height) in deferred_inline {
-            render_inline_box(
+        for (run, inline, box_x, font_size, run_line_height) in deferred_inline {
+            render_run_inline_box(
                 content,
+                run,
                 inline,
                 InlineBoxSlot {
                     x: box_x,

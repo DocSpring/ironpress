@@ -361,8 +361,9 @@ pub(super) fn paint_text_box(
                 let advance = run.atomic_inline_advance().unwrap_or_default();
                 border_pieces.add(run, lx, advance, text_y);
                 if !run.is_inline_edge() {
-                    render_inline_box(
+                    render_run_inline_box(
                         content,
+                        run,
                         inline,
                         InlineBoxSlot {
                             x: lx + inline.margin_left,

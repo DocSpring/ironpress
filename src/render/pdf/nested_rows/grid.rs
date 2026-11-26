@@ -321,8 +321,9 @@ impl NestedRowsRenderer<'_, '_> {
                                     )
                                     .with_initial_fixed_origin(initial_fixed_origin);
                                     box_ctx.stacking = self.stacking.fork();
-                                    render_inline_box(
+                                    render_run_inline_box(
                                         content,
+                                        run,
                                         inline,
                                         InlineBoxSlot {
                                             x: lx + inline.margin_left,

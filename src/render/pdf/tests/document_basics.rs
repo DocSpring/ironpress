@@ -788,3 +788,38 @@ fn render_page_without_links_has_no_annots() {
         "Page without links should not have /Annots"
     );
 }
+
+/// The `/Rect` of each link annotation to `url`, as [x1, y1, x2, y2]
+fn link_rects(content: &str, url: &str) -> Vec<[f32; 4]> {
+    content
+        .split("/Subtype /Link")
+        .skip(1)
+        .filter(|annotation| annotation.contains(&format!("/URI ({url})")))
+        .map(|annotation| {
+            let rect = annotation.split("/Rect [").nth(1).unwrap().split(']').next().unwrap();
+            let values: Vec<f32> = rect.split_whitespace().map(|value| value.parse().unwrap()).collect();
+            [values[0], values[1], values[2], values[3]]
+        })
+        .collect()
+}
+
+#[test]
+fn render_link_annotation_over_an_inline_block_link() {
+    // An empty inline-block link, as DocSpring's signing markers are: Chromium writes its annotation over its box
+    let html = r#"<p>Name: <a href="https://example.com/box" style="display: inline-block; width: 120px; height: 30px"></a> end</p>"#;
+    let pdf = crate::html_to_pdf(html).unwrap();
+    let content = String::from_utf8_lossy(&pdf);
+    let rects = link_rects(&content, "https://example.com/box");
+    assert_eq!(rects.len(), 1, "one link annotation over the box: {content}");
+    let [x1, y1, x2, y2] = rects[0];
+    assert!(((x2 - x1) - 90.0).abs() < 0.01, "120px wide: {:?}", rects[0]);
+    assert!(((y2 - y1) - 22.5).abs() < 0.01, "30px tall: {:?}", rects[0]);
+}
+
+#[test]
+fn render_link_annotation_over_an_image_in_a_link() {
+    let html = r#"<p><a href="https://example.com/img"><img width="40" height="20" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="></a></p>"#;
+    let pdf = crate::html_to_pdf(html).unwrap();
+    let content = String::from_utf8_lossy(&pdf);
+    assert_eq!(link_rects(&content, "https://example.com/img").len(), 1, "{content}");
+}

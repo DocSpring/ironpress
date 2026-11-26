@@ -344,7 +344,7 @@ pub(super) fn render_text_block_lines(
         // layer — above in-flow siblings on the line, in source order
         // (CSS 2.1 §9.9.1 painting order). Defer them so a later
         // in-flow inline-block can't paint over an earlier offset one.
-        let mut deferred_inline: Vec<(&crate::layout::engine::InlineBox, f32, f32, f32)> =
+        let mut deferred_inline: Vec<(&TextRun, &crate::layout::engine::InlineBox, f32, f32, f32)> =
             Vec::new();
         let mut border_pieces = InlineBorderPieces::default();
         for (run_idx, run) in merged.iter().enumerate() {
@@ -377,10 +377,11 @@ pub(super) fn render_text_block_lines(
                         ctx,
                     );
                     if inline.rel_offset_x != 0.0 || inline.rel_offset_y != 0.0 {
-                        deferred_inline.push((inline, ibx, run.font_size, run_line_height));
+                        deferred_inline.push((run, inline, ibx, run.font_size, run_line_height));
                     } else {
-                        render_inline_box(
+                        render_run_inline_box(
                             content,
+                            run,
                             inline,
                             InlineBoxSlot {
                                 x: ibx,
@@ -480,9 +481,10 @@ pub(super) fn render_text_block_lines(
 
         // Paint deferred relatively-positioned inline boxes on top
         // of the in-flow line content, preserving source order.
-        for (inline, ibx, fs, run_line_height) in deferred_inline {
-            render_inline_box(
+        for (run, inline, ibx, fs, run_line_height) in deferred_inline {
+            render_run_inline_box(
                 content,
+                run,
                 inline,
                 InlineBoxSlot {
                     x: ibx,
