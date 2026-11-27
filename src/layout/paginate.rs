@@ -14,7 +14,7 @@ use crate::layout::elements::{
     TextBlock, visit_layout_tree,
 };
 use crate::style::computed::{
-    BoxDecorationBreak, Clear, Float, FootnotePolicy, ObjectFit, Position,
+    BoxDecorationBreak, Clear, Float, FootnotePolicy, ObjectFit, Overflow, Position,
 };
 use crate::types::{Color, EdgeSizes, Margin, PageSize, Size};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -22,6 +22,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 mod flex_line;
 mod float_breaks;
 mod measurement;
+mod overflow_breaks;
 
 fn advance_positioned_ancestors_after_page_break(
     positioned_y_by_depth: &mut HashMap<usize, f32>,
@@ -469,6 +470,51 @@ fn place_carried_floats(
         }
         collect_footnotes_from_element(part.as_ref(), current_footnotes);
         current_elements.push((top, part));
+    }
+}
+
+/// Draws at the top of the page with index `page` the overflow carried on there from boxes with a fixed height on
+/// earlier pages, breaking again the overflow that runs past this page's end too.
+fn place_carried_overflow(
+    carried: &mut float_breaks::Carried,
+    page: usize,
+    page_bottom: f32,
+    current_elements: &mut Vec<(f32, LayoutNode)>,
+    current_footnotes: &mut Vec<FootnoteItem>,
+) {
+    for part in carried.take_for(page) {
+        let height = element_flow_geometry(part.as_ref()).content_height;
+        let part = if exceeds_with_roundoff(height, page_bottom)
+            && let Some((here, rest)) =
+                split_element(part.as_ref(), page_bottom, FragmentBreakRule::Emergency)
+        {
+            carried.push(page + 1, rest);
+            here
+        } else {
+            part
+        };
+        let part = carry_overflow(part, page_bottom, page + 1, carried);
+        collect_footnotes_from_element(part.as_ref(), current_footnotes);
+        current_elements.push((0.0, part));
+    }
+}
+
+/// `element`, drawn `available` above the end of the page, without the overflow of its boxes with a fixed height
+/// that runs past that end, which carries on at the top of the page with index `next_page`.
+fn carry_overflow(
+    element: LayoutNode,
+    available: f32,
+    next_page: usize,
+    carried: &mut float_breaks::Carried,
+) -> LayoutNode {
+    match overflow_breaks::split_overflow(element.as_ref(), available) {
+        Some((here, pieces)) => {
+            for piece in pieces {
+                carried.push(next_page, piece);
+            }
+            here
+        }
+        None => element,
     }
 }
 
@@ -2123,11 +2169,10 @@ fn split_container_node(
     // A definite `height` (or a `max-height` that clamps) breaks only when nothing
     // else can (`Emergency`, which the paginator tries after `Normal` at the same
     // place): a box taller than a fresh page, whose content past the page end would
-    // otherwise be drawn below it. Anything smaller stays whole, as before, and so
-    // does a `clone`d box.
+    // otherwise be drawn below it. Anything smaller stays whole, as before.
     let clone = element.fragmentation.decoration == BoxDecorationBreak::Clone;
     let definite = element.box_model.size.height.is_definite();
-    if (definite && (rule != FragmentBreakRule::Emergency || clone))
+    if (definite && rule != FragmentBreakRule::Emergency)
         || element.positioning.scheme != Position::Static
         || element.flow.float != Float::None
         || children.is_empty()
@@ -2157,9 +2202,16 @@ fn split_container_node(
         avail_below_box_top - element.box_model.border.top.width - element.box_model.padding.top
     };
     let continuation_size = if definite {
-        // The rest of the fixed height continues on the next page, whatever of the content does
+        // The rest of the fixed height continues on the next page, whatever of the content does. Under `clone` each
+        // fragment draws the box's top and bottom edges again, so the continuation adds them to the rest of the
+        // content box's height
         let total = element.box_model.size.height.used()?;
-        BlockSize::definite(split_remainder(total, avail_below_box_top)?)
+        let repeated = if clone {
+            element.box_model.border.vertical_width() + element.box_model.padding.vertical()
+        } else {
+            0.0
+        };
+        BlockSize::definite(split_remainder(total, avail_below_box_top)? + repeated)
     } else {
         element
             .box_model
@@ -2303,6 +2355,10 @@ fn split_container_node(
     // bottom); under `clone` keep the full decoration so the fragment closes.
     let mut first = element.clone();
     first.children = f_children_vec;
+    if clone && definite {
+        // The first fragment of a fixed height ends at the page end, where it closes with its own bottom edges
+        first.box_model.size.height = BlockSize::definite(avail_below_box_top);
+    }
     if !clone {
         first.box_model.margins.end = 0.0;
         first.box_model.padding.bottom = 0.0;
@@ -2311,6 +2367,11 @@ fn split_container_node(
         // square — only the box's real corners stay rounded. This fragment's
         // bottom edge is the cut, so drop the bottom-right/bottom-left radii.
         first.paint.border_radii = first.paint.border_radii.clear_bottom();
+        // A horizontal scrollbar sits at the box's end, in the bottom padding the last fragment keeps, so this one
+        // shows none and doesn't keep its content out of the bar's place
+        if first.overflow.x == Overflow::Scroll {
+            first.overflow.x = Overflow::Hidden;
+        }
         // A box that continues onto the next fragmentainer occupies the FULL
         // remaining height of THIS one: its background and left/right borders
         // extend to the page bottom even though the children only fill part of
@@ -3019,22 +3080,14 @@ impl LayoutVisitor for ElementFlowGeometry {
         let natural_content_height = element.box_model.padding.vertical()
             + children_height
             + element.box_model.border.vertical_width();
-        let content_height = if element.overflow.combined.clips() {
-            element
-                .box_model
-                .size
-                .height
-                .resolve(natural_content_height)
-        } else {
-            element
-                .box_model
-                .size
-                .height
-                .used()
-                .map_or(natural_content_height, |height| {
-                    natural_content_height.max(height)
-                })
-        };
+        // A definite height holds and taller content overflows it, whether the box clips it or not: what follows
+        // goes below the box's end. Visible overflow that runs past the page carries on on the next one
+        // (`overflow_breaks`)
+        let content_height = element
+            .box_model
+            .size
+            .height
+            .resolve(natural_content_height);
         self.set(content_height, element.box_model.margins);
     }
 }
@@ -3086,6 +3139,7 @@ pub(crate) fn paginate_with_context(
     let mut left_floats: Vec<FloatRegion> = Vec::new();
     let mut right_floats: Vec<FloatRegion> = Vec::new();
     let mut carried_floats = float_breaks::Carried::default();
+    let mut carried_overflow = float_breaks::Carried::default();
     let mut prev_margin_bottom: f32 = 0.0;
     // CSS margin-collapse-through-root: the first in-flow block on a page has
     // its margin-top collapse with the body margin on page 1. On continuation
@@ -3298,7 +3352,15 @@ pub(crate) fn paginate_with_context(
             .flex_padding_box_border_top
             .map(|border_top| (position.containing_block_depth, border_top));
 
-        // The parts of floats split at the end of the last page carry on at the top of this one
+        // The parts of floats split at the end of the last page carry on at the top of this one, and so does the
+        // overflow of boxes with a fixed height
+        place_carried_overflow(
+            &mut carried_overflow,
+            pages.len(),
+            content_height,
+            &mut current_elements,
+            &mut current_footnotes,
+        );
         place_carried_floats(
             &mut carried_floats,
             pages.len(),
@@ -3736,6 +3798,13 @@ pub(crate) fn paginate_with_context(
             // this iteration (float or normal-flow branch overwrites both).
             left_floats.clear();
             right_floats.clear();
+            place_carried_overflow(
+                &mut carried_overflow,
+                pages.len(),
+                content_height,
+                &mut current_elements,
+                &mut current_footnotes,
+            );
             place_carried_floats(
                 &mut carried_floats,
                 pages.len(),
@@ -3906,6 +3975,12 @@ pub(crate) fn paginate_with_context(
                     &mut current_generated_content,
                     first_on_page,
                 );
+                let first = carry_overflow(
+                    first,
+                    effective_content_height - y,
+                    pages.len() + 1,
+                    &mut carried_overflow,
+                );
                 collect_footnotes_from_element(&first, &mut current_footnotes);
                 current_elements.push((y, first));
                 // Close the page (the fragmentainer is full) and reset flow state
@@ -3966,6 +4041,12 @@ pub(crate) fn paginate_with_context(
             &mut current_generated_content,
             first_on_page,
         );
+        let element = carry_overflow(
+            element,
+            effective_content_height - effective_y,
+            pages.len() + 1,
+            &mut carried_overflow,
+        );
         collect_footnotes_from_element(&element, &mut current_footnotes);
         current_elements.push((effective_y, element));
         y += content_h_val;
@@ -3981,8 +4062,8 @@ pub(crate) fn paginate_with_context(
     // not two), so only push the pending page if it carries real content — unless
     // it is the only page, so an otherwise-empty single-page document (e.g. an
     // empty body with a page background) still renders its one page.
-    // The rest of a float split at the end of the last page carries on over new pages.
-    while !carried_floats.is_empty() {
+    // The rest of a float split at the end of the last page carries on over new pages, as does overflow.
+    while !carried_floats.is_empty() || !carried_overflow.is_empty() {
         pages.push(Page {
             elements: std::mem::take(&mut current_elements),
             print_content_scale: Default::default(),
@@ -3999,6 +4080,13 @@ pub(crate) fn paginate_with_context(
         repeated_decorations.append_to(&mut current_elements, current_page_geometry);
         left_floats.clear();
         right_floats.clear();
+        place_carried_overflow(
+            &mut carried_overflow,
+            pages.len(),
+            content_height,
+            &mut current_elements,
+            &mut current_footnotes,
+        );
         place_carried_floats(
             &mut carried_floats,
             pages.len(),
