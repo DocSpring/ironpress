@@ -379,6 +379,9 @@ pub(crate) fn authored_overflow_clip_margin(
     }
 }
 
+/// The thickness of a printed scrollbar: Chrome's classic 15px bar
+pub(crate) const SCROLLBAR_THICKNESS: f32 = 15.0 * 0.75;
+
 pub(crate) fn authored_scrollbar_gutter(
     el: &ElementNode,
     rules: &[CssRule],
@@ -393,7 +396,7 @@ pub(crate) fn authored_scrollbar_gutter(
     if !value.split_whitespace().any(|part| part == "stable") {
         return (0.0, 0.0);
     }
-    let gutter = 15.0 * 0.75;
+    let gutter = SCROLLBAR_THICKNESS;
     if value.split_whitespace().any(|part| part == "both-edges") {
         (gutter, gutter)
     } else {

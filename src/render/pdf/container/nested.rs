@@ -609,8 +609,18 @@ pub(super) fn render_nested_container(
         let sb = SCROLLBAR_THICKNESS_PT;
         let v_gutter = if has_v { sb } else { 0.0 };
         let h_gutter = if has_h { sb } else { 0.0 };
-        let scrollport_w = (content_avail_w - v_gutter).max(0.0);
-        let scrollport_h = (content_avail_h - h_gutter).max(0.0);
+        // Layout has already taken a `scroll` axis's gutter out of the content box; an `auto` axis's bar takes it
+        // here
+        let scrollport_w = if *nk_overflow_y == Overflow::Scroll {
+            content_avail_w
+        } else {
+            (content_avail_w - v_gutter).max(0.0)
+        };
+        let scrollport_h = if *nk_overflow_x == Overflow::Scroll {
+            content_avail_h
+        } else {
+            (content_avail_h - h_gutter).max(0.0)
+        };
         let thumb_ratio_h = if scrollport_w > 0.0 {
             over_w / scrollport_w
         } else {

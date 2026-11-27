@@ -292,8 +292,17 @@ pub(in crate::render::pdf) fn render_container(
     let c_sb = SCROLLBAR_THICKNESS_PT;
     let c_v_gutter = if c_has_v { c_sb } else { 0.0 };
     let c_h_gutter = if c_has_h { c_sb } else { 0.0 };
-    let c_scrollport_w = (c_avail_w - c_v_gutter).max(0.0);
-    let c_scrollport_h = (c_avail_h - c_h_gutter).max(0.0);
+    // Layout has already taken a `scroll` axis's gutter out of the content box; an `auto` axis's bar takes it here
+    let c_scrollport_w = if *c_overflow_y == Overflow::Scroll {
+        c_avail_w
+    } else {
+        (c_avail_w - c_v_gutter).max(0.0)
+    };
+    let c_scrollport_h = if *c_overflow_x == Overflow::Scroll {
+        c_avail_h
+    } else {
+        (c_avail_h - c_h_gutter).max(0.0)
+    };
     let c_thumb_ratio_h = if c_scrollport_w > 0.0 {
         c_over_w / c_scrollport_w
     } else {

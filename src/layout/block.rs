@@ -20,15 +20,15 @@ use super::engine::{
     element_sibling_list, emit_page_break_after, flatten_element, flatten_nodes, forward_siblings,
 };
 use super::helpers::{
-    BackgroundFields, LayoutOverflowKeyword, PseudoBoxContext, aspect_ratio_height,
-    authored_intrinsic_width_keyword, authored_keyword_property, authored_line_clamp,
-    authored_overflow_axes, authored_overflow_clip_margin, authored_pseudo_keyword_property,
-    authored_scrollbar_gutter, build_pseudo_block, establishes_bfc_with_overflow,
-    has_background_paint, heading_level, measure_lines_width, pseudo_is_block_like,
-    push_block_pseudo, recurses_as_layout_child, resolve_abs_containing_block,
-    resolve_absolute_descendants_containing_block, resolve_content_box_height, resolve_inset,
-    resolve_padding_box_height, resolve_relative_offsets, selector_attributes_with_has,
-    selector_context_from_ancestors,
+    BackgroundFields, LayoutOverflowKeyword, PseudoBoxContext, SCROLLBAR_THICKNESS,
+    aspect_ratio_height, authored_intrinsic_width_keyword, authored_keyword_property,
+    authored_line_clamp, authored_overflow_axes, authored_overflow_clip_margin,
+    authored_pseudo_keyword_property, authored_scrollbar_gutter, build_pseudo_block,
+    establishes_bfc_with_overflow, has_background_paint, heading_level, measure_lines_width,
+    pseudo_is_block_like, push_block_pseudo, recurses_as_layout_child,
+    resolve_abs_containing_block, resolve_absolute_descendants_containing_block,
+    resolve_content_box_height, resolve_inset, resolve_padding_box_height,
+    resolve_relative_offsets, selector_attributes_with_has, selector_context_from_ancestors,
 };
 use super::inline_formatting::{
     AnonymousBlockFlow, AnonymousInlineFormattingContext, GeneratedContentStyles,
@@ -706,9 +706,23 @@ pub(crate) fn layout_block_element(
     } else {
         (0.0, 0.0)
     };
+    // A `scroll` axis always shows its scrollbar, which Chrome prints and lays out from the box's padding box
+    // (CSS Overflow 3 §4.1): a vertical bar narrows the content box, and a horizontal one sits below the content,
+    // so an auto height grows by its thickness. A `scrollbar-gutter: stable` gutter already holds the vertical bar.
+    let scrollbar_right = if overflow_axes.y == LayoutOverflowKeyword::Scroll {
+        scrollbar_gutter_right.max(SCROLLBAR_THICKNESS)
+    } else {
+        scrollbar_gutter_right
+    };
+    let scrollbar_bottom = if overflow_axes.x == LayoutOverflowKeyword::Scroll {
+        SCROLLBAR_THICKNESS
+    } else {
+        0.0
+    };
     let mut layout_padding = style.padding;
     layout_padding.left += scrollbar_gutter_left;
-    layout_padding.right += scrollbar_gutter_right;
+    layout_padding.right += scrollbar_right;
+    layout_padding.bottom += scrollbar_bottom;
 
     // `block_w` is now the border-box (outer) width for both box-sizing modes
     // (content-box added padding+border above), so the content area is always
