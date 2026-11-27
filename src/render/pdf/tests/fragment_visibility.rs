@@ -234,3 +234,96 @@ fn wrapped_flex_lines_taller_than_a_page_each_break_across_pages() {
         assert_each_drawn_once_on_its_page(&pages, prefix, count);
     }
 }
+
+#[test]
+fn a_box_that_clips_its_overflow_breaks_across_pages() {
+    // An auto-height box has nothing below its end to hide, so Chromium breaks it like any other box, and each piece
+    // clips to its own part of the box
+    let lines = (1..=40)
+        .map(|index| format!("A{index}<br>"))
+        .collect::<String>();
+    for overflow in ["hidden", "auto", "clip"] {
+        for html in [
+            format!(
+                r#"<div style="overflow: {overflow}">{}</div>"#,
+                paragraphs("A", 40)
+            ),
+            format!(
+                r#"<div style="overflow: {overflow}"><div>{}</div></div>"#,
+                paragraphs("A", 40)
+            ),
+            format!(r#"<div style="overflow: {overflow}">{lines}</div>"#),
+            format!(
+                r#"<p>Intro</p><div style="overflow: {overflow}; border: 2pt solid; padding: 5pt">{}</div>"#,
+                paragraphs("A", 40)
+            ),
+            format!(
+                r#"<div style="display: flex; overflow: {overflow}"><div>{}</div></div>"#,
+                paragraphs("A", 40)
+            ),
+            format!(
+                r#"<div style="display: flex"><div style="overflow: {overflow}">{}</div></div>"#,
+                paragraphs("A", 40)
+            ),
+            format!(
+                r#"<table><tr><td><div style="overflow: {overflow}">{}</div></td></tr></table>"#,
+                paragraphs("A", 40)
+            ),
+        ] {
+            assert_each_drawn_once_on_its_page(&page_lines(&html), "A", 40);
+        }
+    }
+}
+
+#[test]
+fn a_box_with_a_height_taller_than_a_page_breaks_across_pages() {
+    for style in [
+        "",
+        "; overflow: hidden",
+        "; background: #eee",
+        "; border: 2pt solid",
+    ] {
+        let pages = page_lines(&format!(
+            r#"<p>Intro</p><div style="height: 600pt{style}">{}</div><p>A30</p>"#,
+            paragraphs("A", 29)
+        ));
+        assert_each_drawn_once_on_its_page(&pages, "A", 30);
+        // What follows the box comes after the rest of its height, on the next page
+        assert!(
+            pages[1]
+                .iter()
+                .any(|(text, y)| text == "A30" && *y < 400.0 - 200.0),
+            "{style}: {pages:?}"
+        );
+    }
+}
+
+#[test]
+fn a_box_that_clips_keeps_hiding_what_runs_past_its_height_on_the_next_page() {
+    // 500pt of the box: 400pt on page 1 and 100pt on page 2, so A23 to A27 show on page 2 and the rest stays hidden
+    let markup = format!(
+        r#"<div style="height: 500pt; overflow: hidden">{}</div>"#,
+        paragraphs("A", 40)
+    );
+    let pages = page_lines(&markup);
+    assert_eq!(pages.len(), 2);
+    assert_each_drawn_once_on_its_page(&pages, "A", 27);
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(&format!(
+            "<html><head><style>@page {{ size: 240pt 400pt; margin: 0 }} body {{ margin: 0; font: 12pt/18pt Helvetica }} \
+             p {{ margin: 0 }}</style></head><body>{markup}</body></html>"
+        ))
+        .expect("the document converts");
+    let content = String::from_utf8_lossy(&pdf);
+    let second = content
+        .split("endstream")
+        .filter(|stream| stream.contains("] TJ"))
+        .nth(1)
+        .expect("a second page");
+    let clip = second.find("W n").expect("page 2 clips the box");
+    assert!(
+        clip < second.find("] TJ").expect("text"),
+        "the clip comes before the text"
+    );
+}

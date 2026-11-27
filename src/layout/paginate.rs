@@ -925,11 +925,12 @@ fn split_text_block_node(
 ) -> Option<(LayoutNode, LayoutNode)> {
     let lines = &element.lines;
     // Only a plain, auto-height, in-flow text block is splittable here. A box
-    // with a definite height or `overflow` clip is a hard-sized box (treat as
-    // monolithic); a positioned/floated box is out of normal flow and handled
-    // elsewhere; a single line cannot be divided.
+    // with a definite height is a hard-sized box (treat as monolithic); a
+    // positioned/floated box is out of normal flow and handled elsewhere; a
+    // single line cannot be divided. An `overflow` clip doesn't stop it: an
+    // auto-height box has no content below its end to hide, and each fragment
+    // clips to its own padding box, as Chromium breaks one.
     if element.box_model.size.height.is_definite()
-        || element.clipping.rect.is_some()
         || element.positioning.scheme != Position::Static
         || element.flow.float != Float::None
         || lines.len() < 2
@@ -1051,7 +1052,6 @@ fn split_text_block_at_line_node(
 
 fn split_text_block_parts(element: &TextBlock, idx: usize) -> Option<(TextBlock, TextBlock)> {
     if element.box_model.size.height.is_definite()
-        || element.clipping.rect.is_some()
         || element.positioning.scheme != Position::Static
         || element.flow.float != Float::None
         || idx == 0
@@ -1136,8 +1136,9 @@ fn split_fixed_height_text_block_node(
         return None;
     }
     let block_height = element.box_model.size.height.used()?;
-    if element.clipping.rect.is_some()
-        || element.positioning.scheme != Position::Static
+    // An `overflow` clip cuts each fragment to its own padding box: lines past the box's height stay hidden below the
+    // last fragment
+    if element.positioning.scheme != Position::Static
         || element.flow.float != Float::None
         || block_height <= 0.0
     {
@@ -2113,13 +2114,20 @@ fn split_container_node(
     rule: FragmentBreakRule,
 ) -> Option<(Container, Container)> {
     let children = &element.children;
-    // Only a plain, auto-height, in-flow container is splittable here. A definite
-    // `height` or `overflow` clip makes it a hard-sized/monolithic box; a
-    // positioned/floated box is out of normal flow; an empty box has nothing to
-    // fragment. A single-child box has no between-children break point but may
-    // still be split by RECURSING into that one (too-tall) child below.
-    if element.box_model.size.height.is_definite()
-        || element.overflow.combined.clips()
+    // Only an in-flow container is splittable here: a positioned/floated box is
+    // out of normal flow, and an empty box has nothing to fragment. A single-child
+    // box has no between-children break point but may still be split by RECURSING
+    // into that one (too-tall) child below. An `overflow` clip doesn't stop it: each
+    // fragment clips to its own padding box, as Chromium breaks one.
+    //
+    // A definite `height` (or a `max-height` that clamps) breaks only when nothing
+    // else can (`Emergency`, which the paginator tries after `Normal` at the same
+    // place): a box taller than a fresh page, whose content past the page end would
+    // otherwise be drawn below it. Anything smaller stays whole, as before, and so
+    // does a `clone`d box.
+    let clone = element.fragmentation.decoration == BoxDecorationBreak::Clone;
+    let definite = element.box_model.size.height.is_definite();
+    if (definite && (rule != FragmentBreakRule::Emergency || clone))
         || element.positioning.scheme != Position::Static
         || element.flow.float != Float::None
         || children.is_empty()
@@ -2138,8 +2146,6 @@ fn split_container_node(
         return None;
     }
 
-    let clone = element.fragmentation.decoration == BoxDecorationBreak::Clone;
-
     // Content-box height available for children on this page: below the box's
     // border-box top, minus the top border + top padding (and, under `clone`, the
     // bottom border + bottom padding the fragment also carries).
@@ -2150,11 +2156,17 @@ fn split_container_node(
     } else {
         avail_below_box_top - element.box_model.border.top.width - element.box_model.padding.top
     };
-    let continuation_size = element
-        .box_model
-        .size
-        .height
-        .remaining_fragment_floor(avail_below_box_top);
+    let continuation_size = if definite {
+        // The rest of the fixed height continues on the next page, whatever of the content does
+        let total = element.box_model.size.height.used()?;
+        BlockSize::definite(split_remainder(total, avail_below_box_top)?)
+    } else {
+        element
+            .box_model
+            .size
+            .height
+            .remaining_fragment_floor(avail_below_box_top)
+    };
     let has_floor_continuation = continuation_size.used().is_some();
 
     // Every child fits but the box's bottom padding and border don't, so the
@@ -2308,7 +2320,11 @@ fn split_container_node(
         // background/side-borders reach the page bottom, matching Chrome. The
         // last fragment keeps auto height (block_height stays None) so it ends
         // at its natural content + bottom decoration.
-        first.box_model.size.height = BlockSize::fragment(avail_below_box_top);
+        first.box_model.size.height = if definite {
+            BlockSize::definite(avail_below_box_top)
+        } else {
+            BlockSize::fragment(avail_below_box_top)
+        };
     }
 
     // Continuation: the remaining children. Under `slice` drop the top
