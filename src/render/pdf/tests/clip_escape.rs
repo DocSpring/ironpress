@@ -105,6 +105,32 @@ fn an_absolute_box_keeps_the_clips_of_its_containing_block_and_around_it() {
             ),
             2,
         ),
+        // A flex container lays its positioned children out after its rows, which it still clips
+        (
+            format!(
+                r#"<div style="display: flex; overflow: hidden; height: 20pt; position: relative"><div>x</div>{MARKER}</div>"#
+            ),
+            2,
+        ),
+        (
+            format!(
+                r#"<div style="display: flex; flex-direction: column; overflow: hidden; height: 20pt; position: relative; border: 2pt solid; border-radius: 6pt"><div>x</div>{MARKER}</div>"#
+            ),
+            2,
+        ),
+        (
+            format!(
+                r#"<div style="display: flex; overflow: hidden; height: 20pt; transform: translateX(0)"><div>x</div>{}</div>"#,
+                MARKER.replace("absolute", "fixed")
+            ),
+            2,
+        ),
+        (
+            format!(
+                r#"<div style="padding: 5pt"><div style="display: flex; overflow: hidden; height: 20pt; position: relative"><div>x</div>{MARKER}</div></div>"#
+            ),
+            2,
+        ),
         (
             format!(
                 r#"<table><tr><td style="position: relative"><div style="overflow: hidden; height: 20pt; position: relative">x{MARKER}</div></td></tr></table>"#
@@ -148,12 +174,17 @@ fn render_link_annotation_for_an_absolute_link_that_escapes_a_clip() {
         super::placed_link_rects(&in_a_stacking_context),
         Vec::<[f32; 4]>::new()
     );
-    // Its containing block clips it
-    let clipped =
-        format!(r#"<div style="position: relative; overflow: hidden; height: 20pt">x{link}</div>"#);
-    assert_eq!(
-        super::placed_link_rects(&clipped),
-        Vec::<[f32; 4]>::new(),
-        "{clipped}"
-    );
+    // Its containing block clips it, a flex container too
+    for clipped in [
+        format!(r#"<div style="position: relative; overflow: hidden; height: 20pt">x{link}</div>"#),
+        format!(
+            r#"<div style="display: flex; position: relative; overflow: hidden; height: 20pt"><div>x</div>{link}</div>"#
+        ),
+    ] {
+        assert_eq!(
+            super::placed_link_rects(&clipped),
+            Vec::<[f32; 4]>::new(),
+            "{clipped}"
+        );
+    }
 }

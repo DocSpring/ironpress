@@ -745,6 +745,77 @@ fn flex_cell_positioning(
     })
 }
 
+/// Puts the absolutely positioned boxes laid out inside a flex container that clips its overflow, and is their
+/// containing block or contains it, in a box over the container's padding box that clips them as the container
+/// does. The container's rows come first, as `rows`, and these boxes after them, outside the rows' clip. A box
+/// whose containing block is outside the container isn't clipped by it. A fixed box is laid out against the page,
+/// but a transform or filter on the container contains it (CSS Transforms 1 §2), so the container clips it too.
+fn clip_positioned_children(
+    style: &ComputedStyle,
+    rows: &[LayoutNode],
+    containing_block: ContainingBlock,
+    positioned: &mut Vec<LayoutNode>,
+) {
+    if !style.overflow.clips() || containing_block.depth == 0 || positioned.is_empty() {
+        return;
+    }
+    let contains_fixed = style.transform.is_some() || style.filter.establishes_stacking_context;
+    let (clipped, escaping): (Vec<_>, Vec<_>) =
+        std::mem::take(positioned).into_iter().partition(|node| {
+            node.positioning_owner().is_some_and(|owner| {
+                let positioning = owner.positioning();
+                (contains_fixed && positioning.scheme == Position::Fixed)
+                    || positioning
+                        .containing_block
+                        .is_some_and(|block| block.depth >= containing_block.depth)
+            })
+        });
+    *positioned = escaping;
+    if clipped.is_empty() {
+        return;
+    }
+    let margins = |node: &LayoutNode| {
+        node.margin_holder()
+            .map(|holder| *holder.margins())
+            .unwrap_or_default()
+    };
+    let outer_height = simulate_block_flow(rows).height
+        - rows.first().map_or(0.0, |row| margins(row).start)
+        - rows.last().map_or(0.0, |row| margins(row).end);
+    let height = (outer_height - style.border.vertical_width()).max(0.0);
+    let border_box_width = containing_block.width + style.border.horizontal_width();
+    let mut paint = BoxPaint {
+        border_radii: style
+            .resolve_corner_radii(border_box_width, outer_height)
+            .inset(style.border.widths()),
+        ..BoxPaint::default()
+    };
+    // A container with a transform or filter is a stacking context, which keeps the fixed boxes in it inside its
+    // clip, at the same paint layer as positioned boxes with no z-index
+    if contains_fixed {
+        paint.group.stacking.z_index = ZIndex::Integer(0);
+    }
+    let clip = Container {
+        children: clipped,
+        box_model: crate::layout::elements::BoxModel {
+            size: crate::layout::elements::LayoutSize::fixed(containing_block.width, Some(height)),
+            ..Default::default()
+        },
+        paint,
+        flow: Default::default(),
+        positioning: Positioning::absolute_at(crate::types::Point::new(0.0, 0.0))
+            .with_containing_block(Some(containing_block))
+            .with_containing_block_depth(containing_block.depth),
+        fragmentation: Default::default(),
+        overflow: crate::layout::elements::OverflowBehavior {
+            combined: Overflow::Hidden,
+            x: Overflow::Hidden,
+            y: Overflow::Hidden,
+        },
+    };
+    positioned.insert(0, clip.boxed());
+}
+
 #[allow(clippy::too_many_arguments)]
 fn flex_row_node(
     style: &ComputedStyle,
@@ -1555,6 +1626,7 @@ pub(crate) fn layout_flex_container(
     env: &mut LayoutEnv,
 ) {
     let flex_writing_mode = style.writing_mode;
+    let output_start = output.len();
     let available_width = ctx.available_width();
     // Keep the border-box and content-box contracts explicit. In particular,
     // an authored `border-box` width is already the outer width, while a
@@ -2829,6 +2901,12 @@ pub(crate) fn layout_flex_container(
             .clips()
             .then(|| Rect::from_xywh(0.0, 0.0, block_w, container_height));
         output.push(background.boxed());
+        clip_positioned_children(
+            style,
+            &output[output_start..],
+            local_containing_block,
+            &mut abs_output,
+        );
         output.append(&mut abs_output);
         return;
     }
@@ -3433,6 +3511,12 @@ pub(crate) fn layout_flex_container(
             AlignItems::FlexStart,
             abs_cb_depth,
         ));
+        clip_positioned_children(
+            style,
+            &output[output_start..],
+            local_containing_block,
+            &mut abs_output,
+        );
         output.append(&mut abs_output);
         return;
     }
@@ -4802,6 +4886,12 @@ pub(crate) fn layout_flex_container(
     // Emit out-of-flow absolute children after the in-flow flex content so they
     // paint above it (CSS painting order) and anchor to the container's padding
     // box via the containing block stamped above.
+    clip_positioned_children(
+        style,
+        &output[output_start..],
+        local_containing_block,
+        &mut abs_output,
+    );
     output.append(&mut abs_output);
 
     if direction.is_row()
