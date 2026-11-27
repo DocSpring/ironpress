@@ -327,3 +327,192 @@ fn a_box_that_clips_keeps_hiding_what_runs_past_its_height_on_the_next_page() {
         "the clip comes before the text"
     );
 }
+
+#[test]
+fn a_box_with_a_height_and_box_decoration_break_clone_breaks_across_pages() {
+    // Each piece draws the box's border and padding again, and the rest of its height carries on to the next page
+    let section = format!(
+        r#"<div style="height: 600pt; border: 2pt solid; padding: 6pt; box-decoration-break: clone{{overflow}}">{}</div>"#,
+        paragraphs("A", 29)
+    );
+    for overflow in ["", "; overflow: hidden"] {
+        let section = section.replace("{overflow}", overflow);
+        for html in [
+            format!("<p>Intro</p>{section}<p>A30</p>"),
+            format!(
+                r#"<p>Intro</p><div style="display: flex"><div style="width: 180pt">{section}</div></div><p>A30</p>"#
+            ),
+        ] {
+            assert_each_drawn_once_on_its_page(&page_lines(&html), "A", 30);
+        }
+    }
+}
+
+#[test]
+fn overflow_past_a_height_carries_on_over_the_next_pages() {
+    // 500pt of the box: 382pt on page 1 below the intro and 118pt on page 2, while its 60 lines (1080pt) run on to
+    // page 3. What follows the box goes below its end on page 2, under the overflow, as Chromium draws it
+    for (html, boxed) in [
+        (
+            format!(
+                r#"<p>Intro</p><div style="height: 500pt">{}</div><p>F1</p>"#,
+                paragraphs("A", 60)
+            ),
+            60,
+        ),
+        (
+            format!(
+                r#"<p>Intro</p><div style="height: 500pt">{}</div><p>F1</p>"#,
+                (1..=60)
+                    .map(|index| format!("A{index}<br>"))
+                    .collect::<String>()
+            ),
+            60,
+        ),
+        (
+            format!(
+                r#"<p>Intro</p><div><div style="height: 500pt; border: 2pt solid; padding-left: 10pt">{}</div></div><p>F1</p>"#,
+                paragraphs("A", 60)
+            ),
+            60,
+        ),
+        // A short box near the end of the page, whose overflow runs on to the next one
+        (
+            format!(
+                r#"<div style="height: 340pt"></div><div><div style="height: 40pt">{}</div></div><p>F1</p>"#,
+                paragraphs("A", 10)
+            ),
+            10,
+        ),
+    ] {
+        let pages = page_lines(&html);
+        assert_each_drawn_once_on_its_page(&pages, "A", boxed);
+        let follower: Vec<(usize, f32)> = pages
+            .iter()
+            .enumerate()
+            .flat_map(|(page, lines)| {
+                lines
+                    .iter()
+                    .filter(|(text, _)| text == "F1")
+                    .map(move |(_, y)| (page, *y))
+            })
+            .collect();
+        let expected = if boxed == 60 {
+            // On page 2, 118pt down: its baseline about 132pt below the page's top
+            (1, 400.0 - 132.0)
+        } else {
+            // Right below the box, at 380pt down on page 1
+            (0, 400.0 - 394.0)
+        };
+        assert_eq!(follower.len(), 1, "{html}: {pages:?}");
+        assert_eq!(follower[0].0, expected.0, "{html}: {pages:?}");
+        assert!(
+            (follower[0].1 - expected.1).abs() < 4.0,
+            "{html}: F1 at {:?}, expected near {expected:?}",
+            follower[0]
+        );
+    }
+}
+
+#[test]
+fn a_box_that_scrolls_keeps_room_for_its_scrollbars() {
+    // A `scroll` box's horizontal scrollbar sits below its content, which its auto height makes room for, so
+    // nothing at its end is drawn under the bar: not on one page, and not on the last of several
+    let marker = r#"<a href="https://example.com/placed" style="display: inline-block; width: 60pt; height: 15pt; background: black"></a>"#;
+    let document = |body: String| {
+        format!(
+            "<html><head><style>@page {{ size: 240pt 400pt; margin: 0 }} body {{ margin: 0; font: 12pt/18pt Helvetica }} \
+             p {{ margin: 0 }}</style></head><body>{body}</body></html>"
+        )
+    };
+    for count in [3, 42] {
+        for decoration in [
+            "",
+            "; border: 2pt solid; padding: 6pt; box-decoration-break: clone",
+        ] {
+            let html = document(format!(
+                r#"<div style="overflow: scroll{decoration}">{}<p>{marker}</p></div>"#,
+                paragraphs("A", count)
+            ));
+            let rects = super::placed_link_rects(&html);
+            assert_eq!(rects.len(), 1, "{count}{decoration}: {rects:?}");
+            let [_, bottom, _, top] = rects[0];
+            assert!(
+                (top - bottom - 15.0).abs() < 0.1,
+                "{count}{decoration}: the marker is cut to {rects:?}"
+            );
+        }
+    }
+    // The first page's part of a box taller than the page shows no horizontal scrollbar at its page end, where its
+    // content runs on: its clip reaches the bottom of the page
+    let pdf = crate::HtmlConverter::new()
+        .compress(false)
+        .convert(&document(format!(
+            r#"<div style="overflow: scroll">{}</div>"#,
+            paragraphs("A", 42)
+        )))
+        .expect("the document converts");
+    let content = String::from_utf8_lossy(&pdf);
+    let first = content
+        .split("endstream")
+        .find(|stream| stream.contains("] TJ"))
+        .expect("a first page");
+    let clips: Vec<Vec<f32>> = first
+        .lines()
+        .filter(|line| line.ends_with("re W n"))
+        .map(|line| {
+            line.split_whitespace()
+                .take(4)
+                .map(|value| value.parse().expect("a number"))
+                .collect()
+        })
+        .collect();
+    assert!(!clips.is_empty(), "the box clips: {first}");
+    for clip in &clips {
+        // A scrollbar there would stop it 11.25pt up
+        assert!(clip[1].abs() < 1.0, "{clip:?} stops above the page's end");
+    }
+    // Its text ends 11.25pt further down when the box has a horizontal scrollbar
+    for (overflow, top) in [("scroll", 54.0 + 11.25), ("hidden", 54.0)] {
+        let pages = page_lines(&format!(
+            r#"<div style="overflow: {overflow}">{}</div><p>F1</p>"#,
+            paragraphs("A", 3)
+        ));
+        let (_, y) = pages[0]
+            .iter()
+            .find(|(text, _)| text == "F1")
+            .expect("F1 drawn");
+        let a1 = pages[0]
+            .iter()
+            .find(|(text, _)| text == "A1")
+            .expect("A1 drawn")
+            .1;
+        assert!(
+            ((a1 - y) - top).abs() < 0.1,
+            "{overflow}: F1 {} below A1",
+            a1 - y
+        );
+    }
+}
+
+#[test]
+fn a_box_in_columns_draws_each_line_inside_its_column() {
+    // 42 lines and a taller one: more than two columns of a page hold, so the box breaks inside itself at the
+    // page's end and carries on in the columns of the next page. Its top border and padding take room in its first
+    // column. A box with nothing to draw of its own lays out as its children, which break between the columns too
+    let marker = r#"<span style="display: inline-block; width: 60pt; height: 15pt; background: black"></span>"#;
+    for decoration in [
+        "",
+        "; border: 2pt solid; padding: 6pt",
+        "; border: 2pt solid; padding: 20pt; border-radius: 18pt",
+        "; border: 2pt solid; padding: 6pt; box-decoration-break: clone",
+    ] {
+        for overflow in ["visible", "hidden"] {
+            let html = format!(
+                r#"<div style="column-count: 2; column-gap: 12pt"><div style="overflow: {overflow}{decoration}">{}<p>{marker}</p></div></div><p>A43</p>"#,
+                paragraphs("A", 42)
+            );
+            assert_each_drawn_once_on_its_page(&page_lines(&html), "A", 43);
+        }
+    }
+}
