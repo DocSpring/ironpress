@@ -70,7 +70,7 @@ use super::engine::{
 };
 use super::helpers::{PseudoBoxContext, build_pseudo_block};
 use super::inline_formatting::GeneratedContentStyles;
-use super::roundoff::is_positive_with_roundoff;
+use super::roundoff::{exceeds_with_roundoff, is_positive_with_roundoff};
 use super::text::has_non_collapsible_text;
 
 /// Geometry of one principal multicol box fragment.
@@ -278,7 +278,7 @@ pub(crate) fn layout_multicol_container(
         if item && let Some(scope) = list_scope.as_mut() {
             scope.advance();
         }
-        items.push(MultiColItem::from_layout(buf, child_info));
+        items.extend(MultiColItem::from_flattened(buf, child_info));
 
         preceding_siblings.push((
             child_el.tag_name().to_string(),
@@ -404,14 +404,27 @@ pub(crate) fn layout_multicol_container(
         && num_cols >= 1
         && is_positive_with_roundoff(col_fill_h)
     {
-        let rows = if style.column_fill_auto {
+        let fill = || {
             build_paginated_column_rows(
                 &items, num_cols, col_width, gap, pad_left, col_fill_h, style,
             )
+        };
+        let rows = if style.column_fill_auto {
+            fill()
         } else {
-            build_balanced_paginated_column_rows(
+            let balanced = build_balanced_paginated_column_rows(
                 &items, num_cols, col_width, gap, pad_left, col_fill_h, style,
-            )
+            );
+            // A balanced row holds whole items, so an item taller than the page makes a row taller than it, whose
+            // columns end below the page. Fill the columns to the page's end instead, breaking inside the item
+            if balanced
+                .iter()
+                .any(|(_, height)| exceeds_with_roundoff(*height, col_fill_h))
+            {
+                fill()
+            } else {
+                balanced
+            }
         };
         // Only fragment when the content genuinely spills past one page (more than
         // one page-row). A single row means it fits — fall through unchanged.

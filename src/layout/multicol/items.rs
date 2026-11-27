@@ -80,6 +80,48 @@ impl MultiColItem {
     }
 }
 
+impl MultiColItem {
+    /// The items of one child's flattened layout. A child whose box layout leaves out (a block with no decoration
+    /// of its own) lays its content out as several blocks, which break between columns like the child's own
+    /// children would: each becomes an item, the first with the child's `break-before` and the last with its
+    /// `break-after`. One that avoids breaks inside, has a fixed height or spans the columns stays one item.
+    pub(super) fn from_flattened(elements: Vec<LayoutNode>, info: ChildMulticolInfo) -> Vec<Self> {
+        if elements.len() < 2
+            || info.span_all
+            || info.inline_level
+            || info.breaks.inside_avoid
+            || info.definite_outer_height.is_some()
+        {
+            return vec![Self::from_layout(elements, info)];
+        }
+        let last = elements.len() - 1;
+        elements
+            .into_iter()
+            .enumerate()
+            .map(|(index, element)| {
+                let breaks = ColumnBreakInfo {
+                    before_force: index == 0 && info.breaks.before_force,
+                    before_avoid: index == 0 && info.breaks.before_avoid,
+                    after_force: index == last && info.breaks.after_force,
+                    after_avoid: index == last && info.breaks.after_avoid,
+                    inside_avoid: false,
+                };
+                Self::from_layout(
+                    vec![element],
+                    ChildMulticolInfo {
+                        span_all: false,
+                        inline_level: false,
+                        display_none: false,
+                        definite_outer_height: None,
+                        definite_outer_width: None,
+                        breaks,
+                    },
+                )
+            })
+            .collect()
+    }
+}
+
 pub(super) struct ChildMulticolInfo {
     pub(super) span_all: bool,
     /// An in-flow inline-level box, which goes in the anonymous block of the inline content around it.
