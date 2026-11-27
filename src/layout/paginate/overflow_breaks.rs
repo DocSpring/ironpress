@@ -180,6 +180,91 @@ fn split_text_block(element: &TextBlock, available: f32) -> Option<(TextBlock, L
     Some((drawn, Box::new(piece)))
 }
 
+/// How far below its border box's top `element` draws when its visible overflow runs past its end, or `None` when
+/// it draws nothing past its end. Content in the flow after the box overlaps that overflow, but a footnote area
+/// mustn't: the paginator moves a footnote's reference to the next page instead.
+pub(super) fn overflow_extent(element: &dyn LayoutElement) -> Option<f32> {
+    let excess = overflow_excess(element);
+    is_positive_with_roundoff(excess)
+        .then(|| element_flow_geometry(element).content_height + excess)
+}
+
+/// How far past the end of its border box `element` draws its in-flow content, or 0
+fn overflow_excess(element: &dyn LayoutElement) -> f32 {
+    struct Excess {
+        excess: f32,
+    }
+
+    impl LayoutVisitor for Excess {
+        fn visit_container(&mut self, element: &Container) {
+            if !carries_overflow(
+                element.positioning.scheme,
+                element.flow.float,
+                element.overflow.combined.clips(),
+                &element.paint,
+            ) {
+                return;
+            }
+            let content_top = element.box_model.border.top.width + element.box_model.padding.top;
+            let mut flow_end = 0.0f32;
+            let mut prev_margin_bottom = None;
+            let mut drawn_end = 0.0f32;
+            for child in &element.children {
+                if element_is_out_of_flow(child.as_ref())
+                    || element_float(child.as_ref()) != Float::None
+                {
+                    continue;
+                }
+                let geometry = element_flow_geometry(child.as_ref());
+                let overlap = sibling_margin_overlap(prev_margin_bottom, child.as_ref());
+                let top = flow_end - overlap + geometry.margins.start;
+                drawn_end = drawn_end.max(
+                    content_top + top + geometry.content_height + overflow_excess(child.as_ref()),
+                );
+                flow_end += estimate_element_height(child.as_ref()) - overlap;
+                prev_margin_bottom = element_collapses_margins(child.as_ref()).then(|| {
+                    child
+                        .margin_holder()
+                        .map(|holder| holder.margins().end)
+                        .unwrap_or_default()
+                });
+            }
+            // Measured against the same walk of the children, so that only overflow counts and not the small
+            // differences from how the flow collapses margins
+            let end = if element.box_model.size.height.is_definite() {
+                element_flow_geometry(element).content_height
+            } else {
+                content_top
+                    + flow_end
+                    + element.box_model.padding.bottom
+                    + element.box_model.border.bottom.width
+            };
+            self.excess = (drawn_end - end).max(0.0);
+        }
+
+        fn visit_text_block(&mut self, element: &TextBlock) {
+            if !element.box_model.size.height.is_definite()
+                || !carries_overflow(
+                    element.positioning.scheme,
+                    element.flow.float,
+                    element.clipping.rect.is_some(),
+                    &element.paint,
+                )
+            {
+                return;
+            }
+            let lines: f32 = element.lines.iter().map(|line| line.height).sum();
+            let drawn_end =
+                element.box_model.border.top.width + element.box_model.padding.top + lines;
+            self.excess = (drawn_end - element_flow_geometry(element).content_height).max(0.0);
+        }
+    }
+
+    let mut visitor = Excess { excess: 0.0 };
+    element.accept(&mut visitor);
+    visitor.excess
+}
+
 /// A piece of `element` that holds `children` without the box's own decoration
 fn overflow_piece(element: &Container, children: Vec<LayoutNode>) -> Container {
     let mut piece = element.clone();

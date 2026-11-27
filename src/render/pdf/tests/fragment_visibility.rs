@@ -516,3 +516,38 @@ fn a_box_in_columns_draws_each_line_inside_its_column() {
         }
     }
 }
+
+#[test]
+fn overflow_carried_on_to_a_page_stays_clear_of_its_footnotes() {
+    // 500pt of the box: 400pt on page 1 and 100pt on page 2, while its lines run on down page 2. The paragraph after
+    // the box goes below its end, over the overflow, but its footnote can't go at the end of a page under the
+    // overflow, so the paragraph moves on with it
+    for count in [43, 60] {
+        let html = format!(
+            r#"<div style="height: 500pt">{}</div><p>F1<span style="float: footnote">N1<br>N2<br>N3</span></p>"#,
+            paragraphs("A", count)
+        );
+        let pages = page_lines(&html);
+        assert_each_drawn_once_on_its_page(&pages, "A", count);
+        let mut notes_found = false;
+        for (page, lines) in pages.iter().enumerate() {
+            let Some(top) = lines
+                .iter()
+                .filter(|(text, _)| text.contains('N'))
+                .map(|(_, y)| *y)
+                .reduce(f32::max)
+            else {
+                continue;
+            };
+            notes_found = true;
+            for (text, y) in lines.iter().filter(|(text, _)| text.starts_with('A')) {
+                assert!(
+                    *y > top + 12.0,
+                    "{text} at {y} on page {}, over the footnote at {top}: {pages:?}",
+                    page + 1
+                );
+            }
+        }
+        assert!(notes_found, "the footnote is drawn: {pages:?}");
+    }
+}

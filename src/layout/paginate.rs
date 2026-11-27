@@ -499,6 +499,16 @@ fn place_carried_overflow(
     }
 }
 
+/// The lowest point on the page that the visible overflow of the boxes with a fixed height on it reaches, or 0
+fn drawn_overflow_bottom(elements: &[(f32, LayoutNode)]) -> f32 {
+    elements
+        .iter()
+        .filter_map(|(top, element)| {
+            overflow_breaks::overflow_extent(element.as_ref()).map(|extent| top + extent)
+        })
+        .fold(0.0, f32::max)
+}
+
 /// `element`, drawn `available` above the end of the page, without the overflow of its boxes with a fixed height
 /// that runs past that end, which carries on at the top of the page with index `next_page`.
 fn carry_overflow(
@@ -3528,16 +3538,29 @@ pub(crate) fn paginate_with_context(
             - footnote_reserved_height(&[current_footnotes.as_slice()], footnote_area, fonts))
         .max(0.0);
         let effective_content_height = (content_height - footnote_reserve).max(0.0);
-        let block_footnote_requires_break = y > 0.0
-            && footnote_block_policy_requires_break(
-                &pending_footnotes,
-                &current_footnotes,
-                y,
-                element_height,
-                content_height,
-                footnote_area,
-                fonts,
+        // A footnote area mustn't cover the overflow of a box with a fixed height drawn on this page, which the
+        // flow after the box overlaps: a footnote's reference that would put its area there moves to the next page
+        let overflow_footnote_requires_break = !pending_footnotes.is_empty()
+            && exceeds_with_roundoff(
+                drawn_overflow_bottom(&current_elements),
+                content_height
+                    - footnote_reserved_height(
+                        &[current_footnotes.as_slice(), pending_footnotes.as_slice()],
+                        footnote_area,
+                        fonts,
+                    ),
             );
+        let block_footnote_requires_break = overflow_footnote_requires_break
+            || y > 0.0
+                && footnote_block_policy_requires_break(
+                    &pending_footnotes,
+                    &current_footnotes,
+                    y,
+                    element_height,
+                    content_height,
+                    footnote_area,
+                    fonts,
+                );
         let physical_page_height = current_page_geometry.size.height;
         let empty_fixed_height_box = is_empty_fixed_height_box(element.as_ref());
         // An empty definite-height box can extend into page margins when its
