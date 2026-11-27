@@ -331,10 +331,12 @@ pub(in crate::render::pdf) fn render_container(
         }
         command
     });
+    let c_establishes_containing_block = c_position.is_positioned()
+        || c_transform.is_some()
+        || element.paint.group.effects.stacking_context
+            == crate::layout::engine::StackingContext::Filter;
     let mut prior_annotation_clip = None;
-    if let Some(command) = &clip_command {
-        content.push_str(command);
-        ctx.stacking.push_clip(command.clone());
+    if let Some(command) = clip_command {
         let shape = if c_has_v || c_has_h {
             PdfRect::new(
                 c_paint_padding_box.left,
@@ -346,7 +348,14 @@ pub(in crate::render::pdf) fn render_container(
         } else {
             overflow_clip_shape(c_paint_box, c_paint_geometry.border, *c_border_radii)
         };
-        prior_annotation_clip = ctx.text.pdf_writer.enter_annotation_clip(shape);
+        prior_annotation_clip = enter_overflow_clip(
+            content,
+            &mut ctx.stacking,
+            ctx.text.pdf_writer,
+            command,
+            shape,
+            first_containing_block_inside(*c_positioned_depth, c_establishes_containing_block),
+        );
     }
 
     // Render children recursively
@@ -360,7 +369,7 @@ pub(in crate::render::pdf) fn render_container(
     // padding-box origin so absolute descendants nested inside
     // static intermediates resolve to it (their containing block).
     let mut abs_origins: HashMap<usize, PdfPoint> = HashMap::new();
-    if *c_positioned_depth > 0 && (c_position.is_positioned() || c_transform.is_some()) {
+    if *c_positioned_depth > 0 && c_establishes_containing_block {
         abs_origins.insert(
             *c_positioned_depth,
             PdfPoint::new(c_padding_box.left, c_padding_box.top()),
@@ -393,11 +402,12 @@ pub(in crate::render::pdf) fn render_container(
 
     // Restore clip
     if needs_clip {
-        ctx.stacking.pop_clip();
-        content.push_str("Q\n");
-        ctx.text
-            .pdf_writer
-            .restore_annotation_clip(prior_annotation_clip);
+        leave_overflow_clip(
+            content,
+            &mut ctx.stacking,
+            ctx.text.pdf_writer,
+            prior_annotation_clip,
+        );
     }
     // Paint print scrollbar chrome in the reserved gutter, after
     // the (gutter-inset) content clip is closed.

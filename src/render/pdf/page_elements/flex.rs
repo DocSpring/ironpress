@@ -242,16 +242,21 @@ pub(in crate::render::pdf) fn render_flex_row(
             *flex_radii,
         ));
         command.push_str("W n\n");
-        content.push_str(&command);
-        ctx.stacking.push_clip(command);
-        prior_annotation_clip = ctx
-            .text
-            .pdf_writer
-            .enter_annotation_clip(overflow_clip_shape(
-                flex_paint_box,
-                flex_paint_geometry.border,
-                *flex_radii,
-            ));
+        let establishes_containing_block = element.positioning.scheme.is_positioned()
+            || element.paint.group.transform.value.is_some()
+            || element.paint.group.effects.stacking_context
+                == crate::layout::engine::StackingContext::Filter;
+        prior_annotation_clip = enter_overflow_clip(
+            content,
+            &mut ctx.stacking,
+            ctx.text.pdf_writer,
+            command,
+            overflow_clip_shape(flex_paint_box, flex_paint_geometry.border, *flex_radii),
+            first_containing_block_inside(
+                element.positioning.containing_block_depth,
+                establishes_containing_block,
+            ),
+        );
     }
 
     // Render each flex cell at its computed x-offset
@@ -263,6 +268,7 @@ pub(in crate::render::pdf) fn render_flex_row(
     // to escape just like ordinary block ancestors.
     let stacking_scope = StackingScope::for_element(element);
     let mut stacking_plan = StackingPaintPlan::default();
+    let context_floor = ctx.stacking.begin_context(stacking_scope);
     for cell in cells {
         let marker = ctx.stacking.marker();
         let mut cell_content = String::new();
@@ -665,12 +671,14 @@ pub(in crate::render::pdf) fn render_flex_row(
     if stacking_scope.is_local() {
         ctx.stacking.paint_plan(stacking_plan, content);
     }
+    ctx.stacking.end_context(context_floor);
     if needs_clip {
-        ctx.stacking.pop_clip();
-        content.push_str("Q\n");
-        ctx.text
-            .pdf_writer
-            .restore_annotation_clip(prior_annotation_clip);
+        leave_overflow_clip(
+            content,
+            &mut ctx.stacking,
+            ctx.text.pdf_writer,
+            prior_annotation_clip,
+        );
     }
     flex_group.finish(content, ctx);
 }

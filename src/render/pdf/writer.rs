@@ -169,11 +169,24 @@ impl PdfWriter {
     /// cover only what it and the clips around it leave visible, as Chromium writes them. Returns the clip to restore
     /// after it
     pub(super) fn enter_annotation_clip(&mut self, clip: RoundedRect) -> Option<Vec<PdfPoint>> {
+        let painted = self.annotation_outline(clip);
+        self.enter_annotation_outline(painted)
+    }
+
+    /// The outline of a clip in the current paint group's coordinates, on the page
+    pub(super) fn annotation_outline(&self, clip: RoundedRect) -> Vec<PdfPoint> {
         let matrix = self.graphics_state.local_to_layout;
-        let painted: Vec<PdfPoint> = annotation_clip::outline(clip)
+        annotation_clip::outline(clip)
             .into_iter()
             .map(|point| matrix.transform_point(point))
-            .collect();
+            .collect()
+    }
+
+    /// [`Self::enter_annotation_clip`] with the clip's outline on the page
+    pub(super) fn enter_annotation_outline(
+        &mut self,
+        painted: Vec<PdfPoint>,
+    ) -> Option<Vec<PdfPoint>> {
         let visible = match &self.annotation_clip {
             None => painted,
             Some(outer) => annotation_clip::intersect(&painted, outer),

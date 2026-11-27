@@ -628,6 +628,11 @@ pub(super) fn render_nested_container(
         // Scroll containers inset the clip by the reserved gutter so
         // content does not paint under the scrollbar.
         let clip = overflow.clips();
+        let establishes_containing_block = nk_position.is_positioned()
+            || nk_transform.is_some()
+            || *nk_stacking_context == StackingContext::Filter;
+        let inner_depth =
+            first_containing_block_inside(*nk_positioned_depth, establishes_containing_block);
         let mut content_clip = clip.then(|| {
             if has_v || has_h {
                 // Rectangular clip inset by the per-side border and the
@@ -638,9 +643,12 @@ pub(super) fn render_nested_container(
                     bottom: h_gutter,
                     ..Default::default()
                 });
-                ContentClip::of(scroll_clip.rounded(Default::default()))
+                ContentClip::of(scroll_clip.rounded(Default::default()), inner_depth)
             } else {
-                ContentClip::of(nk_paint_geometry.rounded_padding_box(*cont_radii))
+                ContentClip::of(
+                    nk_paint_geometry.rounded_padding_box(*cont_radii),
+                    inner_depth,
+                )
             }
         });
         if let Some(clip) = &mut content_clip {
@@ -655,11 +663,7 @@ pub(super) fn render_nested_container(
         // positioned depth so absolutely-positioned descendants nested
         // inside static intermediates anchor here (their CB), not to
         // the static container they are physically nested in.
-        if *nk_positioned_depth > 0
-            && (nk_position.is_positioned()
-                || nk_transform.is_some()
-                || *nk_stacking_context == StackingContext::Filter)
-        {
+        if *nk_positioned_depth > 0 && establishes_containing_block {
             abs_origins.insert(
                 *nk_positioned_depth,
                 PdfPoint::new(padding_box.left, padding_box.top()),

@@ -110,7 +110,9 @@ use border_images::render_border_image;
 use border_paint::*;
 use border_support::*;
 use cell_effects::{paint_box_filter_output, paint_cell_filter_output};
-use clipping::ContentClip;
+use clipping::{
+    ContentClip, enter_overflow_clip, first_containing_block_inside, leave_overflow_clip,
+};
 use compositing::*;
 use conic_gradients::*;
 use container::*;

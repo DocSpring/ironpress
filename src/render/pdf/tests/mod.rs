@@ -2,6 +2,7 @@ use crate::render::pdf::border_images::BorderImageShadings;
 
 include!("foundation.rs");
 mod absolute_text;
+mod clip_escape;
 mod flex_cells;
 mod fragment_visibility;
 mod rich_page_margins;

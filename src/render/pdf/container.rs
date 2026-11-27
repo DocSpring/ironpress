@@ -353,6 +353,7 @@ pub(super) fn render_container_children(
     let stacking_scope = options.stacking_scope;
     let defer_child_decorations = options.defer_child_decorations && !stacking_scope.is_local();
     let mut stacking_plan = StackingPaintPlan::default();
+    let context_floor = ctx.stacking.begin_context(stacking_scope);
 
     // Separate children handled by render_nested_table_rows from those rendered
     // directly (Container, Svg, etc.).
@@ -455,6 +456,7 @@ pub(super) fn render_container_children(
         }
 
         let child_position = FlowPosition::new(y, cursor_y, prev_margin_bottom);
+        let escape = ctx.escape_clips(child);
         let split_in_flow = paint_phase == ElementPaintPhase::All
             && child_paint_order(child).is_in_flow()
             && child
@@ -541,6 +543,7 @@ pub(super) fn render_container_children(
             );
             (handled, result)
         };
+        ctx.restore_clips(escape);
         if let Some(position) = result {
             y = position.y;
             cursor_y = position.cursor_y;
@@ -586,4 +589,6 @@ pub(super) fn render_container_children(
     if stacking_scope.is_local() {
         ctx.stacking.paint_plan(stacking_plan, content);
     }
+
+    ctx.stacking.end_context(context_floor);
 }

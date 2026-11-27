@@ -245,6 +245,7 @@ pub(super) fn render_flex_child(
 
     let stacking_scope = StackingScope::for_element(child);
     let mut stacking_plan = StackingPaintPlan::default();
+    let context_floor = ctx.stacking.begin_context(stacking_scope);
     for cell in cells {
         let marker = ctx.stacking.marker();
         let mut cell_content = String::new();
@@ -483,6 +484,7 @@ pub(super) fn render_flex_child(
     if stacking_scope.is_local() {
         ctx.stacking.paint_plan(stacking_plan, content);
     }
+    ctx.stacking.end_context(context_floor);
     flex_group.finish(content, ctx);
     if planned_flow_top.is_none() {
         cursor_y -= row_h + flex_mb;

@@ -73,6 +73,7 @@ impl NestedRowsRenderer<'_, '_> {
         let cell_content_h = compute_grid_row_height(cells);
         let stacking_scope = StackingScope::for_element(element);
         let mut stacking_plan = StackingPaintPlan::default();
+        let context_floor = self.stacking.begin_context(stacking_scope);
         let mut cells_in_paint_order: Vec<_> = cells.iter().collect();
         cells_in_paint_order.sort_by_key(|cell| cell.placement.paint_order);
         for cell in cells_in_paint_order {
@@ -255,6 +256,9 @@ impl NestedRowsRenderer<'_, '_> {
                     ContentClip::rounded_padding_box(
                         cell_paint_geometry,
                         cell.layout.paint.border_radii,
+                        cell.layout
+                            .established_containing_block_depth()
+                            .unwrap_or(cell.layout.positioning.containing_block_depth + 1),
                     )
                 });
                 if let Some(clip) = &mut content_clip {
@@ -464,6 +468,7 @@ impl NestedRowsRenderer<'_, '_> {
         if stacking_scope.is_local() {
             self.stacking.paint_plan(stacking_plan, content);
         }
+        self.stacking.end_context(context_floor);
         cursor_y -= row_height + margin_bottom;
         self.cursor_y = cursor_y;
         self.previous_margin_bottom = 0.0;

@@ -58,6 +58,34 @@ pub(super) struct PageRenderContext<'a> {
     pub(super) text: TextRenderContext<'a>,
 }
 
+impl PageRenderContext<'_> {
+    /// Leave the overflow clips that a positioned `child` escapes, for as long as it's painted: those of the boxes
+    /// between it and its containing block (`StackingTraversal::escape_clips`). Give them back with
+    /// [`Self::restore_clips`]
+    pub(super) fn escape_clips(
+        &mut self,
+        child: &dyn LayoutElement,
+    ) -> Option<super::stacking::ClipEscape> {
+        let positioning = child.positioning_owner()?.positioning();
+        if !positioning.scheme.is_absolute() {
+            return None;
+        }
+        // No containing block is the initial one, around every clip
+        let depth = positioning
+            .containing_block
+            .map_or(0, |containing_block| containing_block.depth);
+        self.stacking
+            .escape_clips(depth, &mut self.text.pdf_writer.annotation_clip)
+    }
+
+    pub(super) fn restore_clips(&mut self, escape: Option<super::stacking::ClipEscape>) {
+        if let Some(escape) = escape {
+            self.stacking
+                .restore_clips(escape, &mut self.text.pdf_writer.annotation_clip);
+        }
+    }
+}
+
 impl<'a> PageRenderContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
