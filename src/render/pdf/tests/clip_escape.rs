@@ -188,3 +188,31 @@ fn render_link_annotation_for_an_absolute_link_that_escapes_a_clip() {
         );
     }
 }
+
+#[test]
+fn a_clipping_flex_container_clips_its_positioned_children_at_its_own_end() {
+    let link = r#"<a href="https://example.com/placed" style="position: absolute; top: 20pt; left: 10pt; display: block; width: 60pt; height: 15pt"></a>"#;
+    // A column, or a row, of items shorter than the box: the link is inside the box, so it's whole
+    for direction in ["column", "row"] {
+        let short = format!(
+            r#"<div style="display: flex; flex-direction: {direction}; position: relative; overflow: hidden; height: 45pt"><div style="height: 18pt">x</div>{link}</div>"#
+        );
+        let rects = super::placed_link_rects(&short);
+        assert_eq!(rects.len(), 1, "{short}");
+        assert!(
+            (rects[0][3] - rects[0][1] - 15.0).abs() < 0.5,
+            "{short}: {rects:?}"
+        );
+    }
+    // A column whose items don't shrink runs past the box's end, and the link is below it, so it's hidden
+    let items = r#"<div style="flex-shrink: 0; height: 18pt">x</div>"#.repeat(5);
+    let overflowing = format!(
+        r#"<div style="display: flex; flex-direction: column; position: relative; overflow: hidden; height: 27pt">{items}{}</div>"#,
+        link.replace("top: 20pt", "top: 36pt")
+    );
+    assert_eq!(
+        super::placed_link_rects(&overflowing),
+        Vec::<[f32; 4]>::new(),
+        "{overflowing}"
+    );
+}
